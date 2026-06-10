@@ -109,7 +109,7 @@ wrangler secret put API_KEYS           --env preview    --config apps/api/wrangl
 
 受保护端点集合 `{/parse, /contribute, /ingest}` 同受治理链保护，按 **鉴权 → 限频 → 用量 → 业务** 顺序挂载；`/health` 豁免整条链。
 
-- **鉴权**：从 `Authorization: Bearer <key>` 读 key（`Authorization` 存在即权威，非 Bearer 形态归 malformed）；`Authorization` 缺失时回退 `X-API-Key`。key 校验对 `API_KEYS` allowlist。真实治理初始化时 `API_KEYS` 空/缺按配置错误处理（`500 config-error`），不静默把合法 key 全打成 `403`。
+- **鉴权**：从 `Authorization: Bearer <key>` 读 key。`Authorization` 存在即为**权威源、严格不回退**——非 Bearer 形态（如 `Basic …`）或空 Bearer 值（`Authorization: Bearer ` 无 key）直接判 `auth-malformed`，**不**回退去读 `X-API-Key`；仅当 `Authorization` **完全缺失**时才读 `X-API-Key`（其为空串/含非法字符同判 `auth-malformed`）。完全无鉴权头则 `auth-missing`。key 校验对 `API_KEYS` allowlist（不在其中判 `403 auth-forbidden`）。真实治理初始化时 `API_KEYS` 空/缺按配置错误处理（`500 config-error`），不静默把合法 key 全打成 `403`。
 - **限频**：挂在鉴权之后，`GOVERNANCE_KV` 固定窗口计数（`rl:<key>:<windowStart>`，TTL=窗口），超限返回 `429` + `Retry-After`，按 key 隔离。`GOVERNANCE_KV` 故障时 **fail-open**（放行 + 告警），不把 KV 抖动放大成全量 `429`/`5xx`。
 - **用量**：放行后计 `GOVERNANCE_KV`（key/计数/时间元数据，不含 title/price）；写入失败只告警，不把 `200` 降级。
 
