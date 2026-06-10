@@ -71,6 +71,30 @@ wrangler secret put API_KEYS           --env preview    --config apps/api/wrangl
 
 部署目标为 Cloudflare Workers + D1。所有 `wrangler` 调用（本地与 CI）必须显式 `--config apps/api/wrangler.toml`（或以 `apps/api/` 为工作目录），因 `migrations_dir` 按 `wrangler.toml` 所在目录解析为 `../../packages/db/drizzle`——不得依赖调用 cwd 偶然正确。
 
+### 部署前置（首次，带外）
+
+1. **开通资源**：`wrangler d1 create`（production/preview/dev 各一）、`wrangler kv namespace create`（各环境一个、title 互不相同），把返回的 `database_id` / `id` 回填 `wrangler.toml` 对应块；binding 名保持 `DB` / `GOVERNANCE_KV` 不变。
+2. **配 runtime secret**：`OPENROUTER_API_KEY` 与 `API_KEYS`，production 与 preview 各一份（命令见上「配置与 secret」）。
+3. **配 CI 凭据**：`CLOUDFLARE_API_TOKEN` 作为 GitHub repo 的 Actions secret（名字须正好为 `CLOUDFLARE_API_TOKEN`，与 `deploy.yml` 对应）。
+
+`CLOUDFLARE_API_TOKEN` 用 **Custom Scoped Token**（Cloudflare → My Profile → API Tokens → Create Custom Token），**不要用 Global API Key**。按本流水线「`wrangler deploy` + `d1 migrations apply --remote`」所需，权限为：
+
+| 权限 | 级别 | 用途 |
+| --- | --- | --- |
+| Workers Scripts | Edit | `wrangler deploy` 部署 Worker |
+| D1 | Edit | `d1 migrations apply --remote` 建表 |
+| Workers KV Storage | Edit | Worker 绑定 `GOVERNANCE_KV`，部署时挂载 |
+| Account Settings | Read | wrangler 解析账号 / `whoami` |
+
+**Account Resources** 设为 `Include → <你的账号>`（勿留 All accounts）。捷径：用内置模板 **"Edit Cloudflare Workers"**（已含 Workers Scripts/KV/Account Settings），再**手动补一条 `D1 → Edit`**（模板不含 D1）。
+
+验证 scope 是否足够：
+
+```sh
+CLOUDFLARE_API_TOKEN=<token> wrangler whoami                                  # 能列出账号
+wrangler deploy --dry-run --env production --config apps/api/wrangler.toml    # 不报权限错
+```
+
 ### CI/CD
 
 `.github/workflows/deploy.yml`：
