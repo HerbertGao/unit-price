@@ -293,6 +293,21 @@ describe('governance — usage counting', () => {
     expect(String(usageValue)).not.toMatch(/price|"40"|title/i);
   });
 
+  it('usage count is monotonic across admissions (reads prior count from JSON)', async () => {
+    // Round-trips the stored JSON payload: a second admission must read the
+    // prior count back and write count=2 — guards against parsing the whole
+    // JSON string as an int (which yields NaN and pins the counter at 1).
+    const { kv, put } = makeFakeKV();
+    const { request } = appWith({ API_KEYS: VALID_KEY, GOVERNANCE_KV: kv });
+    await request('/parse', bearer(VALID_KEY));
+    await request('/parse', bearer(VALID_KEY));
+    const usageWrites = put.mock.calls.filter(([k]) => String(k).startsWith('usage:'));
+    const counts = usageWrites.map(([, v]) => JSON.parse(String(v)).count);
+    expect(counts).toContain(1);
+    expect(counts).toContain(2); // would be [1, 1] under the NaN bug
+    expect(Math.max(...counts)).toBe(2);
+  });
+
   it('usage write failure does NOT downgrade a 200 response', async () => {
     // Make ONLY the usage write fail: rate-limit get/put succeed, usage put throws.
     // Simplest: fail all puts but the rate-limit path is fail-open, so the

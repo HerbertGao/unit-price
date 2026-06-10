@@ -180,12 +180,24 @@ export function createRealGovernance(): Governance {
       // change the /parse response (no 200 → 5xx downgrade).
       const usageKey = `usage:${key}`;
       try {
+        // Stored value is a JSON payload `{ key, count, lastSeen }` — read the
+        // prior count from the PARSED object, not parseInt on the raw string
+        // (which begins with `{` and would yield NaN, pinning count to 1).
         const current = await kv.get(usageKey);
-        const count = current === null ? 0 : Number.parseInt(current, 10);
-        const safeCount = Number.isNaN(count) ? 0 : count;
+        let prev = 0;
+        if (current !== null) {
+          try {
+            const parsed = JSON.parse(current) as { count?: unknown };
+            if (typeof parsed.count === 'number' && Number.isFinite(parsed.count)) {
+              prev = parsed.count;
+            }
+          } catch {
+            prev = 0; // corrupt/legacy value: restart the counter rather than crash
+          }
+        }
         const payload = JSON.stringify({
           key,
-          count: safeCount + 1,
+          count: prev + 1,
           lastSeen: new Date().toISOString(),
         });
         await kv.put(usageKey, payload);

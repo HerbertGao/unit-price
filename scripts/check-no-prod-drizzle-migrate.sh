@@ -44,8 +44,12 @@ for f in $scan_paths; do
   # Skip this guard script itself.
   [ "$f" = "scripts/check-no-prod-drizzle-migrate.sh" ] && continue
   while IFS= read -r line; do
-    if echo "$line" | grep -Eiq 'drizzle-kit[[:space:]]+migrate'; then
-      if echo "$line" | grep -Eiq -- '--remote|\bd1\b|GOVERNANCE_KV|database_id|env[._]production|env[._]preview'; then
+    # Strip `#` comments (sh/yaml) so prose rationale mentioning
+    # `drizzle-kit migrate` / D1 in a comment does not trip the guard — only
+    # actual command text is scanned (mirrors the `//` stripping above).
+    code_line="${line%%#*}"
+    if echo "$code_line" | grep -Eiq 'drizzle-kit[[:space:]]+migrate'; then
+      if echo "$code_line" | grep -Eiq -- '--remote|\bd1\b|GOVERNANCE_KV|database_id|env[._]production|env[._]preview'; then
         echo "::error::$f: 'drizzle-kit migrate' co-located with a remote/D1 target: $line" >&2
         fail=1
       fi
