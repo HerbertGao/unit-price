@@ -16,7 +16,7 @@ import {
   type ParsedSpec,
   type RawProduct,
 } from '@unit-price/core';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { z } from 'zod';
 import {
@@ -186,12 +186,16 @@ export function createRepository(db: Db | null | undefined): Repository {
         .values(row)
         .onConflictDoUpdate({
           target: [productRaw.store, productRaw.storeSku],
+          // title/price/captured_at track the latest observation (always
+          // overwrite). Optional provenance is COALESCE'd: a new non-null value
+          // wins, but a resubmit that omits it keeps the prior value instead of
+          // nulling it — don't destroy provenance on a price-only update.
           set: {
             title: row.title,
             price: row.price,
-            categoryHint: row.categoryHint,
-            source: row.source,
-            sourceUrl: row.sourceUrl,
+            categoryHint: sql`coalesce(${row.categoryHint}, ${productRaw.categoryHint})`,
+            source: sql`coalesce(${row.source}, ${productRaw.source})`,
+            sourceUrl: sql`coalesce(${row.sourceUrl}, ${productRaw.sourceUrl})`,
             capturedAt: row.capturedAt,
           },
         })
@@ -209,8 +213,12 @@ export function createRepository(db: Db | null | undefined): Repository {
       FiniteSpecGate.parse(spec);
       const calc = CalcResultGate.parse(input.calc);
 
-      const productId = input.productId ?? newId();
-      const unitPriceId = input.unitPriceId ?? newId();
+      // Optional caller-supplied ids must clear IdGate too (rawId already does);
+      // an explicit empty string is rejected rather than used as a primary key.
+      const productId =
+        input.productId == null ? newId() : IdGate.parse(input.productId);
+      const unitPriceId =
+        input.unitPriceId == null ? newId() : IdGate.parse(input.unitPriceId);
       const unitSize = encodeMeasurement(spec.unitSize);
       const totalAmount = encodeMeasurement(spec.totalAmount);
       const productRow = {

@@ -206,6 +206,63 @@ describe('upsertRaw', () => {
       expect(centsToYuan(row.price)).toBe(yuan);
     }
   });
+
+  it('keeps prior provenance when a price-only resubmit omits optional fields', async () => {
+    const id1 = await t.repo.upsertRaw({
+      store: 'sam',
+      storeSku: 'sku-1',
+      raw: { title: '椰子水', price: 39.9, categoryHint: '饮料' },
+      source: 'surge',
+      sourceUrl: 'https://x/1',
+      capturedAt: 1_000,
+    });
+    // Resubmit updates title/price/captured_at but omits source/sourceUrl/categoryHint.
+    const id2 = await t.repo.upsertRaw({
+      store: 'sam',
+      storeSku: 'sku-1',
+      raw: { title: '椰子水(新价)', price: 35.5 },
+      capturedAt: 2_000,
+    });
+    expect(id2).toBe(id1);
+    const row = t.handle
+      .prepare(
+        'SELECT title, price, source, source_url, category_hint, captured_at FROM product_raw WHERE id = ?',
+      )
+      .get(id1) as Record<string, unknown>;
+    expect(row.title).toBe('椰子水(新价)'); // latest observation
+    expect(row.price).toBe(3550); // latest observation
+    expect(row.captured_at).toBe(2_000); // latest observation
+    expect(row.source).toBe('surge'); // preserved, not nulled
+    expect(row.source_url).toBe('https://x/1'); // preserved
+    expect(row.category_hint).toBe('饮料'); // preserved
+  });
+
+  it('overwrites provenance when a resubmit supplies new non-null values', async () => {
+    const id1 = await t.repo.upsertRaw({
+      store: 'sam',
+      storeSku: 'sku-1',
+      raw: { title: 'a', price: 10, categoryHint: '饮料' },
+      source: 'surge',
+      sourceUrl: 'https://x/1',
+      capturedAt: 1_000,
+    });
+    await t.repo.upsertRaw({
+      store: 'sam',
+      storeSku: 'sku-1',
+      raw: { title: 'a', price: 10, categoryHint: '乳品' },
+      source: 'plugin',
+      sourceUrl: 'https://x/2',
+      capturedAt: 2_000,
+    });
+    const row = t.handle
+      .prepare(
+        'SELECT source, source_url, category_hint FROM product_raw WHERE id = ?',
+      )
+      .get(id1) as Record<string, unknown>;
+    expect(row.source).toBe('plugin');
+    expect(row.source_url).toBe('https://x/2');
+    expect(row.category_hint).toBe('乳品');
+  });
 });
 
 describe('saveParsed + getProduct', () => {
@@ -377,6 +434,22 @@ describe('saveParsed + getProduct', () => {
       t.repo.saveParsed({ rawId, spec: fullSpec, calc: badWarnings }),
       'warnings',
     );
+    expect(countRows(t.handle, 'product')).toBe(0);
+    expect(countRows(t.handle, 'unit_price')).toBe(0);
+  });
+
+  it('rejects an explicit empty-string productId/unitPriceId without writing rows', async () => {
+    await expect(
+      t.repo.saveParsed({ rawId, spec: fullSpec, calc: fullCalc, productId: '' }),
+    ).rejects.toThrow(ZodError);
+    await expect(
+      t.repo.saveParsed({
+        rawId,
+        spec: fullSpec,
+        calc: fullCalc,
+        unitPriceId: '',
+      }),
+    ).rejects.toThrow(ZodError);
     expect(countRows(t.handle, 'product')).toBe(0);
     expect(countRows(t.handle, 'unit_price')).toBe(0);
   });
