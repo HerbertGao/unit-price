@@ -80,6 +80,12 @@ jobs:
       - name: Build
         run: pnpm -r build
 
+      # Tests must pass before any production migrate/deploy — a red build must
+      # never reach production (the verify workflow runs independently and does
+      # not gate this job).
+      - name: Test
+        run: pnpm -r test
+
       # Apply migrations to production D1 BEFORE deploy so new code never runs
       # ahead of its schema. migrations_dir is resolved from apps/api/ via
       # --config; idempotency is enforced by wrangler's own d1_migrations table.
