@@ -50,9 +50,12 @@ export const ContributeRequestSchema = z.object({
   title: z.string().min(1, 'title must be a non-empty string'),
   price: z.number({ error: 'price must be a number' }).finite('price must be a finite number'),
   categoryHint: z.string().optional(),
-  // Provenance fields (dedupe / source-of-record).
-  store: z.string().min(1, 'store must be a non-empty string'),
-  storeSku: z.string().min(1, 'storeSku must be a non-empty string'),
+  // Provenance fields (dedupe / source-of-record). Trim BEFORE min(1) so a
+  // whitespace-only dedupe key is rejected at the request layer (400) rather
+  // than slipping past min(1) and tripping the repository's DedupeKeyGate
+  // (which trims) into a generic 500 persistence-error. Mirrors DedupeKeyGate.
+  store: z.string().trim().min(1, 'store must be a non-empty string'),
+  storeSku: z.string().trim().min(1, 'storeSku must be a non-empty string'),
   source: z.string().optional(),
   sourceUrl: z.string().optional(),
   capturedAt: z.number().int('capturedAt must be an integer epoch-ms timestamp').optional(),

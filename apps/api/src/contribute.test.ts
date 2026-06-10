@@ -125,6 +125,10 @@ describe('POST /contribute — invalid request writes nothing (5.2)', () => {
     ['missing storeSku', { ...CLEAN, store: 'sam' }],
     ['empty store', { ...CLEAN, store: '', storeSku: 'x' }],
     ['empty storeSku', { ...CLEAN, store: 'sam', storeSku: '' }],
+    // Whitespace-only keys must 400 at the request layer (trim before min(1)),
+    // not slip past into the repository DedupeKeyGate -> generic 500.
+    ['whitespace store', { ...CLEAN, store: '   ', storeSku: 'x' }],
+    ['whitespace storeSku', { ...CLEAN, store: 'sam', storeSku: '\t ' }],
   ])('%s -> 400 invalid-request, no rows written', async (_name, body) => {
     const { repo, handle } = openRepo();
     const { res, json } = await contribute({ port: throwingPort, makeRepo: () => repo, body });

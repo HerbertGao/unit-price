@@ -10,7 +10,7 @@
 
 `price` 校验**禁止**加正值约束(`.positive()`/`.min(0)`):**负价/0 价是合法上报、不返回 `400`**——`product_raw` 忠实存原始观察(含异常价,沿用 persistence 既有事实),负价/0 价由 core 路由到 `per100ml=null`(沿用 parse-api),走 `200` + `per100ml=null` + warning 并照常落库。`400` 仅用于 `title` 空、`price` 非有限(`NaN`/`±Inf`)、或去重键空。
 
-`store`/`storeSku` 为 `product_raw` 去重键 `(store, store_sku)` 的来源,**必须**在请求层即校验非空(空串/缺失 → `400 invalid-request`),不得把空键传到 repository。该端点**禁止**在 API 层重写任何解析或计算——tier1 正则与 tier3 计算属 `packages/core`、tier2 属现有 `orchestrate`,本端点只编排「落 raw → orchestrate → 落 parse」,价格/单位换算/可比判断仍由确定性程序决定。
+`store`/`storeSku` 为 `product_raw` 去重键 `(store, store_sku)` 的来源,**必须**在请求层即校验非空——请求 schema **必须先 `trim` 再 `min(1)`**,使空串、**纯空白**、缺失一律 → `400 invalid-request`(与 repository `DedupeKeyGate` 的 `trim().min(1)` 对齐),不得把空/空白键传到 repository 导致它落到 `upsertRaw` 抛错的 `500 persistence-error`。该端点**禁止**在 API 层重写任何解析或计算——tier1 正则与 tier3 计算属 `packages/core`、tier2 属现有 `orchestrate`,本端点只编排「落 raw → orchestrate → 落 parse」,价格/单位换算/可比判断仍由确定性程序决定。
 
 成功(`orchestrate` 返回 `ok`)响应 `200`,体为:`spec` / `unitPrice` / `confidence` / `warnings`(即 `/parse` 既有响应契约)**附加** `rawId` / `productId` / `unitPriceId`(均为 app 生成 TEXT id)。响应**必须**在返回前过 Zod 校验。
 
