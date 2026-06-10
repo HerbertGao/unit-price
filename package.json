@@ -15,7 +15,7 @@
     "lint": "echo \"lint: placeholder (no linter configured yet)\""
   },
   "devDependencies": {
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "vitest": "^3.0.0",
     "zod": "^3.24.1"
   }
