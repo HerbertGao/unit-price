@@ -12,11 +12,30 @@
 // miniflare's magic-proxy KV — it hangs the Node event loop here). In-process
 // fetch reliably exercises "the worker entry wires real governance", which is
 // the exact guardrail target.
+import Database from 'better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { KVNamespace } from '@cloudflare/workers-types';
 import worker from './worker.js';
+import { createDb } from '@unit-price/db';
 import { RATE_LIMIT_MAX } from './governance.js';
 import type { Bindings } from './bindings.js';
+
+// Migrations live in @unit-price/db; apply onto an in-memory better-sqlite3
+// handle so a production-path /ingest can resolve a real repo via env.DB
+// (createDb/defaultMakeRepo accept a better-sqlite3 handle just like a D1 one).
+const migrationsFolder = fileURLToPath(
+  new URL('../../../packages/db/drizzle', import.meta.url),
+);
+function migratedDbHandle(): Database.Database {
+  const handle = new Database(':memory:');
+  handle.pragma('foreign_keys = ON');
+  const db = createDb(handle);
+  if (db.kind !== 'sqlite') throw new Error('expected a better-sqlite3-backed Db');
+  migrate(db.orm, { migrationsFolder });
+  return handle;
+}
 
 /** Map-backed fake KVNamespace (get/put with TTL semantics). */
 function makeFakeKV() {
@@ -64,6 +83,20 @@ const contributeBody = JSON.stringify({
 function fetchContribute(env: Bindings, init: RequestInit) {
   const req = new Request('http://worker.test/contribute', init);
   return worker.fetch(req, env, ctx);
+}
+
+const ingestBody = JSON.stringify({
+  title: '可口可乐 330ml*24听',
+  price: 40,
+  store: 'sam',
+  storeSku: 'coke-24',
+});
+
+// /ingest variant that lets the caller supply its own ExecutionContext (to spy
+// on waitUntil — the production background port calls c.executionCtx.waitUntil).
+function fetchIngest(env: Bindings, init: RequestInit, execCtx: ExecutionContext = ctx) {
+  const req = new Request('http://worker.test/ingest', init);
+  return worker.fetch(req, env, execCtx);
 }
 
 describe('worker.ts production entry — real governance guardrail', () => {
@@ -127,5 +160,48 @@ describe('worker.ts production entry — real governance guardrail', () => {
     );
     expect(res.status).toBe(401);
     expect((await res.json()).error).toBe('auth-missing');
+  });
+
+  it('/ingest is guarded by real governance: missing key -> 401 (not wide-open)', async () => {
+    // The production entry must mount REAL governance on /ingest too (it is in
+    // the protected endpoint set). A no-op here would run the capture path open.
+    const { kv } = makeFakeKV();
+    const res = await fetchIngest(
+      { API_KEYS: VALID_KEY, GOVERNANCE_KV: kv },
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: ingestBody },
+    );
+    expect(res.status).toBe(401);
+    expect((await res.json()).error).toBe('auth-missing');
+  });
+
+  it('a legal /ingest schedules the background via ctx.waitUntil (production = waitUntil, not the default sync port)', async () => {
+    // buildApp injects `(c, run) => c.executionCtx.waitUntil(run())`. Drive a
+    // legal /ingest through the real production entry with a DB-bound env and a
+    // spy ExecutionContext; the spy MUST see exactly one waitUntil call —
+    // proving production wires the waitUntil port (not the default sync one).
+    const { kv } = makeFakeKV();
+    const handle = migratedDbHandle();
+    const waitUntil = vi.fn();
+    const spyCtx = {
+      waitUntil,
+      passThroughOnException: () => {},
+    } as unknown as ExecutionContext;
+    const env = {
+      API_KEYS: VALID_KEY,
+      GOVERNANCE_KV: kv,
+      DB: handle as unknown as Bindings['DB'],
+    } as Bindings;
+    const res = await fetchIngest(
+      env,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${VALID_KEY}` },
+        body: ingestBody,
+      },
+      spyCtx,
+    );
+    expect(res.status).toBe(202);
+    expect(typeof (await res.json()).rawId).toBe('string');
+    expect(waitUntil).toHaveBeenCalledTimes(1);
   });
 });
