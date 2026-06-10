@@ -426,14 +426,14 @@ describe('POST /contribute — error body carries rawId (5.8)', () => {
 });
 
 describe('POST /contribute — non-target boundary (5.9)', () => {
-  it('routes are exactly {/health, /parse, /contribute} — no rankings/corrections/compare', async () => {
+  it('routes are exactly {/health, /parse, /contribute, /ingest} — no rankings/corrections/compare', async () => {
     const app = createApp({
       makeLlm: () => throwingPort,
       governance: createNoopGovernance(),
       makeRepo: () => null,
     });
     const paths = [...new Set(app.routes.map((r) => r.path))].sort();
-    expect(paths).toEqual(['/contribute', '/health', '/parse']);
+    expect(paths).toEqual(['/contribute', '/health', '/ingest', '/parse']);
     expect(paths).not.toContain('/rankings');
     expect(paths).not.toContain('/corrections');
     expect(paths).not.toContain('/compare');

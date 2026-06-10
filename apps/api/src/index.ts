@@ -24,8 +24,10 @@ export {
   ParseResponseSchema,
   ContributeRequestSchema,
   ContributeResponseSchema,
+  IngestResponseSchema,
   type ContributeRequest,
   type ContributeResponse,
+  type IngestResponse,
 } from './routes.js';
 export {
   orchestrate,
@@ -105,6 +107,13 @@ export function buildApp() {
     makeLlm: defaultMakeLlm,
     governance: createRealGovernance(),
     makeRepo: defaultMakeRepo,
+    // Production background-execution port: schedule /ingest's post-response work
+    // (orchestrate + saveParsed) on the Workers ExecutionContext so it continues
+    // after the 202 is sent within the same invocation. The closure captures the
+    // PER-REQUEST `c` at CALL time (not at build time), and returns void
+    // (waitUntil returns void) so the handler's `await` resolves immediately —
+    // the 202 lands fast and is never blocked on `run()`.
+    scheduleBackground: (c, run) => c.executionCtx.waitUntil(run()),
   });
 }
 
