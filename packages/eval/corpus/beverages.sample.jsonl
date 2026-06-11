@@ -4,3 +4,6 @@
 {"title":"多维刺梨柠檬饮 2.1L(100mL×21)","source":"manual","priceCents":6990,"expected":{"unitSize":100,"quantity":21,"totalAmount":2100,"per100ml":3.33}}
 {"title":"2L装可乐 330ml*6","source":"manual","priceCents":1980,"expected":{"unitSize":330,"quantity":6,"totalAmount":1980}}
 {"title":"550mL便携装 1.5L*6","source":"manual","expected":{"unitSize":550,"quantity":6}}
+{"title":"汾酒沪上青花 清香型白酒 53度 500mL","source":"manual","priceCents":3000,"expected":{"unitSize":500,"quantity":1,"totalAmount":500,"per100ml":6}}
+{"title":"汾酒 55%vol清香型白酒 950ml","source":"manual","priceCents":9500,"expected":{"unitSize":950,"quantity":1,"totalAmount":950,"per100ml":10}}
+{"title":"LFE 进口埃德华兹900单一葡萄园干红葡萄酒 750mL","source":"manual","priceCents":20000,"expected":{"unitSize":750,"quantity":null,"per100ml":null}}

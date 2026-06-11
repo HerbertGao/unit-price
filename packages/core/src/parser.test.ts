@@ -273,4 +273,96 @@ describe('tier1 parser', () => {
     expect(spec.quantity).toBe(24);
     expect(spec.totalAmount).toEqual({ value: 7200, unit: 'ml' });
   });
+
+  // §含量描述符 token 不计入「数字数量信号」(酒精度/百分比含量不抑制单件推断)
+
+  it('infers quantity=1 for a 度 single bottle, computing per100ml (汾酒 53度 500mL)', () => {
+    // `53度` 是酒精度、唯一游离数字;剥离后无数量信号 -> 单件推断。
+    const { spec, warnings } = parseTier1(raw('汾酒沪上青花 清香型白酒 53度 500mL', 30));
+    expect(spec.unitSize).toEqual({ value: 500, unit: 'ml' });
+    expect(spec.quantity).toBe(1);
+    expect(spec.totalAmount).toEqual({ value: 500, unit: 'ml' });
+    expect(warnings).toContain('数量按单件推断为 1');
+    // calculator: 30 / 500 * 100 = 6
+    const { unitPrice } = calculate(spec, 30);
+    expect(unitPrice.per100ml).toBe(6);
+  });
+
+  it('infers quantity=1 for a %vol single bottle, never null (汾酒 55%vol 950ml)', () => {
+    const { spec } = parseTier1(raw('汾酒 55%vol清香型白酒 950ml', 95));
+    expect(spec.unitSize).toEqual({ value: 950, unit: 'ml' });
+    expect(spec.quantity).toBe(1);
+    expect(spec.totalAmount).toEqual({ value: 950, unit: 'ml' });
+    // calculator: 95 / 950 * 100 = 10 (MUST NOT be null)
+    const { unitPrice } = calculate(spec, 95);
+    expect(unitPrice.per100ml).toBe(10);
+  });
+
+  it('infers quantity=1 for a percentage-content single bottle (NFC 100%果汁 300ml)', () => {
+    const { spec } = parseTier1(raw('NFC 100%果汁 300ml', 9));
+    expect(spec.unitSize).toEqual({ value: 300, unit: 'ml' });
+    expect(spec.quantity).toBe(1);
+    expect(spec.totalAmount).toEqual({ value: 300, unit: 'ml' });
+    const { unitPrice } = calculate(spec, 9);
+    expect(unitPrice.per100ml).not.toBeNull();
+  });
+
+  it('infers quantity=1 for the ° alcohol-degree notation (白酒 52° 500ml)', () => {
+    const { spec, warnings } = parseTier1(raw('白酒 52° 500ml', 40));
+    expect(spec.unitSize).toEqual({ value: 500, unit: 'ml' });
+    expect(spec.quantity).toBe(1);
+    expect(spec.totalAmount).toEqual({ value: 500, unit: 'ml' });
+    expect(warnings).toContain('数量按单件推断为 1');
+  });
+
+  it('content digits do not interfere with a real trailing count (白酒 53度 500ml*6瓶)', () => {
+    // `*6` 经 QTY_RE 抽取 -> quantity≠null -> 根本不进单件推断;`53度` 不干扰。
+    const { spec, warnings } = parseTier1(raw('白酒 53度 500ml*6瓶', 180));
+    expect(spec.unitSize).toEqual({ value: 500, unit: 'ml' });
+    expect(spec.quantity).toBe(6);
+    expect(spec.totalAmount).toEqual({ value: 3000, unit: 'ml' });
+    expect(warnings).not.toContain('数量按单件推断为 1');
+  });
+
+  it('does not infer single unit when a leading package count precedes the size (白酒 53度 6瓶 500ml)', () => {
+    // 前置 `6瓶` 不被 PKG_COUNT_RE(只扫 size 之后)抽取;进单件推断时剥度数后
+    // `6瓶` 仍命中信号 -> 不推单件,quantity 保持 null(既有前置限制,本变更不修)。
+    const { spec, warnings } = parseTier1(raw('白酒 53度 6瓶 500ml', 180));
+    expect(spec.unitSize).toEqual({ value: 500, unit: 'ml' });
+    expect(spec.quantity).toBeNull();
+    expect(warnings).not.toContain('数量按单件推断为 1');
+    const { unitPrice } = calculate(spec, 180);
+    expect(unitPrice.per100ml).toBeNull();
+  });
+
+  it('keeps a bare product-name number conservative -> null (埃德华兹900 750mL)', () => {
+    // `900` 无含量后缀、不被剥 -> 仍作游离数字信号 -> 不推单件、留 null(已知残留)。
+    const { spec, warnings } = parseTier1(
+      raw('LFE 进口埃德华兹900单一葡萄园干红葡萄酒 750mL', 200),
+    );
+    expect(spec.unitSize).toEqual({ value: 750, unit: 'ml' });
+    expect(spec.quantity).toBeNull();
+    expect(warnings).not.toContain('数量按单件推断为 1');
+    const { unitPrice } = calculate(spec, 200);
+    expect(unitPrice.per100ml).toBeNull();
+  });
+
+  it('regression: existing single-unit / count paths unchanged after content-token strip', () => {
+    // 单件大规格(无数字)
+    expect(parseTier1(raw('MM 弱碱性饮用水 4L', 9.9)).spec.quantity).toBe(1);
+    // 乘号
+    expect(parseTier1(raw('可乐 330ml*24听', 40)).spec.quantity).toBe(24);
+    // 前置乘号
+    expect(parseTier1(raw('24x500mL', 42.8)).spec.quantity).toBe(24);
+    // 游离 `24听` 未紧贴 size -> 不推单件
+    expect(parseTier1(raw('整箱24听 可乐 330ml')).spec.quantity).toBeNull();
+    // 品名噪声 X20 + 后置 *6
+    expect(parseTier1(raw('可口可乐X20 330ml*6听', 40)).spec.quantity).toBe(6);
+    // 乘号在场但数量 0 -> 不推单件
+    const zero = parseTier1(raw('农夫山泉 330ml*0'));
+    expect(zero.spec.quantity).toBe(0);
+    expect(zero.warnings).not.toContain('数量按单件推断为 1');
+    // 总量复述
+    expect(parseTier1(raw('多维刺梨柠檬饮 2.1L(100mL×21)', 69.9)).spec.quantity).toBe(21);
+  });
 });
