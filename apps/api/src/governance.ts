@@ -16,7 +16,7 @@
 // (invalid-request/config-error/insufficient-information/internal) so failures
 // are mechanically distinguishable.
 import type { MiddlewareHandler } from 'hono';
-import type { Bindings } from './bindings.js';
+import type { AppEnv, Bindings } from './bindings.js';
 
 /** Fixed-window length in seconds (module constant; configurable if needed). */
 export const RATE_LIMIT_WINDOW_SECONDS = 60;
@@ -51,8 +51,14 @@ export interface Governance {
   authenticate(env: Bindings, headers: Headers): AuthResult;
   /** Fixed-window per-key rate check. MUST fail-open on KV failure. */
   checkRateLimit(env: Bindings, key: string): Promise<RateResult>;
-  /** Admission usage counting (metadata only). MUST NOT throw to the caller. */
-  recordUsage(env: Bindings, key: string): Promise<void>;
+  /**
+   * Admission usage counting (metadata only). MUST NOT throw to the caller.
+   * `amount` defaults to 1 (the admission baseline) and is back-compatible; a
+   * caller (e.g. batch overflow accounting) may pass a larger increment. The
+   * caller MUST guarantee `amount >= 1` — this port adds it as-is and does NOT
+   * guard against `amount <= 0` (a negative would corrupt the KV count).
+   */
+  recordUsage(env: Bindings, key: string, amount?: number): Promise<void>;
 }
 
 /** Bearer prefix (case-insensitive scheme per RFC 7235). */
@@ -171,7 +177,7 @@ export function createRealGovernance(): Governance {
       }
     },
 
-    async recordUsage(env, key): Promise<void> {
+    async recordUsage(env, key, amount = 1): Promise<void> {
       const kv = env.GOVERNANCE_KV;
       if (kv === undefined) return;
 
@@ -197,7 +203,7 @@ export function createRealGovernance(): Governance {
         }
         const payload = JSON.stringify({
           key,
-          count: prev + 1,
+          count: prev + (amount ?? 1),
           lastSeen: new Date().toISOString(),
         });
         await kv.put(usageKey, payload);
@@ -221,8 +227,8 @@ export function createNoopGovernance(): Governance {
     async checkRateLimit(): Promise<RateResult> {
       return { ok: true };
     },
-    async recordUsage(): Promise<void> {
-      // no-op
+    async recordUsage(_env, _key, _amount?): Promise<void> {
+      // no-op (ignores amount, like all other inputs)
     },
   };
 }
@@ -233,7 +239,7 @@ export function createNoopGovernance(): Governance {
  * `next()`. Short-circuits with a JSON error body on any failed gate. Mount this
  * on /parse only — /health is exempt from the entire chain.
  */
-export function governanceMiddleware(gov: Governance): MiddlewareHandler<{ Bindings: Bindings }> {
+export function governanceMiddleware(gov: Governance): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     // ① Authentication. Unauthenticated requests MUST NOT reach rate limiting
     //    (so unregistered keys can't blow up KV counter slots).
@@ -241,6 +247,10 @@ export function governanceMiddleware(gov: Governance): MiddlewareHandler<{ Bindi
     if (!auth.ok) {
       return c.json({ error: auth.code, message: auth.message }, auth.status);
     }
+
+    // Expose the authenticated key to downstream handlers (e.g. batch overflow
+    // usage accounting) via the context Variable.
+    c.set('govKey', auth.key);
 
     // ② Rate limit (after auth). Over-limit short-circuits before business.
     const rate = await gov.checkRateLimit(c.env, auth.key);

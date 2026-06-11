@@ -18,3 +18,14 @@ export interface Bindings {
   /** KV namespace for governance (rate-limit + usage counters). */
   GOVERNANCE_KV?: KVNamespace;
 }
+
+/**
+ * Hono environment for the app: the binding set plus context Variables. Defined
+ * on this shared leaf (both routes.ts and governance.ts already import Bindings
+ * from here) so the `Variables` SOT lives alongside the `Bindings` SOT and the
+ * existing `routes → governance` dependency direction is preserved.
+ *
+ * `govKey` is set by governanceMiddleware after auth so handlers can attribute
+ * usage (e.g. batch overflow accounting) to the authenticated key.
+ */
+export type AppEnv = { Bindings: Bindings; Variables: { govKey: string } };

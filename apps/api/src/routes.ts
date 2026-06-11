@@ -11,7 +11,7 @@ import { ParsedSpecSchema, UnitPriceSchema, WarningsSchema, type RawProduct } fr
 import type { Repository } from '@unit-price/db';
 import { orchestrate } from './orchestrate.js';
 import type { SpecParserLLM } from './llm.js';
-import type { Bindings } from './bindings.js';
+import type { AppEnv, Bindings } from './bindings.js';
 import { governanceMiddleware, type Governance } from './governance.js';
 
 /** Request schema: title non-empty string, price a finite number, optional hint. */
@@ -86,6 +86,50 @@ export const IngestResponseSchema = z.object({ rawId: z.string().min(1) });
 
 export type IngestResponse = z.infer<typeof IngestResponseSchema>;
 
+/**
+ * Max items per batch ingest request. Pinned at 40 to keep one invocation's
+ * background tier2 LLM fetches within the free-plan Worker subrequest ceiling
+ * (50) with headroom for non-LLM fetches. Raising this to 100+ REQUIRES first
+ * confirming the production Worker is on a PAID plan (1000 subrequests) — an
+ * explicit deploy prerequisite, not a runtime "find out later".
+ */
+export const MAX_BATCH = 40;
+
+/** Bounded concurrency pool size for background per-item parsing of a batch. */
+export const BG_POOL = 5;
+
+/**
+ * Batch ingest request: an envelope of 1..MAX_BATCH single-item contributions.
+ * Reuses ContributeRequestSchema for each item (single-item fields are NOT
+ * redefined — schema SOT). Strict: any item failing ContributeRequestSchema, an
+ * empty array, or an over-limit array rejects the whole batch with 400.
+ */
+export const BatchIngestRequestSchema = z.object({
+  items: z.array(ContributeRequestSchema).min(1).max(MAX_BATCH),
+});
+
+export type BatchIngestRequest = z.infer<typeof BatchIngestRequestSchema>;
+
+/**
+ * Batch ingest response: how many items landed as raw + which ones failed.
+ * `accepted` = items whose upsertRaw succeeded and were queued for background
+ * parsing. `failed` reports each failed item by its ORIGINAL index in the
+ * request `items` array (for precise client-side dequeue/retry), plus its
+ * store/storeSku for logging. Invariant: accepted + failed.length === items.length.
+ */
+export const BatchIngestResponseSchema = z.object({
+  accepted: z.number().int().nonnegative(),
+  failed: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      store: z.string(),
+      storeSku: z.string(),
+    }),
+  ),
+});
+
+export type BatchIngestResponse = z.infer<typeof BatchIngestResponseSchema>;
+
 export interface AppDeps {
   /**
    * Factory that builds an LLM port from the per-request injected env. Building
@@ -121,7 +165,7 @@ export interface AppDeps {
    * throws under Node dev; the runtime difference is confined to this port.
    */
   scheduleBackground?: (
-    c: Context<{ Bindings: Bindings }>,
+    c: Context<AppEnv>,
     run: () => Promise<void>,
   ) => void | Promise<void>;
 }
@@ -141,7 +185,7 @@ type HelperResult<T> = { ok: true; value: T } | { ok: false; response: Response 
  * 400 invalid-request, no row written.
  */
 async function parseContributeBody(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<AppEnv>,
 ): Promise<HelperResult<ContributeRequest>> {
   let body: unknown;
   try {
@@ -177,7 +221,7 @@ async function parseContributeBody(
  * persistence-error. Both keep the failure from bubbling as a framework 500.
  */
 function resolveRepo(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<AppEnv>,
   deps: AppDeps,
 ): HelperResult<Repository> {
   let repo: Repository | null;
@@ -196,17 +240,19 @@ function resolveRepo(
 }
 
 /**
- * upsertRaw FIRST (observation-first): the raw report is the most valuable
- * crowd-sourced asset, persisted even if parsing later fails. A throw maps to
- * persistence-error (raw not landed → no rawId).
+ * SHARED landing map (single source of the upsertRaw field mapping). Returns the
+ * app-generated rawId on success, or `null` on any throw. Both `landRaw` (single
+ * /ingest, /contribute) and the batch handler MUST go through here so the
+ * `ContributeRequest → upsertRaw({...})` field mapping lives in EXACTLY ONE place
+ * — inlining a second copy in the batch handler would let the single-item and
+ * batch landing logic silently drift apart.
  */
-async function landRaw(
-  c: Context<{ Bindings: Bindings }>,
+async function upsertRawOrNull(
   repo: Repository,
   req: ContributeRequest,
-): Promise<HelperResult<string>> {
+): Promise<string | null> {
   try {
-    const rawId = await repo.upsertRaw({
+    return await repo.upsertRaw({
       store: req.store,
       storeSku: req.storeSku,
       raw: { title: req.title, price: req.price, categoryHint: req.categoryHint },
@@ -214,17 +260,35 @@ async function landRaw(
       sourceUrl: req.sourceUrl,
       capturedAt: req.capturedAt,
     });
-    return { ok: true, value: rawId };
   } catch {
+    return null;
+  }
+}
+
+/**
+ * upsertRaw FIRST (observation-first): the raw report is the most valuable
+ * crowd-sourced asset, persisted even if parsing later fails. A throw maps to
+ * persistence-error (raw not landed → no rawId). Thin wrapper over the shared
+ * `upsertRawOrNull` map: a null (throw) becomes the 500 short-circuit response;
+ * /ingest and /contribute behavior is unchanged.
+ */
+async function landRaw(
+  c: Context<AppEnv>,
+  repo: Repository,
+  req: ContributeRequest,
+): Promise<HelperResult<string>> {
+  const rawId = await upsertRawOrNull(repo, req);
+  if (rawId === null) {
     return {
       ok: false,
       response: c.json({ error: 'persistence-error', message: 'failed to persist raw report' }, 500),
     };
   }
+  return { ok: true, value: rawId };
 }
 
-export function createApp(deps: AppDeps): Hono<{ Bindings: Bindings }> {
-  const app = new Hono<{ Bindings: Bindings }>();
+export function createApp(deps: AppDeps): Hono<AppEnv> {
+  const app = new Hono<AppEnv>();
 
   // /health is exempt from the entire governance chain (auth + rate + usage),
   // so liveness probes can hit it keyless and high-frequency.
@@ -434,6 +498,159 @@ export function createApp(deps: AppDeps): Hono<{ Bindings: Bindings }> {
     // ── Validate the 202 body (rawId from upsertRaw is always non-empty, so this
     //    is a defensive guard); failure → 500 internal (mirrors /contribute).
     const validated = IngestResponseSchema.safeParse({ rawId });
+    if (!validated.success) {
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
+    }
+    return c.json(validated.data, 202);
+  });
+
+  // Governance runs on /ingest/batch too, mounted BEFORE the handler. Hono
+  // matches `app.use('/ingest', …)` by EXACT path, so the /ingest middleware
+  // does NOT wrap /ingest/batch — the batch endpoint MUST mount its own
+  // governance. Registered right after /ingest for locality.
+  app.use('/ingest/batch', governanceMiddleware(deps.governance));
+
+  // POST /ingest/batch — batch async crowd-sourced capture: land each item's raw
+  // SYNCHRONOUSLY (shared upsertRawOrNull map), then schedule a SINGLE bounded-
+  // concurrency background unit (BG_POOL) draining all landed items, and return
+  // 202 immediately. Request-path error codes mirror /ingest:
+  // {invalid-request(400), persistence-error(500), internal(500), accepted(202)}
+  // plus governance codes. accepted=0 (every upsertRaw failed) → 500 (NO 2xx
+  // masking a whole-batch write failure as accepted).
+  app.post('/ingest/batch', async (c) => {
+    // ── Envelope validation. Non-JSON → 400 invalid-request.
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid-request', message: 'request body must be valid JSON' }, 400);
+    }
+
+    // Strict: empty array / over MAX_BATCH / any item failing
+    // ContributeRequestSchema → 400, whole batch rejected, no row written.
+    const parsedReq = BatchIngestRequestSchema.safeParse(body);
+    if (!parsedReq.success) {
+      return c.json(
+        {
+          error: 'invalid-request',
+          message: 'request body failed validation',
+          issues: parsedReq.error.issues.map((i) => ({ path: i.path, message: i.message })),
+        },
+        400,
+      );
+    }
+    const items = parsedReq.data.items;
+
+    // ── Resolve the repository (reused). null/throw → 500 persistence-error
+    //    (whole batch, no raw landed).
+    const resolved = resolveRepo(c, deps);
+    if (!resolved.ok) return resolved.response;
+    const repo = resolved.value;
+
+    // ── Synchronous per-item landing via the SHARED map. Each item lands
+    //    independently; a throw (null) does not stop the rest. Invariant:
+    //    accepted + failed.length === items.length.
+    const landed: Array<{ rawId: string; req: ContributeRequest }> = [];
+    const failed: Array<{ index: number; store: string; storeSku: string }> = [];
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index]!;
+      const rawId = await upsertRawOrNull(repo, item);
+      if (rawId === null) {
+        failed.push({ index, store: item.store, storeSku: item.storeSku });
+      } else {
+        landed.push({ rawId, req: item });
+      }
+    }
+    const accepted = landed.length;
+
+    // ── SINGLE bounded-concurrency background unit (NOT one waitUntil per item —
+    //    that would fan out MAX_BATCH unbounded concurrent units). drainBackground
+    //    consumes `landed` through a fixed pool of BG_POOL workers; each item runs
+    //    the SAME logic as /ingest's background `run` (orchestrate → ok ?
+    //    saveParsed : log), self-wrapping try/catch so one item never trips the
+    //    others. BG_POOL bounds CONCURRENCY; MAX_BATCH bounds TOTAL subrequests.
+    const env = c.env;
+    const drainBackground = async (
+      units: Array<{ rawId: string; req: ContributeRequest }>,
+      pool: number,
+    ): Promise<void> => {
+      let cursor = 0;
+      const runOne = async (unit: { rawId: string; req: ContributeRequest }): Promise<void> => {
+        const { rawId, req } = unit;
+        try {
+          const input: RawProduct = { title: req.title, price: req.price, categoryHint: req.categoryHint };
+          const outcome = await orchestrate(input, deps.makeLlm(env));
+          if (outcome.kind === 'insufficient') {
+            console.warn('[ingest/batch] background parse insufficient', {
+              rawId,
+              store: req.store,
+              storeSku: req.storeSku,
+            });
+            return;
+          }
+          if (outcome.kind === 'config-error') {
+            console.error('[ingest/batch] background parse config-error', {
+              rawId,
+              store: req.store,
+              storeSku: req.storeSku,
+              message: outcome.message,
+            });
+            return;
+          }
+          // ok → saveParsed. calc assembled directly from orchestrate's response
+          // (no recompute); uncomputable (per100ml=null) persisted normally.
+          const res = outcome.response;
+          await repo.saveParsed({
+            rawId,
+            spec: res.spec,
+            calc: { unitPrice: res.unitPrice, confidence: res.confidence, warnings: res.warnings },
+          });
+        } catch (err) {
+          console.error('[ingest/batch] background work failed', {
+            rawId,
+            store: req.store,
+            storeSku: req.storeSku,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      };
+      const worker = async (): Promise<void> => {
+        while (cursor < units.length) {
+          const unit = units[cursor++]!;
+          await runOne(unit);
+        }
+      };
+      const workers: Array<Promise<void>> = [];
+      const width = Math.min(pool, units.length);
+      for (let i = 0; i < width; i++) workers.push(worker());
+      await Promise.all(workers);
+    };
+
+    if (accepted >= 1) {
+      // Schedule the background unit ONCE (single waitUntil) — the pool limits
+      // concurrency internally. Production's waitUntil returns void so this
+      // `await` resolves immediately; the dev/default sync version awaits the
+      // whole drain (deterministic for tests).
+      await (deps.scheduleBackground ?? ((_c, r) => r()))(c, () => drainBackground(landed, BG_POOL));
+    }
+
+    // ── Usage stacking: admission already counted 1 (governance middleware).
+    //    Total usage for the request should equal `accepted`, so add (accepted-1)
+    //    when accepted>1. Guard >1 so we never pass amount ≤ 0 (would corrupt the
+    //    KV count). Stacking failure does not throw / does not change the response.
+    const key = c.get('govKey');
+    if (accepted > 1) await deps.governance.recordUsage(c.env, key, accepted - 1);
+
+    // ── Status code. accepted=0 (every upsertRaw failed) → 500 persistence-error,
+    //    NO result body (mirrors single /ingest upsertRaw failure → 500; never a
+    //    2xx masking a whole-batch write failure as accepted).
+    if (accepted === 0) {
+      return c.json({ error: 'persistence-error', message: 'failed to persist any raw report' }, 500);
+    }
+
+    // accepted ≥ 1 → assemble + validate the 202 body. Validation failure → 500
+    // internal (defensive guard, effectively unreachable).
+    const validated = BatchIngestResponseSchema.safeParse({ accepted, failed });
     if (!validated.success) {
       return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
