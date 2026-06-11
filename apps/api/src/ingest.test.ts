@@ -23,7 +23,7 @@ import {
   RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW_SECONDS,
 } from './governance.js';
-import type { Bindings } from './bindings.js';
+import type { AppEnv, Bindings } from './bindings.js';
 import type { ParseResult, SpecParserLLM } from './llm.js';
 
 const migrationsFolder = fileURLToPath(
@@ -72,7 +72,7 @@ const configFailPort: SpecParserLLM = {
 /** Synchronous background port: run() is awaited, so the background completes
  *  before the 202 returns — lets functional tests query post-background rows. */
 const syncBackground = (
-  _c: Context<{ Bindings: Bindings }>,
+  _c: Context<AppEnv>,
   run: () => Promise<void>,
 ): Promise<void> => run();
 
@@ -90,7 +90,7 @@ async function ingest(opts: {
   makeRepo?: (env: Bindings) => Repository | null;
   body: unknown;
   scheduleBackground?: (
-    c: Context<{ Bindings: Bindings }>,
+    c: Context<AppEnv>,
     run: () => Promise<void>,
   ) => void | Promise<void>;
 }) {
@@ -335,7 +335,7 @@ describe('POST /ingest — non-blocking fire-and-forget (5.4)', () => {
     const { repo } = openRepo();
     const neverResolves = () => new Promise<void>(() => {});
     const fireAndForget = (
-      _c: Context<{ Bindings: Bindings }>,
+      _c: Context<AppEnv>,
       run: () => Promise<void>,
     ): void => {
       void run();

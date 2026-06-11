@@ -25,9 +25,13 @@ export {
   ContributeRequestSchema,
   ContributeResponseSchema,
   IngestResponseSchema,
+  BatchIngestRequestSchema,
+  BatchIngestResponseSchema,
   type ContributeRequest,
   type ContributeResponse,
   type IngestResponse,
+  type BatchIngestRequest,
+  type BatchIngestResponse,
 } from './routes.js';
 export {
   orchestrate,
