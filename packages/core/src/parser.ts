@@ -79,13 +79,21 @@ const QTY_SIGNAL_RE = new RegExp(
   'i',
 );
 
+// 含量描述符 token:`数字 + 含量后缀`(酒精度 度/°、%vol、百分比 %)。这些是商品
+// 含量、不是数量,故在单件推断的「游离数字」判定里要先剥掉。global 以剥多次出现。
+// 顺序:%vol/%\s*vol 在 % 之前(`55%vol` 整段抹、不留 vol);vol 单列兜底 `55vol`。
+const CONTENT_TOKEN_RE = /\d+(?:\.\d+)?\s*(?:%\s*vol|%vol|vol|度|°|%)/gi;
+
 /**
  * True when `rest` (the title with the size span removed) carries any digit-
  * bearing quantity signal: a multiplier symbol, a `数字 + 包装单位` count, or a
  * free-floating digit. Drives the single-unit inference guard.
+ *
+ * 含量描述符(`53度`/`55%vol`/`100%`)非数量,先剥再判:剥离只作用于本判据、
+ * 不改 `rest` 本身、不影响 size/乘号/包装计数等正向抽取(它们在此之前已定)。
  */
 function hasQuantitySignal(rest: string): boolean {
-  return QTY_SIGNAL_RE.test(rest);
+  return QTY_SIGNAL_RE.test(rest.replace(CONTENT_TOKEN_RE, ''));
 }
 
 /**
