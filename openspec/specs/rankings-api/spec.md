@@ -16,7 +16,7 @@
 
 **排序**：必须按 `per100ml` **升序**（最便宜真实单价 `rank=1`）。相同 `per100ml` 必须以 **`unit_price` 同表确定列 `unit_price.id` 升序**作次级排序键，保证分页稳定、不重叠不遗漏；次级键**必须取 `unit_price` 同表列**——**禁用跨表的 `product.id`**：它与 `per100ml` 不在同一张表，无法被 `per100ml` 索引覆盖、会迫使临时排序、削弱稳定保证。主排序**必须能走 `per100ml` 列上的数值索引**（schema 既有 `unit_price_per100ml_idx`，REAL 数值序非字典序）满足 `per100ml` 序与 `per100ml IS NOT NULL` 过滤，**禁止全表扫描后把全量行取入应用内存排序**；同值段内按 `unit_price.id` 定序即确定 tiebreak。`unit_price.id` 是 app 生成的 **TEXT** 主键，`ASC` 为**字典序**——对同一数据快照构成**确定全序**（任意两 id 字符串可比、无并列），足以保证 tiebreak 确定，不依赖 id 数值单调。注：本期单列 `per100ml` 索引无法同时覆盖二级键 `unit_price.id`，引擎可能对该二级序做一次轻量临时排序——这是**可接受**的（数据量小、且仍由索引承担主序与过滤，非全表内存排序）；若未来同值段巨大需完全索引覆盖，可由 persistence 增 `(per100ml, id)` 复合索引，非本期必需。
 
-**响应 schema（Zod 单一事实源）**：响应体必须由 `RankingsResponseSchema`（Zod，types 从中推导）定义，落点与既有 `ParseResponseSchema`/`IngestResponseSchema` 一致——现居 `apps/api/src/routes.ts`、经 `apps/api/src/index.ts` 再导出；`packages/api-client` 共享包尚未建，待其提取时再迁共享层供 SDK 复用（届时 app 与 SDK 共依赖同一份）。每个榜单项必须包含：
+**响应 schema（Zod 单一事实源）**：响应体必须由 `RankingsResponseSchema`（Zod，types 从中推导）定义。该 schema **现居 `packages/api-client`（`@unit-price/api-client`）**，`apps/api` 与客户端（小程序等）**共依赖同一份**；`apps/api` 从该包 import（不再在 `routes.ts` 自持定义）。每个榜单项必须包含：
 - `rank`：整数，从 `1` 起，等于 `offset + 该项在结果中的序号`（1-based），**不落库、读时投影赋值**；
 - `title`：来自 `product_raw.title`；
 - `priceCents`：整数分（来自 `product_raw.price`，原样为分），**禁止**在服务端转元/做浮点货币换算（换算交前端展示）；
