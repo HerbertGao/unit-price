@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sams值不值 · 设计基线 (P0)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     Sams值不值 — 设计 tokens（视觉 SOT，供 Taro WXSS 翻译）
+     概念：诚实验货单 / 价格透视眼。冷灰白卡 + 山姆蓝(主) + 绿(值) + 红(贵) + 铜金(点缀)。
+     ============================================================ */
+  :root {
+    /* — 色板 — */
+    --paper:      #F1F3F6;   /* 冷调浅灰底，贴山姆 App */
+    --paper-card: #FFFFFF;   /* 白卡 */
+    --paper-sink: #E9EDF2;   /* 凹陷/分组底 */
+    --ink:        #1B2735;   /* 冷墨(蓝黑) — 正文/数据 */
+    --ink-soft:   #54606E;   /* 次级文字 */
+    --muted:      #8B95A2;   /* 弱化/脚注 */
+    --line:       #E4E8ED;   /* 发丝线 */
+    --line-strong:#CBD3DC;
+    --blue:       #014B90;   /* 山姆 App 蓝(抓包实测) = 品牌/结构/主操作/激活 */
+    --blue-bright:#0E6FBE;   /* 亮蓝 = 链接/次级交互 */
+    --blue-bg:    #E0EAF5;   /* 蓝浅底 = 激活 chip/徽标底 */
+    --em:         #4F9BD9;   /* 标题强调 / 暗底高亮蓝 */
+    --board-bg:   #08233F;   /* 展示台深蓝底 */
+    --board-glow: rgba(1,101,184,.24);
+    --worth:      #137A4C;   /* 绿 = 值 / 划算 / rank1 */
+    --worth-bg:   #E0EFE6;
+    --pricey:     #DE1C24;   /* 红 = 贵 / 警示(复用山姆红) */
+    --pricey-bg:  #FBE6E5;
+    --stamp:      #DE1C24;
+    --gold:       #B97A2E;   /* 铜金 = 卓越/最划算·稀用点缀 */
+
+    /* — 字体 — */
+    --f-display: 'Fraunces', 'Noto Serif SC', Georgia, serif;
+    --f-sans:    'Noto Sans SC', -apple-system, 'PingFang SC', sans-serif;
+    --f-mono:    'DM Mono', 'SFMono-Regular', ui-monospace, monospace;
+
+    /* — 尺度（小程序用 rpx，原型用 px，1px≈2rpx）— */
+    --r-card: 18px;
+    --r-pill: 999px;
+    --shadow: 0 1px 0 var(--line), 0 14px 30px -22px rgba(20,35,55,.40);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--f-sans);
+    background: var(--board-bg);
+    color: #E8EEF5;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    /* 深蓝展示台底纹 */
+    background-image:
+      radial-gradient(1200px 600px at 80% -10%, var(--board-glow), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(185,122,46,.10), transparent 55%);
+    padding: 56px 24px 90px;
+  }
+
+  /* ───────── 展示台 header ───────── */
+  .board-head { max-width: 1180px; margin: 0 auto 52px; }
+  .kicker {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .32em;
+    text-transform: uppercase; color: #CDA063; margin-bottom: 16px;
+  }
+  .board-title {
+    font-family: var(--f-display); font-weight: 900; font-size: 64px;
+    line-height: .98; letter-spacing: -.02em; color: #FFFFFF;
+  }
+  .board-title em { font-style: italic; font-weight: 500; color: var(--em); }
+  .board-sub {
+    margin-top: 18px; max-width: 640px; color: #AEC0D4; font-size: 15px; line-height: 1.7;
+  }
+  .board-sub b { color: #FFFFFF; font-weight: 700; }
+
+  /* ───────── tokens 条 ───────── */
+  .tokens { max-width: 1180px; margin: 0 auto 56px; display: flex; flex-wrap: wrap; gap: 28px 44px; align-items: flex-start; }
+  .tok-group h4 {
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+    color: #8FA1B5; margin-bottom: 14px;
+  }
+  .swatches { display: flex; gap: 10px; }
+  .sw { width: 46px; }
+  .sw i { display: block; height: 46px; border-radius: 11px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .sw span { display: block; font-family: var(--f-mono); font-size: 10px; color: #9DB1C6; margin-top: 7px; text-align: center; }
+  .type-spec { display: flex; flex-direction: column; gap: 10px; }
+  .type-spec div { display: flex; align-items: baseline; gap: 12px; }
+  .type-spec .lbl { font-family: var(--f-mono); font-size: 10px; color: #8FA1B5; width: 64px; }
+  .ts-display { font-family: var(--f-display); font-weight: 900; font-size: 26px; color: #FFFFFF; }
+  .ts-mono { font-family: var(--f-mono); font-size: 20px; color: var(--em); }
+  .ts-sans { font-family: var(--f-sans); font-weight: 700; font-size: 19px; color: #E8EEF5; }
+
+  /* ───────── 屏幕画廊 ───────── */
+  .gallery {
+    max-width: 1180px; margin: 0 auto; display: flex; flex-wrap: wrap;
+    gap: 30px 26px; justify-content: center; align-items: flex-start;
+  }
+  .frame-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .frame-label {
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .12em; color: #9DB1C6;
+  }
+  .frame-label b { color: #FFFFFF; font-weight: 500; }
+
+  /* 手机框 375×812 */
+  .phone {
+    width: 375px; height: 812px; border-radius: 44px; background: var(--paper);
+    box-shadow: 0 0 0 11px #050b14, 0 0 0 13px #16202e, 0 40px 80px -30px rgba(0,0,0,.8);
+    overflow: hidden; position: relative; display: flex; flex-direction: column;
+    /* 纸纹 */
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='0.035'/></svg>");
+  }
+  .notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 150px; height: 30px; background: #050402; border-radius: 0 0 18px 18px; z-index: 50; }
+  .statusbar {
+    height: 50px; flex-shrink: 0; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 26px 6px; font-family: var(--f-mono); font-size: 13px; color: var(--ink); font-weight: 500;
+  }
+  .statusbar .dots { letter-spacing: 2px; }
+
+  /* 滚动内容区 */
+  .screen { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .scroll { flex: 1; overflow-y: auto; }
+  .scroll::-webkit-scrollbar { width: 0; }
+
+  /* ───────── 通用组件 ───────── */
+  /* 顶部 app bar */
+  .appbar { padding: 6px 20px 12px; display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; flex-direction: column; }
+  .brand .wm { font-family: var(--f-display); font-weight: 900; font-size: 26px; line-height: .9; color: var(--ink); letter-spacing: -.01em; }
+  .brand .wm em { font-style: italic; font-weight: 500; color: var(--blue); }
+  .brand .tag { font-family: var(--f-mono); font-size: 10px; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
+  .lens {
+    width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--ink);
+    position: relative; flex-shrink: 0;
+  }
+  .lens::after { content:''; position:absolute; width: 12px; height: 3px; background: var(--ink); border-radius: 2px; right: -5px; bottom: 2px; transform: rotate(45deg); }
+  .lens::before { content:'¥'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--f-display); font-weight:900; font-size:16px; color: var(--blue); }
+
+  /* 搜索栏 */
+  .search {
+    margin: 2px 20px 14px; height: 44px; background: var(--paper-card); border: 1.5px solid var(--line-strong);
+    border-radius: var(--r-pill); display: flex; align-items: center; gap: 10px; padding: 0 18px;
+  }
+  .search svg { flex-shrink: 0; }
+  .search span { font-size: 14px; color: var(--muted); }
+
+  /* 收据胶带式 横幅（新鲜度/范围诚实） */
+  .tape {
+    margin: 0 20px 16px; background: var(--paper-sink); border-radius: 10px;
+    padding: 9px 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-family: var(--f-mono); font-size: 11px; color: var(--ink-soft);
+    border-left: 3px solid var(--blue);
+  }
+  .tape .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--muted); }
+
+  /* 区段标题 */
+  .sec-head { padding: 4px 20px 12px; display: flex; align-items: flex-end; justify-content: space-between; }
+  .sec-head h2 { font-family: var(--f-display); font-weight: 900; font-size: 23px; color: var(--ink); letter-spacing: -.01em; }
+  .sec-head .unit { font-family: var(--f-mono); font-size: 12px; color: var(--blue); background: var(--blue-bg); padding: 4px 9px; border-radius: 6px; }
+
+  /* 属性 chips */
+  .chips { display: flex; gap: 8px; padding: 0 20px 14px; overflow-x: auto; }
+  .chip {
+    flex-shrink: 0; font-size: 13px; padding: 7px 15px; border-radius: var(--r-pill);
+    background: var(--paper-card); border: 1.5px solid var(--line-strong); color: var(--ink-soft); white-space: nowrap;
+  }
+  .chip.on { background: var(--blue); color: #fff; border-color: var(--blue); font-weight: 500; }
+
+  /* 榜单行 */
+  .list { padding: 0 14px 8px; }
+  .row {
+    background: var(--paper-card); border-radius: var(--r-card); padding: 14px;
+    display: flex; gap: 13px; align-items: center; margin-bottom: 10px;
+    box-shadow: var(--shadow); position: relative;
+  }
+  .row.top { border: 1.5px solid var(--worth); }
+  .rank {
+    flex-shrink: 0; width: 34px; text-align: center; font-family: var(--f-mono); font-weight: 500;
+    font-size: 17px; color: var(--muted);
+  }
+  .row.top .rank { color: var(--worth); }
+  /* 商品图占位（mock）/ 缺图降级 */
+  .pic {
+    width: 56px; height: 56px; flex-shrink: 0; border-radius: 12px; background: var(--paper-sink);
+    display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;
+  }
+  .pic .bottle { width: 18px; height: 38px; border-radius: 5px 5px 7px 7px; background: linear-gradient(160deg, #cfe3d6, #a9c9b6); position: relative; }
+  .pic .bottle::before { content:''; position:absolute; top:-6px; left:50%; transform:translateX(-50%); width:8px; height:8px; background:#a9c9b6; border-radius:2px; }
+  .pic.cola .bottle { background: linear-gradient(160deg,#3a2b22,#6b4a36); }
+  .pic.tea .bottle { background: linear-gradient(160deg,#d9b36a,#b98a21); }
+  .pic.juice .bottle { background: linear-gradient(160deg,#e7b07a,#d07b34); }
+  .pic.degrade { background: repeating-linear-gradient(45deg,var(--paper-sink),var(--paper-sink) 5px,#e6dec9 5px,#e6dec9 10px); }
+  .pic.degrade b { font-family: var(--f-display); font-weight: 900; font-size: 20px; color: var(--line-strong); }
+  .row-body { flex: 1; min-width: 0; }
+  .row-title { font-size: 14px; font-weight: 500; color: var(--ink); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .row-meta { display: flex; align-items: baseline; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+  .per {
+    font-family: var(--f-mono); font-weight: 500; font-size: 21px; color: var(--ink); letter-spacing: -.01em;
+  }
+  .per u { text-decoration: none; font-size: 11px; color: var(--muted); margin-left: 2px; }
+  .pkg { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+
+  /* 诚实标注族 — 统一“盖戳”视觉 */
+  .stamp-tag {
+    font-family: var(--f-mono); font-size: 10px; padding: 2px 7px; border-radius: 5px; letter-spacing: .02em;
+    display: inline-flex; align-items: center; gap: 4px; line-height: 1.6;
+  }
+  .t-attr  { background: var(--paper-sink); color: var(--ink-soft); }
+  .t-warn  { background: var(--pricey-bg); color: var(--pricey); }
+  .t-stale { background: #f3ecd6; color: var(--gold); }
+  .t-deal  { background: var(--worth-bg); color: var(--worth); font-weight: 500; }
+  .t-noncmp{ background: var(--paper-sink); color: var(--muted); }
+
+  /* footer of list */
+  .list-foot { text-align: center; font-family: var(--f-mono); font-size: 11px; color: var(--muted); padding: 8px 0 16px; }
+
+  /* ───────── 底部 TabBar ───────── */
+  .tabbar {
+    flex-shrink: 0; height: 64px; background: var(--paper-card); border-top: 1.5px solid var(--line);
+    display: flex; padding-bottom: 8px;
+  }
+  .tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); }
+  .tab .ic { width: 22px; height: 22px; border: 2px solid currentColor; border-radius: 6px; }
+  .tab.lens-ic .ic { border-radius: 50%; }
+  .tab.mine-ic .ic { border-radius: 11px 11px 4px 4px; }
+  .tab span { font-size: 11px; }
+  .tab.on { color: var(--blue); }
+  .tab.on span { font-weight: 700; }
+
+  /* ───────── 分类树（双栏）───────── */
+  .twocol { display: flex; flex: 1; overflow: hidden; }
+  .rail { width: 118px; flex-shrink: 0; background: var(--paper-sink); overflow-y: auto; padding: 6px 0 20px; }
+  .rail .grp { font-family: var(--f-mono); font-size: 10px; color: var(--muted); padding: 12px 12px 6px; letter-spacing: .1em; }
+  .rail .node { padding: 11px 12px; font-size: 13px; color: var(--ink-soft); border-left: 3px solid transparent; }
+  .rail .node.sub { padding-left: 20px; font-size: 13px; }
+  .rail .node.on { background: var(--paper); color: var(--ink); border-left-color: var(--worth); font-weight: 700; }
+  .rail .node.off { color: var(--muted); }
+  .rail .node small { display: block; font-family: var(--f-mono); font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .pane { flex: 1; overflow-y: auto; }
+  .pane-head { padding: 14px 16px 8px; }
+  .pane-head h3 { font-family: var(--f-display); font-weight: 900; font-size: 20px; color: var(--ink); }
+  .pane-head p { font-family: var(--f-mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .pane .chips { padding: 8px 16px 12px; }
+  .crow { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 11px; }
+  .crow .rank { width: 24px; font-size: 14px; }
+  .crow .cb { flex: 1; min-width: 0; }
+  .crow .ct { font-size: 13px; color: var(--ink); line-height: 1.3; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .crow .cper { font-family: var(--f-mono); font-size: 16px; color: var(--ink); margin-top: 3px; }
+  /* 不可排名节点提示 */
+  .noncmp-note {
+    margin: 16px; padding: 16px; border: 1.5px dashed var(--line-strong); border-radius: 12px;
+    text-align: center; color: var(--muted); font-size: 13px; background: var(--paper-sink);
+  }
+  .noncmp-note b { display: block; color: var(--ink-soft); font-family: var(--f-display); font-weight: 600; font-size: 16px; margin-bottom: 6px; }
+
+  /* ───────── 详情页 ───────── */
+  .backbar { padding: 6px 20px 8px; display: flex; align-items: center; gap: 12px; }
+  .backbar .bk { font-size: 22px; color: var(--ink); }
+  .backbar .bt { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+  .d-head { padding: 6px 20px 4px; display: flex; gap: 14px; }
+  .d-pic { width: 78px; height: 78px; flex-shrink: 0; border-radius: 14px; background: var(--paper-sink); display:flex;align-items:center;justify-content:center; }
+  .d-pic .bottle { width: 22px; height: 50px; border-radius: 6px 6px 9px 9px; background: linear-gradient(160deg,#cfe3d6,#7fae93); }
+  .d-info { flex: 1; }
+  .d-title { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.35; }
+  .d-spec { font-family: var(--f-mono); font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .d-stale { margin-top: 7px; }
+
+  /* HERO 单价 + 验货戳 */
+  .hero {
+    margin: 16px 20px 8px; background: var(--paper-card); border-radius: var(--r-card);
+    box-shadow: var(--shadow); padding: 22px 20px 18px; position: relative; overflow: hidden;
+  }
+  .hero .big {
+    font-family: var(--f-mono); font-weight: 500; font-size: 60px; line-height: .9; color: var(--ink); letter-spacing: -.03em;
+  }
+  .hero .big small { font-size: 18px; color: var(--muted); font-weight: 400; }
+  .hero .ref { font-family: var(--f-mono); font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .verdict {
+    position: absolute; top: 16px; right: 14px; width: 78px; height: 78px; border-radius: 50%;
+    border: 2.5px solid var(--pricey); color: var(--pricey); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; transform: rotate(-13deg); opacity: .92;
+  }
+  .verdict b { font-family: var(--f-display); font-weight: 900; font-size: 26px; line-height: 1; }
+  .verdict u { font-family: var(--f-mono); font-size: 8px; text-decoration: none; letter-spacing: .12em; margin-top: 4px; }
+  .verdict.ok { border-color: var(--worth); color: var(--worth); }
+
+  /* 公式收据行 */
+  .formula {
+    margin: 0 20px 14px; padding: 13px 16px; background: var(--paper-sink); border-radius: 12px;
+    font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 8px;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .formula .lead { color: var(--muted); }
+  .formula b { color: var(--ink); }
+
+  /* 反套路 callout */
+  .insight {
+    margin: 0 20px 16px; padding: 15px 16px; border-radius: 12px; background: var(--pricey-bg);
+    border-left: 3px solid var(--pricey); font-size: 13px; color: #8a1f1a; line-height: 1.6;
+  }
+  .insight b { color: var(--pricey); }
+
+  /* 同品类比价块 */
+  .cmp { margin: 0 20px 18px; }
+  .cmp-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+  .cmp-head h4 { font-family: var(--f-display); font-weight: 600; font-size: 16px; color: var(--ink); }
+  .cmp-head .ssz { font-family: var(--f-mono); font-size: 10px; color: var(--gold); background: #f3ecd6; padding: 3px 7px; border-radius: 5px; }
+  .cmp-list { background: var(--paper-card); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+  .cmp-list .crow:last-child { border-bottom: none; }
+  .crow.me { background: var(--worth-bg); }
+  .crow.me.bad { background: var(--pricey-bg); }
+
+  /* ───────── 我的 ───────── */
+  .contribute {
+    margin: 14px 20px 18px; padding: 20px; border-radius: var(--r-card); background: var(--blue); color: #fff;
+    position: relative; overflow: hidden;
+  }
+  .contribute::after { content:'¥'; position:absolute; right:-10px; bottom:-30px; font-family:var(--f-display); font-weight:900; font-size:150px; color: rgba(255,255,255,.07); }
+  .contribute h3 { font-family: var(--f-display); font-weight: 900; font-size: 22px; margin-bottom: 6px; }
+  .contribute p { font-size: 12.5px; color: #C2D2E6; line-height: 1.6; margin-bottom: 16px; max-width: 78%; }
+  .paste {
+    background: rgba(255,255,255,.10); border: 1.5px dashed rgba(255,255,255,.30); border-radius: 12px;
+    padding: 13px 14px; font-family: var(--f-mono); font-size: 12px; color: #AFC0D4; margin-bottom: 12px;
+  }
+  .paste b { color: #fff; display: block; font-size: 13px; margin-bottom: 4px; }
+  .go-btn { background: var(--gold); color: #fff; font-weight: 700; font-size: 14px; text-align: center; padding: 12px; border-radius: var(--r-pill); }
+
+  .mlist { margin: 0 20px; background: var(--paper-card); border-radius: var(--r-card); box-shadow: var(--shadow); overflow: hidden; }
+  .mitem { padding: 16px 18px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+  .mitem:last-child { border-bottom: none; }
+  .mitem .mi-ic { width: 22px; height: 22px; border-radius: 6px; background: var(--worth-bg); flex-shrink: 0; }
+  .mitem .mi-ic.b { background: var(--pricey-bg); } .mitem .mi-ic.c { background: #f3ecd6; }
+  .mitem .mt { flex: 1; font-size: 14px; color: var(--ink); }
+  .mitem .mv { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+  .mitem .arr { color: var(--line-strong); font-size: 18px; }
+  .method { margin: 16px 20px 0; font-family: var(--f-mono); font-size: 11px; color: var(--muted); text-align: center; line-height: 1.7; }
+
+  /* 组件图例小框 */
+  .legend { margin: 0 20px 18px; }
+  .legend .lg-h { font-family: var(--f-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 18px 0 10px; }
+  .legend .lg-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+
+  .scroll-pad { height: 16px; }
+
+  /* 入场动画 */
+  .frame-wrap { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+  .frame-wrap:nth-child(2){animation-delay:.08s} .frame-wrap:nth-child(3){animation-delay:.16s}
+  .frame-wrap:nth-child(4){animation-delay:.24s} .frame-wrap:nth-child(5){animation-delay:.32s}
+  @keyframes rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 480px) { body { padding: 30px 8px; } .board-title { font-size: 40px; } .phone { transform: scale(.92); } }
+</style>
+</head>
+<body>
+
+  <!-- ============ 展示台头部 ============ -->
+  <div class="board-head">
+    <div class="kicker">P0 · 设计基线 · 主色 山姆蓝 #014B90 · Visual SOT</div>
+    <h1 class="board-title">Sams<em>值不值</em></h1>
+    <p class="board-sub">山姆真实单价比价 · 价格透视眼。视觉概念 <b>「诚实验货单」</b>：把脏规格算成可比单价、并<b>把算式当收据一样印出来</b>。冷调浅灰 + 白卡，<b>山姆蓝</b>主结构，绿=值、红=贵；诚实标注（警示 / 样本量 / 陈旧 / 不可比）做成「盖戳」而非藏起来——诚实就是产品本身。</p>
+  </div>
+
+  <!-- ============ tokens ============ -->
+  <div class="tokens">
+    <div class="tok-group">
+      <h4>Palette</h4>
+      <div class="swatches">
+        <div class="sw"><i style="background:#F1F3F6"></i><span>paper</span></div>
+        <div class="sw"><i style="background:#1B2735"></i><span>ink</span></div>
+        <div class="sw"><i style="background:#014B90"></i><span>蓝</span></div>
+        <div class="sw"><i style="background:#137A4C"></i><span>值</span></div>
+        <div class="sw"><i style="background:#DE1C24"></i><span>贵</span></div>
+        <div class="sw"><i style="background:#B97A2E"></i><span>金</span></div>
+      </div>
+    </div>
+    <div class="tok-group">
+      <h4>Type</h4>
+      <div class="type-spec">
+        <div><span class="lbl">Display</span><span class="ts-display">Fraunces 值不值</span></div>
+        <div><span class="lbl">Numerals</span><span class="ts-mono">0.30 元/100ml</span></div>
+        <div><span class="lbl">Body 中文</span><span class="ts-sans">Noto Sans SC</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 画廊 ============ -->
+  <div class="gallery">
+
+    <!-- ░░░░░░░░ 屏 1：榜单首页 ░░░░░░░░ -->
+    <div class="frame-wrap">
+      <div class="frame-label"><b>① 榜单首页</b> · 旗舰软饮真实单价榜</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span class="dots">▪▪▪ ⌃ ▭</span></div>
+        <div class="screen">
+          <div class="scroll">
+            <div class="appbar">
+              <div class="brand">
+                <div class="wm">Sams<em>值不值</em></div>
+                <div class="tag">拆穿超市单价障眼法</div>
+              </div>
+              <div class="lens"></div>
+            </div>
+            <div class="search">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="#9A9279" stroke-width="1.6"/><path d="M11 11l3 3" stroke="#9A9279" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span>搜软饮名，如 元气森林 / 无糖可乐</span>
+            </div>
+            <div class="tape">
+              <span>山姆软饮</span><span class="dot"></span><span>收录 42 件</span><span class="dot"></span><span>更新于 6月12日</span><span class="dot"></span><span>酒类暂不参与排名</span>
+            </div>
+            <div class="sec-head">
+              <h2>软饮真实单价榜</h2>
+              <span class="unit">元 / 100ml</span>
+            </div>
+            <div class="chips">
+              <span class="chip on">全部</span><span class="chip">无糖</span><span class="chip">气泡</span><span class="chip">进口</span><span class="chip">茶饮</span>
+            </div>
+            <div class="list">
+              <div class="row top">
+                <div class="rank">01</div>
+                <div class="pic"><div class="bottle"></div></div>
+                <div class="row-body">
+                  <div class="row-title">怡宝 饮用纯净水 555ml×24</div>
+                  <div class="row-meta"><span class="per">0.25<u>元/100ml</u></span><span class="pkg">整件 ¥33.9</span><span class="stamp-tag t-deal">★ 最划算</span></div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="rank">02</div>
+                <div class="pic"><div class="bottle"></div></div>
+                <div class="row-body">
+                  <div class="row-title">农夫山泉 饮用天然水 550ml×24</div>
+                  <div class="row-meta"><span class="per">0.30<u>元/100ml</u></span><span class="pkg">整件 ¥39.9</span></div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="rank">03</div>
+                <div class="pic tea"><div class="bottle"></div></div>
+                <div class="row-body">
+                  <div class="row-title">维他 柠檬茶 250ml×24</div>
+                  <div class="row-meta"><span class="per">0.45<u>元/100ml</u></span><span class="pkg">整件 ¥27.0</span><span class="stamp-tag t-attr">茶饮</span></div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="rank">04</div>
+                <div class="pic cola"><div class="bottle"></div></div>
+                <div class="row-body">
+                  <div class="row-title">可口可乐 无糖植物甜汽水 330ml×15</div>
+                  <div class="row-meta"><span class="per">0.57<u>元/100ml</u></span><span class="pkg">整件 ¥45.0</span><span class="stamp-tag t-attr">无糖</span></div>
+                </div>
+              </div>
+              <!-- 缺图降级行（演示文字优先 fallback） -->
+              <div class="row">
+                <div class="rank">05</div>
+                <div class="pic degrade"><b>果</b></div>
+                <div class="row-body">
+                  <div class="row-title">Sunraysia 进口苹果汁汽水 750ml×6</div>
+                  <div class="row-meta"><span class="per">0.95<u>元/100ml</u></span><span class="pkg">整件 ¥42.8</span><span class="stamp-tag t-attr">进口</span></div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="rank">06</div>
+                <div class="pic juice"><div class="bottle"></div></div>
+                <div class="row-body">
+                  <div class="row-title">元気森林 气泡水 480ml×15</div>
+                  <div class="row-meta"><span class="per">0.97<u>元/100ml</u></span><span class="pkg">整件 ¥69.9</span><span class="stamp-tag t-warn">⚠ 单件推断</span></div>
+                </div>
+              </div>
+              <div class="list-foot">— 已到底 · 共 42 件 —</div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab on lens-ic"><div class="ic"></div><span>榜单</span></div>
+            <div class="tab"><div class="ic"></div><span>分类</span></div>
+            <div class="tab mine-ic"><div class="ic"></div><span>我的</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ░░░░░░░░ 屏 2：分类树 ░░░░░░░░ -->
+    <div class="frame-wrap">
+      <div class="frame-label"><b>② 分类</b> · 品类树 · 树里按单价排序</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span class="dots">▪▪▪ ⌃ ▭</span></div>
+        <div class="screen">
+          <div class="appbar">
+            <div class="brand"><div class="wm" style="font-size:22px">分类比价</div><div class="tag">按品类 / 属性横向比</div></div>
+            <div class="lens"></div>
+          </div>
+          <div class="twocol">
+            <div class="rail">
+              <div class="grp">饮料</div>
+              <div class="node">软饮 <small>per 100ml</small></div>
+              <div class="node sub">碳酸饮料</div>
+              <div class="node sub">果汁 / 植物饮</div>
+              <div class="node sub">咖啡 / 茶饮</div>
+              <div class="node sub on">饮用水</div>
+              <div class="grp">酒类</div>
+              <div class="node off">白酒 <small>暂不排名</small></div>
+              <div class="node off">葡萄酒 <small>暂不排名</small></div>
+              <div class="node off">啤酒 <small>暂不排名</small></div>
+            </div>
+            <div class="pane">
+              <div class="pane-head">
+                <h3>饮用水</h3>
+                <p>软饮 · 按 per100ml 升序 · 11 件</p>
+              </div>
+              <div class="chips">
+                <span class="chip on">全部</span><span class="chip">气泡</span><span class="chip">进口</span>
+              </div>
+              <div class="crow"><div class="rank" style="color:var(--worth)">01</div><div class="cb"><div class="ct">怡宝 纯净水 555ml×24</div><div class="cper">0.25</div></div></div>
+              <div class="crow"><div class="rank">02</div><div class="cb"><div class="ct">农夫山泉 天然水 550ml×24</div><div class="cper">0.30</div></div></div>
+              <div class="crow"><div class="rank">03</div><div class="cb"><div class="ct">百岁山 矿泉水 570ml×24</div><div class="cper">0.41</div></div></div>
+              <div class="crow"><div class="rank">04</div><div class="cb"><div class="ct">屈臣氏 苏打汽水 330ml×24 <span class="stamp-tag t-attr">气泡</span></div><div class="cper">0.57</div></div></div>
+              <div class="crow"><div class="rank">05</div><div class="cb"><div class="ct">巴黎水 天然气泡水 330ml×24 <span class="stamp-tag t-attr">气泡·进口</span></div><div class="cper">1.36</div></div></div>
+              <!-- 不可排名节点提示（点酒类时） -->
+              <div class="noncmp-note">
+                <b>酒类暂不支持横向对比</b>
+                可浏览列表，但不按单价排名 —— 可比口径（每100ml？含度数？）待样本到位再定。
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab lens-ic"><div class="ic"></div><span>榜单</span></div>
+            <div class="tab on"><div class="ic"></div><span>分类</span></div>
+            <div class="tab mine-ic"><div class="ic"></div><span>我的</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ░░░░░░░░ 屏 3：商品详情 ░░░░░░░░ -->
+    <div class="frame-wrap">
+      <div class="frame-label"><b>③ 商品详情</b> · 单价 + 公式 + 同品类比价 + 诚实</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span class="dots">▪▪▪ ⌃ ▭</span></div>
+        <div class="screen">
+          <div class="scroll">
+            <div class="backbar"><span class="bk">‹</span><span class="bt">气泡饮品 · 第 5 / 6</span></div>
+            <div class="d-head">
+              <div class="d-pic"><div class="bottle" style="background:linear-gradient(160deg,#e7b07a,#d07b34)"></div></div>
+              <div class="d-info">
+                <div class="d-title">元気森林 白桃味 气泡水 480ml×15</div>
+                <div class="d-spec">总容量 7200ml · 货架价 ¥69.9</div>
+                <div class="d-stale"><span class="stamp-tag t-stale">⌛ 采集于 6月12日</span></div>
+              </div>
+            </div>
+            <div class="hero">
+              <div class="verdict"><b>偏贵</b><u>VS 同类</u></div>
+              <div class="big">0.97<small> 元/100ml</small></div>
+              <div class="ref">每瓶 ¥4.66 · 看着不到 5 元一瓶</div>
+            </div>
+            <div class="formula">
+              <span class="lead">算式</span> 69.9 ÷ (480 × 15) × 100 = <b>0.97 元/100ml</b>
+            </div>
+            <div class="insight">
+              <b>反套路：</b>每瓶看似不到 5 元，但单瓶只有 480ml。按每 100ml 算，它比榜首的水贵约 <b>3.9 倍</b>，在气泡饮品里也属偏贵。
+            </div>
+            <div class="cmp">
+              <div class="cmp-head">
+                <h4>同品类比价 · 气泡饮品</h4>
+                <span class="ssz">样本较少 6 款 · 仅供参考</span>
+              </div>
+              <div class="cmp-list">
+                <div class="crow"><div class="rank" style="color:var(--worth)">01</div><div class="cb"><div class="ct">屈臣氏 苏打汽水 330ml×24</div></div><div class="cper">0.57</div></div>
+                <div class="crow"><div class="rank">02</div><div class="cb"><div class="ct">名仁 苏打水 375ml×24</div></div><div class="cper">0.62</div></div>
+                <div class="crow"><div class="rank">…</div><div class="cb"><div class="ct" style="color:var(--muted)">中间略</div></div><div class="cper" style="color:var(--muted)"></div></div>
+                <div class="crow me bad"><div class="rank">05</div><div class="cb"><div class="ct"><b>元気森林 气泡水 480ml×15</b>（本品）</div></div><div class="cper">0.97</div></div>
+                <div class="crow"><div class="rank">06</div><div class="cb"><div class="ct">巴黎水 天然气泡水 330ml×24</div></div><div class="cper">1.36</div></div>
+              </div>
+            </div>
+            <div class="scroll-pad"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ░░░░░░░░ 屏 4：我的 ░░░░░░░░ -->
+    <div class="frame-wrap">
+      <div class="frame-label"><b>④ 我的</b> · 兜底算单价 + 贡献 + 方法</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span class="dots">▪▪▪ ⌃ ▭</span></div>
+        <div class="screen">
+          <div class="scroll">
+            <div class="appbar">
+              <div class="brand"><div class="wm" style="font-size:22px">我的</div><div class="tag">没找到？自己算一件</div></div>
+              <div class="lens"></div>
+            </div>
+            <div class="contribute">
+              <h3>帮你算 & 收录</h3>
+              <p>榜上没有？把山姆商品标题和价格贴进来，立刻算出真实单价，并可收录进榜单。</p>
+              <div class="paste"><b>可口可乐 无糖汽水 330ml*24　¥45</b>↳ 粘标题 + 价格…</div>
+              <div class="go-btn">算真实单价 →</div>
+            </div>
+            <div class="legend" style="margin-top:-4px">
+              <div class="lg-h">即时结果预览</div>
+              <div class="hero" style="margin:0 0 8px;box-shadow:none;border:1.5px solid var(--line)">
+                <div class="verdict ok"><b>划算</b><u>VS 同类</u></div>
+                <div class="big" style="font-size:48px">0.57<small> 元/100ml</small></div>
+                <div class="ref">算式 45 ÷ (330×24) ×100 = 0.57 · 碳酸里第 2 便宜</div>
+              </div>
+            </div>
+            <div class="mlist">
+              <div class="mitem"><div class="mi-ic"></div><div class="mt">我的收录</div><div class="mv">3 件</div><div class="arr">›</div></div>
+              <div class="mitem"><div class="mi-ic c"></div><div class="mt">我的收藏</div><div class="mv">5 件</div><div class="arr">›</div></div>
+              <div class="mitem"><div class="mi-ic b"></div><div class="mt">纠错与反馈</div><div class="mv"></div><div class="arr">›</div></div>
+              <div class="mitem"><div class="mi-ic"></div><div class="mt">我们怎么算单价</div><div class="mv">方法说明</div><div class="arr">›</div></div>
+            </div>
+            <div class="method">AI 只理解脏规格，单价由确定性程序计算并留痕公式。<br/>不爬全站 · 只算你给的 / 你在看的。</div>
+            <div class="scroll-pad"></div>
+          </div>
+          <div class="tabbar">
+            <div class="tab lens-ic"><div class="ic"></div><span>榜单</span></div>
+            <div class="tab"><div class="ic"></div><span>分类</span></div>
+            <div class="tab on mine-ic"><div class="ic"></div><span>我的</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ░░░░░░░░ 屏 5：状态 & 诚实标注族 ░░░░░░░░ -->
+    <div class="frame-wrap">
+      <div class="frame-label"><b>⑤ 状态 & 诚实标注族</b> · 组件图例</div>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="statusbar"><span>9:41</span><span class="dots">▪▪▪ ⌃ ▭</span></div>
+        <div class="screen">
+          <div class="scroll">
+            <div class="appbar"><div class="brand"><div class="wm" style="font-size:22px">组件图例</div><div class="tag">三态 / 标注 / 降级</div></div></div>
+
+            <div class="legend">
+              <div class="lg-h">诚实标注族（统一“盖戳”）</div>
+              <div class="lg-row">
+                <span class="stamp-tag t-deal">★ 最划算</span>
+                <span class="stamp-tag t-attr">无糖</span>
+                <span class="stamp-tag t-attr">气泡·进口</span>
+                <span class="stamp-tag t-warn">⚠ 数量按单件推断为 1</span>
+              </div>
+              <div class="lg-row">
+                <span class="stamp-tag t-stale">⌛ 采集于 6月12日 · 可能已变动</span>
+                <span class="stamp-tag t-noncmp">暂不支持横向对比</span>
+              </div>
+
+              <div class="lg-h">不可比 · comparable=false</div>
+              <div class="noncmp-note" style="margin:0 0 8px">
+                <b>该商品不参与比价</b>
+                饮料零食组合礼包，规格混杂、口径不一 —— 不适合直接按总 ml 比较。
+              </div>
+
+              <div class="lg-h">加载 / 空 / 首屏错</div>
+              <div class="row" style="justify-content:center;color:var(--muted);font-family:var(--f-mono);font-size:12px">加载中 · · ·</div>
+              <div class="noncmp-note" style="margin:0 0 8px"><b>榜单暂无数据</b>下拉刷新试试</div>
+              <div class="noncmp-note" style="margin:0;border-color:var(--pricey);color:var(--pricey)"><b style="color:var(--pricey)">榜单加载失败</b>请检查网络后重试 · <span style="text-decoration:underline">重试</span></div>
+
+              <div class="lg-h" style="margin-top:18px">商品图缺失 → 文字优先降级</div>
+              <div class="row">
+                <div class="rank">07</div>
+                <div class="pic degrade"><b>茶</b></div>
+                <div class="row-body"><div class="row-title">某品牌 乌龙茶 500ml×15</div><div class="row-meta"><span class="per">0.62<u>元/100ml</u></span><span class="pkg">整件 ¥46.5</span></div></div>
+              </div>
+            </div>
+            <div class="scroll-pad"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

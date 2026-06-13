@@ -1,0 +1,24 @@
+/* Degraded in-list ad slot. v1 is ALWAYS unfilled → zero height, no visible
+   card, the list of RankingRow cards does not jump. Self-contained here so the
+   collapse rule travels with the component into the new row structure (the
+   inline height:0 on the host node stays the load-bearing source measured by a
+   real layout query). Layout only — no colors. */
+
+.ad-slot--empty {
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  overflow: hidden;
+}
+
+/* Future filled state: a fixed-height card holding a real ad unit. Unreachable
+   in v1. Layout/spacing only. */
+.ad-slot--filled {
+  margin-bottom: 20rpx;
+}
+
+.ad-slot__unit {
+  width: 100%;
+  height: 100%;
+}

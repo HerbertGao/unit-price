@@ -1,0 +1,27 @@
+/* List footer presentation. Mirrors the existing .footer / state__* / btn--small
+   styling, colors via var(--…) only. */
+
+.lfoot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32rpx 24rpx 48rpx;
+}
+
+.lfoot__hint {
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.lfoot__btn {
+  margin-top: 16rpx;
+  padding: 12rpx 36rpx;
+  background: var(--blue);
+  border-radius: var(--r-pill);
+}
+
+.lfoot__btn-text {
+  font-size: var(--fs-md);
+  color: var(--paper-card);
+}

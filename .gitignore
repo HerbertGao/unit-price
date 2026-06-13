@@ -17,3 +17,6 @@ packages/eval/corpus/*
 
 # Wrangler local cache/state (Cloudflare Workers dev)
 .wrangler/
+
+# Playwright MCP verification artifacts (screenshots/logs), not source
+.playwright-mcp/

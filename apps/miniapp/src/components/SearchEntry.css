@@ -1,0 +1,52 @@
+/* SearchEntry — placeholder bar (P0 ".search"). px→rpx ~1:2. The icon inherits
+   color: var(--muted) so its currentColor strokes match the placeholder text;
+   no color literals. */
+
+.searchentry {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin: 4rpx 40rpx 28rpx;
+  height: 88rpx;
+  padding: 0 36rpx;
+  background: var(--paper-card);
+  border: 3rpx solid var(--line-strong);
+  border-radius: var(--r-pill);
+  color: var(--muted);
+}
+
+/* Magnifier glyph drawn from primitives, stroked in currentColor. */
+.searchentry__icon {
+  position: relative;
+  flex-shrink: 0;
+  width: 32rpx;
+  height: 32rpx;
+  color: currentColor;
+}
+
+.searchentry__icon-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22rpx;
+  height: 22rpx;
+  border: 3rpx solid currentColor;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.searchentry__icon-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14rpx;
+  height: 3rpx;
+  border-radius: 2rpx;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+
+.searchentry__placeholder {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
