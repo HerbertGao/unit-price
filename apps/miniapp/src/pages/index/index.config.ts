@@ -1,5 +1,6 @@
 export default definePageConfig({
-  navigationBarTitleText: '单价榜单',
+  // No page-level navigationBarTitleText — inherit app-level `Sams值不值`
+  // so the title stays consistent across all three tabs.
   // Enable the native pull-down gesture so usePullDownRefresh fires (offset=0
   // refresh). onReachBottom fires from the page scroll automatically.
   enablePullDownRefresh: true,

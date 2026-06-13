@@ -1,0 +1,39 @@
+/* List three-state presentation. Mirrors the existing screen--center / state__*
+   / btn styling, colors via var(--…) only. */
+
+.lstate {
+  box-sizing: border-box;
+}
+
+.lstate--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 120rpx 48rpx;
+}
+
+.lstate__title {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+  margin-bottom: 16rpx;
+}
+
+.lstate__hint {
+  font-size: var(--fs-md);
+  color: var(--muted);
+}
+
+.lstate__btn {
+  margin-top: 40rpx;
+  padding: 18rpx 56rpx;
+  background: var(--blue);
+  border-radius: var(--r-pill);
+}
+
+.lstate__btn-text {
+  font-size: var(--fs-md);
+  color: var(--paper-card);
+}

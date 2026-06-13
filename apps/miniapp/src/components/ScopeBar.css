@@ -1,0 +1,16 @@
+/* ScopeBar — translated from P0 ".tape" (receipt-tape banner). px→rpx ~1:2.
+   Colors via var(--…) only. */
+
+.scopebar {
+  margin: 0 40rpx 28rpx;
+  padding: 18rpx 28rpx;
+  background: var(--paper-sink);
+  border-left: 6rpx solid var(--blue);
+  border-radius: 20rpx;
+}
+
+.scopebar__text {
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}

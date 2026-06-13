@@ -15,7 +15,15 @@
 // page's insertion rule, not by this component.)
 //
 // NO interstitial. Rewarded video is deferred (v1 is read-only, no reward hook).
+//
+// Adapted to the new RankingRow card list: the slot's zero-height collapse rule
+// is now self-contained in AdSlot.css (no longer relying on pages/index/index.css)
+// so it travels with the component. Insertion remains the PAGE's job, keyed by
+// item.rank via pages/index/adSlots.ts (10/22/34…); this component renders only
+// the slot host node and its v1 zero-height degrade.
 import { View } from '@tarojs/components';
+
+import './AdSlot.css';
 
 export interface AdSlotProps {
   /** Stable host-node id so a real layout source (Taro.createSelectorQuery /

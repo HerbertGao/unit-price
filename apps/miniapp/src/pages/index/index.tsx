@@ -1,50 +1,75 @@
-// Read-only rankings screen. Consumes the prod GET /rankings via
-// @unit-price/api-client (buildRankingsUrl + parseRankingsResponse) over
-// Taro.request. NO entry/scan/photo path, NO core tier1/calc on device — the
-// list is already-computed per100ml from /rankings.
+// Read-only rankings home (榜单 Tab). Composes the P1 shared components per the
+// P0 design baseline (design/sams-zhibuzhi/index.html) in order: brand head →
+// search entry → static scope bar → attribute chips → ranking list.
 //
-// Renders the spec's three states (loading / empty / error) with the two error
-// positions kept distinct (whole-screen first-screen error vs list-preserving
-// page error), pull-to-refresh + reach-bottom pagination, and the degraded
-// in-list ad slot (zero-height in v1).
-import { View, Text } from '@tarojs/components';
+// Consumes prod GET /rankings via @unit-price/api-client (buildRankingsUrl +
+// parseRankingsResponse, jitless) over Taro.request — wired through useRankings.
+// NO entry/scan/photo path, NO core tier1/calc on device: the list is
+// already-computed per100ml from /rankings. The search entry and attribute chips
+// are placeholders only — they NEVER request and NEVER reorder the list.
+//
+// Data layer (the state machine + Taro lifecycle hooks) stays in the page (D4);
+// the components are pure presentation. Renders the spec's three states (loading
+// / empty / first-screen error) with the two error positions kept distinct
+// (whole-screen first-screen error vs list-preserving page error), pull-to-refresh
+// + reach-bottom pagination, and the degraded in-list ad slot (zero-height in v1).
+import { View, ScrollView } from '@tarojs/components';
 import { useLoad, usePullDownRefresh, useReachBottom } from '@tarojs/taro';
 import Taro from '@tarojs/taro';
 import { Fragment } from 'react';
-import type { RankingsItem } from '@unit-price/api-client';
 import { useRankings } from './useRankings';
 import { isAdSlotAfterRank } from './adSlots';
 import AdSlot from '../../components/AdSlot';
+import BrandHead from '../../components/BrandHead';
+import SearchEntry from '../../components/SearchEntry';
+import ScopeBar from '../../components/ScopeBar';
+import Chip from '../../components/Chip';
+import RankingRow from '../../components/RankingRow';
+import ListFooter from '../../components/ListFooter';
+import { ListLoading, ListEmpty, FirstScreenError } from '../../components/ListStates';
 
 import './index.css';
 
-/** Format integer cents → yuan string with 2 decimals (display precision only).
- *  This is the per-PACKAGE reference price (priceCents/100); it is NEVER used to
- *  derive or replace per100ml (the authoritative comparable unit price). */
-function formatYuan(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
+// Static placeholder chip set (P0 ".chips": 全部/无糖/气泡/进口/茶饮). All disabled
+// in P1 — tapping does NOT request, does NOT reorder. Real attribute filtering is
+// P3. The leading "全部" carries the active visual, the rest are dimmed placeholders.
+const CHIPS: ReadonlyArray<{ label: string; active?: boolean }> = [
+  { label: '全部', active: true },
+  { label: '无糖' },
+  { label: '气泡' },
+  { label: '进口' },
+  { label: '茶饮' },
+];
 
-/** Format the comparable unit price (元 / 100ml) for display. per100ml is the
- *  server-computed comparable truth; shown verbatim, not back-derived. */
-function formatPer100ml(per100ml: number): string {
-  return per100ml.toFixed(2);
-}
+// Layout-only inline styles (no color literals — color is owned by the components'
+// own CSS via tokens). The chips row scrolls horizontally; the gaps are spacing.
+const CHIPS_ROW_STYLE = {
+  display: 'flex',
+  gap: '16rpx',
+  padding: '8rpx 24rpx 4rpx',
+  whiteSpace: 'nowrap' as const,
+} as const;
 
-function RankingRow({ item }: { item: RankingsItem }) {
+/** Header block shown above every list state so the brand / search / scope /
+ *  chips are present whether the list is loading, empty, errored, or ready. */
+function Header() {
   return (
-    <View className="row">
-      <View className="row__rank">
-        <Text className="row__rank-num">{item.rank}</Text>
-      </View>
-      <View className="row__body">
-        <Text className="row__title">{item.title}</Text>
-        <View className="row__meta">
-          <Text className="row__per100ml">{formatPer100ml(item.per100ml)} 元/100ml</Text>
-          <Text className="row__price">整件 ¥{formatYuan(item.priceCents)}</Text>
-        </View>
-      </View>
-    </View>
+    <Fragment>
+      <BrandHead />
+      <SearchEntry
+        onClick={() => {
+          // Placeholder only: a "敬请期待" toast. NO navigation, NO request, NO
+          // input/focus state. Real search is P4 (spec / D5).
+          void Taro.showToast({ title: '敬请期待', icon: 'none' });
+        }}
+      />
+      <ScopeBar />
+      <ScrollView scrollX className="chips" style={CHIPS_ROW_STYLE}>
+        {CHIPS.map((c) => (
+          <Chip key={c.label} label={c.label} active={c.active} disabled={!c.active} />
+        ))}
+      </ScrollView>
+    </Fragment>
   );
 }
 
@@ -69,15 +94,13 @@ export default function Index() {
     r.loadNext();
   });
 
-  // FIRST-SCREEN error: whole-screen error + retry. Never a white screen.
+  // FIRST-SCREEN error: whole-screen error + retry. Never a blank screen. Error
+  // judgement stays in useRankings (unchanged); the page just renders it.
   if (r.phase === 'error') {
     return (
-      <View className="screen screen--center">
-        <Text className="state__title">榜单加载失败</Text>
-        <Text className="state__hint">请检查网络后重试</Text>
-        <View className="btn" onClick={() => r.retryFirst()}>
-          <Text className="btn__text">重试</Text>
-        </View>
+      <View className="screen">
+        <Header />
+        <FirstScreenError onRetry={() => r.retryFirst()} />
       </View>
     );
   }
@@ -85,8 +108,9 @@ export default function Index() {
   // First-screen loading (no list yet).
   if (r.phase === 'idle' || (r.phase === 'loading' && r.items.length === 0)) {
     return (
-      <View className="screen screen--center">
-        <Text className="state__hint">加载中…</Text>
+      <View className="screen">
+        <Header />
+        <ListLoading />
       </View>
     );
   }
@@ -94,9 +118,9 @@ export default function Index() {
   // Empty state: a validated [] from /rankings → explicit empty, not blank/error.
   if (r.phase === 'ready' && r.items.length === 0) {
     return (
-      <View className="screen screen--center">
-        <Text className="state__title">榜单暂无数据</Text>
-        <Text className="state__hint">下拉刷新试试</Text>
+      <View className="screen">
+        <Header />
+        <ListEmpty />
       </View>
     );
   }
@@ -105,6 +129,7 @@ export default function Index() {
   // server) interleaved with degraded ad slots after render rank 10/22/34/…
   return (
     <View className="screen">
+      <Header />
       <View className="list">
         {r.items.map((item) => {
           const showAdAfter = isAdSlotAfterRank(item.rank);
@@ -117,25 +142,12 @@ export default function Index() {
         })}
       </View>
 
-      {/* Footer: page-load spinner OR page-error local retry (list preserved). */}
-      {r.pageLoading ? (
-        <View className="footer">
-          <Text className="state__hint">加载中…</Text>
-        </View>
-      ) : null}
-      {r.pageError ? (
-        <View className="footer">
-          <Text className="state__hint">下一页加载失败</Text>
-          <View className="btn btn--small" onClick={() => r.retryNext()}>
-            <Text className="btn__text">重试本页</Text>
-          </View>
-        </View>
-      ) : null}
-      {r.reachedEnd && !r.pageError ? (
-        <View className="footer">
-          <Text className="state__hint">已到底</Text>
-        </View>
-      ) : null}
+      <ListFooter
+        pageLoading={r.pageLoading}
+        pageError={r.pageError}
+        reachedEnd={r.reachedEnd}
+        onRetryNext={() => r.retryNext()}
+      />
     </View>
   );
 }

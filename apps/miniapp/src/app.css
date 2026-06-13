@@ -1,0 +1,69 @@
+/* ============================================================
+   Sams值不值 — 设计 tokens(视觉 SOT,翻译自 design/sams-zhibuzhi/index.html 的 :root)
+   概念:诚实验货单 / 价格透视眼。冷灰白卡 + 山姆蓝(主)+ 绿(值)+ 红(贵)。
+   尺度从原型 px 按 1px≈2rpx 翻译为 rpx。色值仅允许出现在本文件 token 定义处;
+   页面 / 组件一律引用 var(--…)。
+   ============================================================ */
+page {
+  /* — 色板(P0 榜单首页与本期抽出组件实际用到的子集)— */
+  --paper: #F1F3F6;        /* 冷调浅灰底,贴山姆 App */
+  --paper-card: #FFFFFF;   /* 白卡 */
+  --paper-sink: #E9EDF2;   /* 凹陷 / 分组底 */
+  --ink: #1B2735;          /* 冷墨(蓝黑)— 正文 / 数据 */
+  --ink-soft: #54606E;     /* 次级文字 */
+  --muted: #8B95A2;        /* 弱化 / 脚注 */
+  --line: #E4E8ED;         /* 发丝线 */
+  --line-strong: #CBD3DC;  /* 较重分隔线 */
+  --blue: #014B90;         /* 山姆 App 蓝 = 品牌 / 结构 / 主操作 / 激活 */
+  --blue-bg: #E0EAF5;      /* 蓝浅底 = 激活 chip / 徽标底 */
+  --worth: #137A4C;        /* 绿 = 值 / 划算 / rank1 */
+  --worth-bg: #E0EFE6;     /* 绿浅底 */
+  --pricey: #DE1C24;       /* 红 = 贵 / 警示 */
+  --pricey-bg: #FBE6E5;    /* 红浅底 */
+
+  /* — 字体栈(系统中文栈 + 等宽兜底,不引远程网络字体)— */
+  --f-sans: -apple-system, "PingFang SC", system-ui, "Helvetica Neue", sans-serif;
+  --f-mono: "SFMono-Regular", ui-monospace, Menlo, monospace;
+
+  /* — 字阶(rpx)— */
+  --fs-xs: 20rpx;   /* 脚注 / 标价说明 */
+  --fs-sm: 24rpx;   /* 次级文字 / chip */
+  --fs-md: 28rpx;   /* 正文 */
+  --fs-lg: 30rpx;   /* 标题行 */
+  --fs-xl: 34rpx;   /* 区块标题 */
+  --fs-2xl: 44rpx;  /* per100ml 大字(D1)*/
+
+  /* — 字重 — */
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 900;
+
+  /* — per100ml 大字规格(D1:字号 + 字重 + 紧字距,不依赖具体字形)— */
+  --per100ml-size: var(--fs-2xl);
+  --per100ml-weight: var(--fw-black);
+  --per100ml-tracking: -0.02em;
+
+  /* — 间距(rpx)— */
+  --sp-1: 8rpx;
+  --sp-2: 16rpx;
+  --sp-3: 24rpx;
+  --sp-4: 32rpx;
+  --sp-5: 48rpx;
+  --sp-6: 64rpx;
+
+  /* — 圆角(rpx)— */
+  --r-card: 36rpx;   /* 原型 18px 卡片 */
+  --r-pill: 999rpx;  /* 胶囊 / chip */
+
+  /* — 阴影(本文件为 5.4 grep 唯一合法 rgba 来源)— */
+  --shadow: 0 2rpx 0 var(--line), 0 28rpx 60rpx -44rpx rgba(20, 35, 55, 0.4);
+
+  /* — 全局 base(只放页面底色 / 字体,组件样式不下沉本文件)— */
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-sans);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
