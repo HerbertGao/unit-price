@@ -148,11 +148,13 @@ export function useRankings(): RankingsApi {
       });
     } catch {
       setState((s) => {
-        // If we already had a list, refresh failure must NOT wipe it; keep the
-        // list and surface a page-level (local) error. If we had nothing,
-        // fall back to the whole-screen error state.
+        // If we already had a list, refresh failure must NOT wipe it. Keep the
+        // list as-is WITHOUT raising pageError: that footer's retry maps to
+        // next-page loading (retryNext → runNext → append), which is wrong for a
+        // failed refresh. The pull-to-refresh gesture is itself the retry
+        // affordance. If we had nothing, fall back to the whole-screen error.
         if (s.items.length) {
-          return { ...s, phase: 'ready', pageLoading: false, pageError: true };
+          return { ...s, phase: 'ready', pageLoading: false, pageError: false };
         }
         return {
           phase: 'error',
