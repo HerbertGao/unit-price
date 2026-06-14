@@ -829,6 +829,24 @@ export function createRepository(db: Db | null | undefined): Repository {
             `attachTag: attaching a category leaf while pending is set creates 有叶∧pending; use reconcileCategory`,
           );
         }
+        // single-attribution: a product holds at most one category leaf. Refuse a
+        // second, DIFFERENT leaf (re-attaching the same leaf stays a no-op below);
+        // an A→B re-classification goes through reconcileCategory (drops the old leaf).
+        const existingLeaf = await orm
+          .select({ tagId: productTag.tagId })
+          .from(productTag)
+          .where(
+            and(
+              eq(productTag.productId, productId),
+              inArray(productTag.tagId, [...leafIds]),
+            ),
+          )
+          .limit(1);
+        if (existingLeaf[0] != null && existingLeaf[0].tagId !== t.id) {
+          throw new Error(
+            `attachTag: product already has a different category leaf; use reconcileCategory`,
+          );
+        }
       }
       // (product_id, tag_id) is unique → re-attaching the same edge is a no-op.
       await orm

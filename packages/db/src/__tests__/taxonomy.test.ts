@@ -795,6 +795,37 @@ describe('independent primitive guards (kind + existence)', () => {
       }),
     ).resolves.not.toThrow();
   });
+
+  it('attachTag refuses a second, different category leaf (single-attribution)', async () => {
+    const pid = await insertProduct(t.repo);
+    await t.repo.attachTag({
+      productId: pid,
+      tagSlug: 'carbonated',
+      source: 'rule',
+      confidence: 1,
+    });
+    // A DIFFERENT leaf must be refused — would create dual category leaves.
+    await expect(
+      t.repo.attachTag({
+        productId: pid,
+        tagSlug: 'juice-plant',
+        source: 'rule',
+        confidence: 1,
+      }),
+    ).rejects.toThrow(/already has a different category leaf/);
+    // Re-attaching the SAME leaf stays an idempotent no-op (not a throw).
+    await expect(
+      t.repo.attachTag({
+        productId: pid,
+        tagSlug: 'carbonated',
+        source: 'rule',
+        confidence: 1,
+      }),
+    ).resolves.not.toThrow();
+    // Exactly one category leaf remains.
+    const attr = await t.repo.getProductAttribution(pid);
+    expect(attr?.categoryLeafSlug).toBe('carbonated');
+  });
 });
 
 describe('seed parity: 0004 DML migration ≡ seedTaxonomy()', () => {
