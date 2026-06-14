@@ -7,17 +7,26 @@
 ## 前置
 
 1. **代码已合并 main 并自动部署**:GH Actions 在 push 到 main 时自动 migrate + deploy prod。
-2. **设两个独立 secret**(经 `wrangler secret put`,不写进仓库 / 不写进 `wrangler.toml`):
+2. **设两个独立 secret**(不写进仓库 / 不写进 `wrangler.toml`)。两值都用**强随机**(低熵 key 可被离线爆破),且**互不相同**:
+
+   生产 Worker 是 `wrangler.toml` 的 `[env.production]` 环境,故 `wrangler secret put` **必须带 `--env production`**——否则会设到顶层 dev(`unit-price-dev`)、prod 仍未配。从 `apps/api/` 跑(wrangler 在 cwd 找 `wrangler.toml`):
 
    ```sh
-   # admin 端点鉴权凭据(逗号分隔多 key);与公共 API_KEYS 分离。
-   wrangler secret put ADMIN_API_KEYS
+   cd apps/api
 
-   # 审计日志 keyed 哈希的 keying 输入;必须与 ADMIN_API_KEYS 不同源。
-   wrangler secret put AUDIT_LOG_HMAC_SECRET
+   # admin 端点鉴权凭据(逗号分隔多 key);与公共 API_KEYS 分离。
+   openssl rand -hex 32                       # 生成强随机值,记下来(驱动时作 Bearer token)
+   npx wrangler secret put ADMIN_API_KEYS --env production         # 粘上面的值
+
+   # 审计日志 keyed 哈希的 keying 输入;必须与 ADMIN_API_KEYS【不同源】。
+   openssl rand -hex 32                       # 另生成一个不同的强随机值
+   npx wrangler secret put AUDIT_LOG_HMAC_SECRET --env production  # 粘这个值
    ```
 
-   `ADMIN_API_KEYS` 未配 / 空 → admin 端点 fail-closed 返回 `500 config-error`、不驱动 backfill。
+   wrangler 需先 `wrangler login`(或设 `CLOUDFLARE_API_TOKEN`)。**替代:** Cloudflare 控制台 → Workers & Pages → `unit-price-api`(production)→ Settings → Variables and Secrets → 加两个加密 secret(免本地登录)。
+
+   - `ADMIN_API_KEYS` 未配 / 空 → admin 端点 fail-closed 返回 `500 config-error`、不驱动 backfill。
+   - `AUDIT_LOG_HMAC_SECRET` 未配 / 空 → 同样 fail-closed `500 config-error`(审计 keying 必需、不以弱常量盐降级运行)。**两个都设好前端点都会 500,这是设计、非故障。**
 
 ## 驱动
 
@@ -27,12 +36,13 @@
 - 每次响应取 `nextCursor`,作下次 `?cursor=<nextCursor>` 入参;首次不带 `cursor`。
 - 循环直到 `nextCursor` 为 `null`。
 
-示例 shell 循环(curl + jq):
+示例 shell 循环(curl + jq)。**zsh 注意**:`KEY`/`API` 用**单引号**赋值——双引号下 key/URL 里的 `!` 会触发 zsh 历史展开报 `zsh: event not found`;`set +H` 再加一道保险(或直接把本段存成文件用 `bash 文件` 跑,脚本文件不做历史展开):
 
 ```sh
-API="https://<api-域>"
-KEY="<admin-key>"
-cursor=""
+set +H                              # 关闭 zsh ! 历史展开(双保险)
+API='https://<api-域>'              # 单引号:URL 含 ! 也安全
+KEY='<admin-key>'                   # 单引号:key 含 ! 也安全
+cursor=''
 
 while :; do
   if [ -z "$cursor" ]; then
@@ -45,8 +55,8 @@ while :; do
   echo "$resp"
 
   cursor=$(echo "$resp" | jq -r '.nextCursor')
-  if [ "$cursor" = "null" ]; then
-    echo "backfill 完成:nextCursor=null"
+  if [ "$cursor" = 'null' ]; then
+    echo 'backfill 完成:nextCursor=null'
     break
   fi
 done
