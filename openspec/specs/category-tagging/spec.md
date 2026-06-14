@@ -68,12 +68,15 @@
 - **当** 一个商品仅有粗 native 映射(待细化)vs 一个商品 tier1/native 都未命中(待人工)
 - **那么** 前者 `pending_category_tag_id` **非空**、后者**为空**;二者**禁止**无法区分
 
-### 需求:rankable 派生、归属变化必重算、且本期不接入 /rankings
+### 需求:rankable 派生、归属变化必重算、且已接入 /rankings 作资格门（P3 收敛）
 
-`product.rankable` **必须**为派生值:当且仅当商品为**已分类(叶)**态且该叶解析出的 `comparable_unit` 非空(v1 = `per_100ml` 软饮)时为 `true`;待细化 / 待人工 / 酒类(`comparable_unit=null`)一律 `false`。
+`product.rankable` **必须**为派生值:当且仅当商品为**已分类(叶)**态且该叶解析出的 `comparable_unit` 非空(v1 = `per_100ml` 软饮)时为 `true`;待细化 / 待人工 / 酒类(`comparable_unit=null`)一律 `false`。榜单读路径**只读** `rankable`、**不改其派生口径**。
 
 - **归属变化必重算**:所有写品类归属的路径(backfill / 挂叶 / 人工纠错)**必须**在写归属后**立即重算并更新 `rankable`**,**禁止**陈旧。
-- **与本期 `/rankings` 的边界(消歧、不制造冲突)**:`rankable` 本期**只落列、无下游读**;现有 `GET /rankings` 仍按 `per100ml IS NOT NULL` 判据(`rankings-api` **不变、本期不读 `rankable`**)。因此一个「待细化 / 待人工但 per100ml 可算」的软饮**本期仍可能出现在现有扁平 `/rankings`**——这是**本期接受的已知状态**。本需求中「`rankable=false` 不出榜」的「榜」**专指 P3 品类树 / cohort 榜**(rankable 接入后),**不指**本期扁平 `/rankings`;两套入榜判据(`per100ml IS NOT NULL` 与 `rankable`)的收敛属 **P3**。
+- **与 `/rankings` 的边界（P3 收敛，取代 P2「本期不接入」）**:`rankable` **现已接入** `GET /rankings` 与 `GET /categories`,成为品类作用域榜单的**权威「资格门」**。两套入榜判据(数据门「单价列非空」与资格门 `rankable`)在 P3 **收敛为合取**:某行入榜当且仅当「目标品类节点闭包成员 ∧ `rankable=true` ∧ `per100ml IS NOT NULL`」。`rankable` 回答「该不该上某可比轴」、数据门回答「是否真有该数」,**缺一不可**。**数据门的列由可排名成员(`rankable=true` 的商品)所在轴决定,而非由被查询节点自身的 `comparable_unit` 决定**——这关键在于被查询节点自身可无 `comparable_unit`(如 root `beverage` 为 null)但仍有可排名后代;v1 唯一可排名轴是 `per_100ml`(`rankable=true ⟹ 该商品 comparable_unit=per_100ml`),故**对任一节点(含 root)数据门一律 = `per100ml IS NOT NULL`**;v2 引入 `per_100g` 后跨多轴祖先节点需按成员各自轴取列(v2、非目标;详见 `rankings-api`)。因此:
+  - 一个「待细化 / 待人工但 per100ml 可算」的软饮(`rankable=false`)**不再**出现在任何品类节点榜(含默认 root)——这与 P2「仍可能出现在扁平榜」的已知状态**已被收敛消除**;
+  - 酒类叶(`comparable_unit=null` → `rankable=false`)即便有非空 per100ml 也**不入榜**(修正「按容量轴排序酒类」的语义错误),其品类节点榜经资格门**自然返回空**。
+  - 详细 HTTP 契约(参数、错误码、闭包 JOIN、去重)见 `rankings-api` 与 `category-tree-api` 规范。
 
 #### 场景:软饮叶且单位可算则 rankable
 - **当** 商品为已分类软饮叶、继承 `comparable_unit=per_100ml`
@@ -87,9 +90,9 @@
 - **当** 人工纠错或规则升级后再 backfill 使某商品归属改变
 - **那么** 其 `rankable` **必须**随之重算到正确值,**禁止**保留旧派生值
 
-#### 场景:rankable 本期不接入现有 /rankings
-- **当** 本期检查 `GET /rankings` 的入榜判据
-- **那么** 它**必须**仍为 `per100ml IS NOT NULL`(`rankings-api` 不变),**不读** `rankable`;可算 per100ml 的待细化软饮本期仍可入该扁平榜(rankable 收敛留 P3)
+#### 场景:rankable 已接入 /rankings、两套判据 P3 收敛
+- **当** P3 后检查 `GET /rankings` 的入榜判据
+- **那么** 它**必须**为「目标品类节点闭包成员 ∧ `rankable=true` ∧ `per100ml IS NOT NULL`」的合取(**已读** `rankable`);`rankable=false` 的项(待细化 / 待人工软饮、酒类)**禁止**出现在任何品类节点榜;P2 的「rankable 不接入、可算 per100ml 的待细化软饮仍入扁平榜」已不再成立
 
 ### 需求:必须 seed 初始规范品类树与受控属性(comparable_unit 可空、占位单位禁 seed)
 
