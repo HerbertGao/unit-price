@@ -26,4 +26,4 @@
 - [x] 4.1 `pnpm --filter api test` 全绿;`pnpm -r build`/类型检查通过
 - [x] 4.2 grep 强锚:`app.use('/admin/backfill'` 在中间件挂载列表;`runBackfill` 确有路由驱动(非仅 re-export);**route handler 的 `c.json(...)` 响应体字面量不含 `results` 键**(收紧锚点,不误伤内部对 `BackfillResult.results` 的合法计数读)
 - [x] 4.3 运维 runbook(写入 docs):合并部署 + 设 `ADMIN_API_KEYS` secret 后,以脚本循环 `POST /admin/backfill`(缺省 limit)带 `nextCursor` 推进直到 `null`;机械完成判据 = **游标单调推进到 `nextCursor=null`、且累计处理覆盖 bootstrap 起始快照存量的每个 id 至少一次**(续跑期并发 ingest 的新行落入下一轮 sweep、不计入本轮分母);**注**:存量恰为 limit 整数倍时,末尾会观测到一次 `total:0` 且 `nextCursor=null` 的空读=正常终止信号、非错误
-- [ ] 4.4 `/opsx:archive` 前:确认 prod 首轮 backfill 已实跑、达成 4.3 的覆盖判据;**记录** backfill 前后 `manual`(待人工)绝对计数作**观测项**(非归档门——tier1 对某批恰好全不命中时 manual 可能持平而逻辑仍正确;门只是覆盖判据)
+- [x] 4.4 `/opsx:archive` 前:确认 prod 首轮 backfill 已实跑、达成 4.3 的覆盖判据;**记录** backfill 前后 `manual`(待人工)绝对计数作**观测项**(非归档门——tier1 对某批恰好全不命中时 manual 可能持平而逻辑仍正确;门只是覆盖判据)
