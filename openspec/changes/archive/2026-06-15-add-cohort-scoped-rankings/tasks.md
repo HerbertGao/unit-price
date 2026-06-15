@@ -33,9 +33,9 @@
 
 ## 6. 存量纠正 + 验收（合并后 / 运维）
 
-- [ ] 6.1 合并后重跑 `POST /admin/backfill`（幂等）重分类存量（乳品/酒类/漏判软饮按新 tier1 规则 + 新树落叶、重算 rankable）。
-- [ ] 6.2 重跑数据就绪门（只读 prod）：各 cohort 榜基数合理（软饮 ~68、牛奶/啤酒/葡萄酒/白酒… 各 cohort 有数）；残留「`per100ml 非空 ∧ rankable=0 ∧ 无 kind=category 叶`」B 仅由**已确认非软饮长尾**（品牌酒标题无关键词、稀奶油等）构成 → 接受（不进榜、不混 cohort）；彻底收靠后续 store-map（非本期）。
-- [ ] 6.3 归档：实现合并后经 `/opsx:archive` 把**四份 MODIFIED 增量**（rankings-api / category-tagging / category-tree-api / persistence）并入主 spec（本期无新建/改名需求，category-tagging 标题已是 P3 收敛态、无 4.5 式更名门）。
+- [x] 6.1 合并后重跑 `POST /admin/backfill`（幂等）重分类存量（乳品/酒类/漏判软饮按新 tier1 规则 + 新树落叶、重算 rankable）。
+- [x] 6.2 重跑数据就绪门（只读 prod）：各 cohort 榜基数合理（软饮 65、牛奶 20/啤酒 20/葡萄酒 150/白酒 51/洋酒 13/威士忌 10/清酒果酒 15/酸奶 1/乳酸菌 2 各 cohort 有数）；rankable 总数 42→347（覆盖 ~92%）；酒类父 rankableCount=259>0∧rankable=false（守卫 400）；boards 同质（beer 仅啤酒、软饮仅软饮）；残留 B ~29 仅由已确认非软饮长尾（品牌酒标题无关键词、稀奶油等）构成 → 接受，彻底收靠后续 store-map（非本期）。
+- [x] 6.3 归档：实现合并后经 `/opsx:archive` 把**四份 MODIFIED 增量**（rankings-api / category-tagging / category-tree-api / persistence）并入主 spec（本期无新建/改名需求，category-tagging 标题已是 P3 收敛态、无 4.5 式更名门）。
 
 ## 7. 非本变更范围（记录）
 
