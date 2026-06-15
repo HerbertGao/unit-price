@@ -505,6 +505,7 @@ describe('admin/backfill — write-set, response projection, audit (3.5)', () =>
     expect(body).toHaveProperty('pending');
     expect(body).toHaveProperty('manual');
     expect(body).toHaveProperty('rankable');
+    expect(body).toHaveProperty('storeMapDecisions');
     expect(body).toHaveProperty('nextCursor');
     expect(body).not.toHaveProperty('results');
   });

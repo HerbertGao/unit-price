@@ -38,6 +38,14 @@ export const productRaw = sqliteTable(
     price: integer('price').notNull(),
     /** RawProduct.categoryHint (optional → nullable column). */
     categoryHint: text('category_hint'),
+    /**
+     * Store-origin provenance: the leaf id from the store's native
+     * `categoryIdList` path end. Nullable; orthogonal to domain columns and
+     * NOT a reuse of `category_hint` (which carries `product.category`). Feeds
+     * the tagging pipeline via `store_category_map` for store-authoritative
+     * leaf classification.
+     */
+    nativeCategoryId: text('native_category_id'),
     source: text('source'),
     sourceUrl: text('source_url'),
     /** Epoch (ms) of the most recent observation; set at ingest time. */

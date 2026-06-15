@@ -208,6 +208,94 @@ describe('POST /contribute — dedupe + provenance COALESCE (5.3)', () => {
   });
 });
 
+describe('POST /contribute — nativeCategoryId provenance (2.1/2.3)', () => {
+  it('nativeCategoryId lands on product_raw.native_category_id; categoryHint/product.category untouched', async () => {
+    const { repo, handle } = openRepo();
+    const { res } = await contribute({
+      port: throwingPort,
+      makeRepo: () => repo,
+      body: {
+        ...CLEAN,
+        store: 'sam',
+        storeSku: 'coke-native',
+        categoryHint: 'soda',
+        nativeCategoryId: '10012164',
+      },
+    });
+    expect(res.status).toBe(200);
+    const raw = handle
+      .prepare(
+        'SELECT native_category_id AS n, category_hint AS h FROM product_raw WHERE store_sku = ?',
+      )
+      .get('coke-native') as { n: string | null; h: string | null };
+    // native id on its dedicated column; categoryHint stays the domain passthrough.
+    expect(raw.n).toBe('10012164');
+    expect(raw.h).toBe('soda');
+    // product.category is the categoryHint passthrough, NOT the native id.
+    const prod = handle
+      .prepare(
+        'SELECT category FROM product WHERE raw_id = (SELECT id FROM product_raw WHERE store_sku = ?)',
+      )
+      .get('coke-native') as { category: string };
+    expect(prod.category).toBe('soda');
+  });
+
+  it.each([
+    ['omitted', { ...CLEAN, store: 'sam', storeSku: 'n-omit' }],
+    ['explicit null', { ...CLEAN, store: 'sam', storeSku: 'n-null', nativeCategoryId: null }],
+    ['empty string', { ...CLEAN, store: 'sam', storeSku: 'n-empty', nativeCategoryId: '' }],
+    ['whitespace', { ...CLEAN, store: 'sam', storeSku: 'n-ws', nativeCategoryId: '   ' }],
+  ])('%s → native_category_id NULL, 200 (not 400)', async (_name, body) => {
+    const { repo, handle } = openRepo();
+    const { res } = await contribute({ port: throwingPort, makeRepo: () => repo, body });
+    expect(res.status).toBe(200);
+    const raw = handle
+      .prepare('SELECT native_category_id AS n FROM product_raw WHERE store_sku = ?')
+      .get((body as { storeSku: string }).storeSku) as { n: string | null };
+    expect(raw.n).toBeNull();
+  });
+
+  it('trims a meaningful value before storing', async () => {
+    const { repo, handle } = openRepo();
+    const { res } = await contribute({
+      port: throwingPort,
+      makeRepo: () => repo,
+      body: { ...CLEAN, store: 'sam', storeSku: 'n-trim', nativeCategoryId: '  10012164  ' },
+    });
+    expect(res.status).toBe(200);
+    const raw = handle
+      .prepare('SELECT native_category_id AS n FROM product_raw WHERE store_sku = ?')
+      .get('n-trim') as { n: string | null };
+    expect(raw.n).toBe('10012164');
+  });
+
+  it('non-string (number) nativeCategoryId → 400 invalid-request, no rows', async () => {
+    const { repo, handle } = openRepo();
+    const { res, json } = await contribute({
+      port: throwingPort,
+      makeRepo: () => repo,
+      body: { ...CLEAN, store: 'sam', storeSku: 'n-num', nativeCategoryId: 12345 },
+    });
+    expect(res.status).toBe(400);
+    expect(json.error).toBe('invalid-request');
+    expect(countRows(handle, 'product_raw')).toBe(0);
+  });
+
+  it('legacy body without nativeCategoryId still succeeds (non-BREAKING)', async () => {
+    const { repo, handle } = openRepo();
+    const { res } = await contribute({
+      port: throwingPort,
+      makeRepo: () => repo,
+      body: { ...CLEAN, store: 'sam', storeSku: 'n-legacy' },
+    });
+    expect(res.status).toBe(200);
+    const raw = handle
+      .prepare('SELECT native_category_id AS n FROM product_raw WHERE store_sku = ?')
+      .get('n-legacy') as { n: string | null };
+    expect(raw.n).toBeNull();
+  });
+});
+
 describe('POST /contribute — weight product computes per100g and lands (5.4/5.5)', () => {
   it('weight unit (2kg) -> 200, per100g set / per100ml null in body, persisted on the weight axis', async () => {
     // tier1 extracts a clean weight single unit (2kg, qty inferred = 1) — a

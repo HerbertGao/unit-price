@@ -108,9 +108,9 @@ category_closure          品类 is-a 闭包(tag 维度,非 product 维度——
      → store_category_map:山姆 categoryId(数值路径)→ 我们的 tag(高置信)
      → 仲裁(品类 kind),确定性优先级,对 `tier1 ∈ {未命中, 命中叶, 多叶tie}` × `store-map ∈ {未命中, 命中叶, 命中粗节点}` 全覆盖(tier1 只产叶,无「命中粗节点」态;tier1 多叶等优先级不可判 = `多叶tie`,视作「tier1 无确定输出」可落 ③ 回退):
         ① **两方都命中、粒度冲突**(粗细不同)→ 取更深(更细)叶(一般判据「取更深叶」双向适用,如 `tier1 细叶` > `store-map 粗节点`);
-        ② **两方都命中、同粒度异叶**(如 tier1=碳酸、store-map=果汁,等深不同叶)→ **tier1 关键词 > store-map**(标题细粒度证据强于商超粗映射);
+        ② **两方都命中、同粒度**:**异叶**(如 tier1=碳酸、store-map=果汁,等深不同叶)→ **native 叶 store-map ≻ tier1**(门店权威叶级 native 分类纠正 tier1 关键词启发式的跨 cohort 误判,`decidedBy=store-map`);**同叶**(两叶相同)→ 取该叶、`decidedBy=tier1`(叶一致不翻 provenance,避免对本已分对的商品批量 churn `product_tag.source`);
         ③ **仅一方有确定叶输出**(含 `tier1 多叶tie` 视为 tier1 无确定输出):仅 tier1 命中叶 → 采该叶;仅 store-map 命中**叶** → 采该叶(含 tier1 tie 但 store-map 有干净叶时,**采 store-map 叶**而非锁待人工);仅 store-map 命中**粗(非叶)节点** → 暂停「粗分类/待细化」(见 §二);
-        ④ **两方都无确定叶输出**(tier1 tie/未命中 且 store-map 未命中)→ 若有 LLM 候选过 guard 则用,否则 `category` 留空 + `待人工`
+        ④ **两方都无确定叶输出**(tier1 tie/未命中 且 store-map 未命中)→ `category` 留空 + `待人工`(**本期无 LLM 候选**——管线本期不含 tier2 LLM 判品类;LLM 候选 + guard 为 v2,届时此格改「若有 LLM 候选过 guard 则用,否则待人工」)
      → LLM 候选确定性 guard(**对所有 kind**):category 候选必须落**已知 category 节点白名单**、attribute 候选必须落**已知属性受控值白名单**、brand/product_line 候选须落已知值或→ `待人工`;**kind 误判**(如把「无糖」当 category)= 非对应白名单 → 直接丢弃,不采纳。(受控属性值表初始 = tier1 已覆盖属性(无糖/气泡/进口…)+ 人工 seed,纳入人工维护,与 category 节点白名单**同源治理**。)
      → 确定性闭包(挂叶→category_closure 补祖先)
      → 人工纠错(source=manual,沉淀规则/few-shot)
@@ -126,6 +126,7 @@ category_closure          品类 is-a 闭包(tag 维度,非 product 维度——
 ## 七、分期
 
 - **v1(随 `add-database` / Phase 3)**:tag 字典(kind + is-a + comparable_unit)、product_tag、store_category_map、category_closure;自动打标签 = tier1 规则 + 山姆 map(LLM 候选稍后)。
+  - **native-id store-map 已接通(在真实商品上点火)**:ingest/contribute 请求采集专用 provenance 字段 `nativeCategoryId`(山姆 `categoryIdList` 路径末端叶 id)→ 落 `product_raw.native_category_id` 列(可空、与 `category_hint` 分列、COALESCE 写)→ backfill 的 `listProductsForBackfill` 读该列喂 `tagProduct`,使 store-map 仲裁分支点火(取代曾经硬编码 `null` 的惰性路径)。HAR 提取器**新抽**每条商品 `categoryIdList` 的**叶 id(路径末端)**+ `(store, storeSku)`,既供前向 ingest,也供存量 native-id-only `UPDATE` 回填(见 `docs/backfill-runbook.md`)。native 缺失(未回填/新店无 map)的行退化为 tier1 关键词。
   - **v1 排名只支持 `per_100ml` 节点**(软饮全线 + 乳品全线 + 各酒种叶):`comparable_unit` 字段落库,core 本期只算 per100ml(对齐 `unit-price-calc` 主规范「只产 per100ml」);解析单位为 null 的节点(root `饮料`、`酒类` 父、未来纸品)`rankable=false`、不出榜。`per_100g`/`per_100sheet` 为 **v2 占位**,本期重量/纸品商品一律走 `unit-price-calc` 不可计算终态。
   - **`rankable` 已接入 `/rankings`(节点作用域榜 + cohort 守卫)**:`GET /rankings?category=<节点 slug>`(**缺省 `soft-drink`**)按 `category_closure` 闭包取该节点子树成员。入榜判据为**合取**——⓪ 目标节点经静态解析得**非空 `comparable_unit`**(**cohort 守卫**:跨多个可比 cohort 的节点 root `饮料`/`酒类` 父解析 `null` → 整请求 `400`,杜绝「水 + 酒」「啤酒 + 威士忌」混榜)∧ ① 闭包命中目标节点 ∧ ② `product.rankable=true`(资格门:已分类叶 ∧ 该叶解析出非空可比单位)∧ ③ 数据门(单价列非空,**列由可排名成员所在轴决定**;v1 唯一可排名轴是 per_100ml,故对任一可开榜节点均为 `per100ml IS NOT NULL`)。`rankable=false` 行(待人工/待细化、非饮品如稀奶油)**一律不入任何节点榜**;而「不同酒种混排」「软饮 + 酒类混排」由 **cohort 守卫**(拒跨 cohort 父节点开榜)消除,**而非**靠把酒类标 `rankable=false`——本期酒类各叶**可排名**、各有自己的 per100ml cohort 榜。配套 `GET /categories` 输出 category is-a 树,每节点带继承解析的 `comparableUnit`、节点自身轴标记 `rankable` 与闭包后代可排名数 `rankableCount`。`rankable` 现**恰等于「该节点是单一 cohort、可点进榜」**(软饮/软饮叶/乳品/乳品叶/各酒种叶 `true`;root/酒类父 `false`)→ 消费契约**用 `rankable` 判榜入口**;`rankableCount` 对可点进节点 = 其 cohort 榜基数,对 `rankable=false` 节点(root/酒类父)为分支信息性计数(酒类父 `>0`)、不对应任何榜。
 - **v2**:LLM 候选打标签 + 白名单 guard;**eval 新增「品类标签准确率」维度**(见下);策展视图(无糖饮料等保存查询);跨店同款匹配;酒类/纸品等可比单位与计算扩展(届时 core 增 per_100g/per_100sheet 计算 + 解除 spec-parsing `category` 恒 beverage 约束)。

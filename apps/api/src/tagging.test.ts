@@ -21,7 +21,7 @@ import {
   seedTaxonomy,
   type Repository,
 } from '@unit-price/db';
-import { runBackfill, tagProduct } from './tagging.js';
+import { listProductsForBackfill, runBackfill, tagProduct } from './tagging.js';
 
 const migrationsFolder = fileURLToPath(
   new URL('../../../packages/db/drizzle', import.meta.url),
@@ -46,10 +46,11 @@ async function openSeeded(): Promise<SeededDb> {
 
 /**
  * Land one product (product_raw + product + unit_price) via the real repo. When
- * `nativeCategoryId` is given it rides on product_raw.category_hint — used by the
- * DIRECT tagProduct store-map tests (which pass nativeCategoryId explicitly). The
- * backfill does NOT consume it this period (it feeds nativeCategoryId=null,
- * store-map lazy — see design D9). Returns the product id.
+ * `nativeCategoryId` is given it lands on product_raw.native_category_id (its
+ * dedicated store-provenance column) via the real upsertRaw field — NOT
+ * category_hint (which is the passthrough source of product.category) — so the
+ * backfill's listProductsForBackfill reads it and store-map fires, mirroring
+ * production. Returns the product id.
  */
 async function landProduct(
   repo: Repository,
@@ -58,23 +59,19 @@ async function landProduct(
     price: number;
     store: string;
     storeSku: string;
-    /** Store-native category id (rides on product_raw.category_hint). */
+    /** Store-native category id (lands on product_raw.native_category_id). */
     nativeCategoryId?: string;
   },
 ): Promise<string> {
   const rawId = await repo.upsertRaw({
     store: opts.store,
     storeSku: opts.storeSku,
-    raw: {
-      title: opts.title,
-      price: opts.price,
-      ...(opts.nativeCategoryId ? { categoryHint: opts.nativeCategoryId } : {}),
-    },
+    raw: { title: opts.title, price: opts.price },
+    nativeCategoryId: opts.nativeCategoryId,
   });
   const spec: ParsedSpec = parseTier1({
     title: opts.title,
     price: opts.price,
-    ...(opts.nativeCategoryId ? { categoryHint: opts.nativeCategoryId } : {}),
   }).spec;
   const calc: CalcResult = calculate(spec, opts.price);
   const { productId } = await repo.saveParsed({ rawId, spec, calc });
@@ -412,12 +409,12 @@ describe('tagProduct — three-state reconcile / single-attribution convergence 
 });
 
 describe('runBackfill — full stock, idempotent, no LLM (3.2/3.4)', () => {
-  it('backfills every product via tier1 (store-map LAZY), derives state + rankable, re-run idempotent', async () => {
+  it('backfills every product (store-map fires off native_category_id), derives state + rankable, re-run idempotent', async () => {
     const { repo, db, handle } = await openSeeded();
 
-    // Seed a coarse-node map row + rely on the canonical leaf-native seeds so the
-    // sample WOULD cover store-map branches IF the backfill fed native ids — it
-    // does NOT this period (lazy), so these natives are inert in the backfill.
+    // Seed a coarse-node map row alongside the canonical leaf-native seeds. The
+    // backfill now READS product_raw.native_category_id (landProduct lands it via
+    // the real upsertRaw field), so these natives fire store-map in the backfill.
     const softDrinkTagId = (
       handle.prepare("SELECT id FROM tag WHERE slug = 'soft-drink'").get() as {
         id: string;
@@ -429,16 +426,16 @@ describe('runBackfill — full stock, idempotent, no LLM (3.2/3.4)', () => {
       )
       .run(softDrinkTagId);
 
-    // Land a representative sample. Note the native ids are carried on
-    // product_raw.category_hint for landing, but the backfill IGNORES them (it
-    // feeds nativeCategoryId=null), so only tier1 keyword titles classify:
-    //   可口可乐   → tier1 carbonated (classified, rankable)
-    //   神秘饮料   + native 10003380  → store-map carbonated IF fed, but tier1 miss → 待人工
-    //   某啤酒礼盒  + native 10012172  → P3.5: `啤酒` IS a tier1 beer keyword → tier1
-    //                                   classifies BEER (no store-map needed); beer
-    //                                   binds per_100ml → classified, rankable
-    //   神秘饮品盒  + native coarse    → store-map pending IF fed, but tier1 miss → 待人工
-    //   神秘赠品   → tier1 miss → 待人工
+    // Land a representative sample. Native ids land on product_raw.native_category_id
+    // and the backfill reads them → store-map fires:
+    //   可口可乐   (no native)        → tier1 carbonated → classified, rankable
+    //   神秘饮料   + native 10003380  → tier1 miss, store-map carbonated leaf →
+    //                                   classified, rankable, store-map DECISION
+    //   某啤酒礼盒  + native 10012172  → tier1 hits `啤酒`=beer AND store-map=beer
+    //                                   (SAME leaf) → classified, rankable,
+    //                                   decidedBy=tier1 (NOT a store-map decision)
+    //   神秘饮品盒  + native coarse    → tier1 miss, store-map COARSE node → pending
+    //   神秘赠品   (no native)        → tier1 miss, no native → 待人工
     await landProduct(repo, { title: '可口可乐 330ml*24听', price: 40, store: 'sam', storeSku: 's-coke' });
     await landProduct(repo, { title: '神秘饮料 330ml*24', price: 30, store: 'sam', storeSku: 's-mystery', nativeCategoryId: '10003380' });
     await landProduct(repo, { title: '某啤酒礼盒', price: 100, store: 'sam', storeSku: 's-beer', nativeCategoryId: '10012172' });
@@ -447,13 +444,16 @@ describe('runBackfill — full stock, idempotent, no LLM (3.2/3.4)', () => {
 
     const first = await runBackfill(repo, db);
     expect(first.total).toBe(5);
-    // store-map LAZY: native ids are never fed. tier1 classifies the carbonated
-    // title AND the 啤酒 title (P3.5 beer keyword); the remaining native-id-only /
-    // no-keyword products land 待人工 (the seed rows are inert in the backfill).
-    expect(first.classified).toBe(2); // carbonated + beer (both tier1)
-    expect(first.pending).toBe(0); // coarse store-map never consulted
-    expect(first.manual).toBe(3); // mystery/coarse/gift all tier1-miss
-    expect(first.rankable).toBe(2); // carbonated + beer (both bind per_100ml)
+    // store-map fires off native ids: carbonated (tier1) + carbonated (store-map,
+    // tier1-miss) + beer (tier1, same-leaf store-map agreement) = 3 classified;
+    // the coarse native lands pending; the no-keyword/no-native product 待人工.
+    expect(first.classified).toBe(3); // carbonated + store-map carbonated + beer
+    expect(first.pending).toBe(1); // coarse store-map node
+    expect(first.manual).toBe(1); // gift: tier1-miss, no native
+    expect(first.rankable).toBe(3); // all three classified leaves bind per_100ml
+    // Only 神秘饮料 is a store-map DECISION (tier1-miss filled by store-map leaf);
+    // 某啤酒礼盒 is same-leaf agreement (recorded tier1), 神秘饮品盒 is coarse → pending.
+    expect(first.storeMapDecisions).toBe(1);
 
     // Snapshot the product_tag rows for idempotency comparison.
     const tagCountBefore = (handle.prepare('SELECT count(*) AS c FROM product_tag').get() as { c: number }).c;
@@ -461,10 +461,11 @@ describe('runBackfill — full stock, idempotent, no LLM (3.2/3.4)', () => {
     // Re-run on the same snapshot → identical summary + no duplicate edges.
     const second = await runBackfill(repo, db);
     expect(second.total).toBe(5);
-    expect(second.classified).toBe(2);
-    expect(second.pending).toBe(0);
-    expect(second.manual).toBe(3);
-    expect(second.rankable).toBe(2);
+    expect(second.classified).toBe(3);
+    expect(second.pending).toBe(1);
+    expect(second.manual).toBe(1);
+    expect(second.rankable).toBe(3);
+    expect(second.storeMapDecisions).toBe(1);
     const tagCountAfter = (handle.prepare('SELECT count(*) AS c FROM product_tag').get() as { c: number }).c;
     expect(tagCountAfter).toBe(tagCountBefore);
 
@@ -473,26 +474,30 @@ describe('runBackfill — full stock, idempotent, no LLM (3.2/3.4)', () => {
     // db types/schema, and Drizzle query helpers — so no seam can invoke an LLM.
   });
 
-  it('backfill is store-map LAZY: a product classifiable ONLY by a store native id lands 待人工', async () => {
-    // Even though the canonical seed maps Sam native 10003380 → carbonated, the
-    // backfill does not feed native ids this period, so a title with no tier1
-    // keyword stays 待人工 — proving the backfill's classification is tier1-only.
+  it('backfill fires store-map: a product classifiable ONLY by a store native leaf → classified (not 待人工)', async () => {
+    // The canonical seed maps Sam native 10003380 → carbonated. The backfill now
+    // reads product_raw.native_category_id, so a title with no tier1 keyword but a
+    // mapped native leaf classifies via store-map — proving the backfill fires
+    // store-map (the inverse of the old "store-map LAZY → 待人工" assertion).
     const { repo, db } = await openSeeded();
     const id = await landProduct(repo, {
       title: '神秘饮料 330ml*24', // no tier1 leaf keyword
       price: 30,
       store: 'sam',
-      storeSku: 's-lazy',
-      nativeCategoryId: '10003380', // seeded → carbonated, but inert in backfill
+      storeSku: 's-native',
+      nativeCategoryId: '10003380', // seeded → carbonated, fires in backfill
     });
     const result = await runBackfill(repo, db);
-    expect(result.classified).toBe(0);
-    expect(result.manual).toBe(1);
+    expect(result.classified).toBe(1);
+    expect(result.manual).toBe(0);
+    expect(result.storeMapDecisions).toBe(1); // tier1-miss filled by store-map leaf
     const attr = await repo.getProductAttribution(id);
-    expect(attr?.state).toBe('manual');
-    expect(attr?.categoryLeafSlug).toBeNull();
+    expect(attr?.state).toBe('classified-leaf');
+    expect(attr?.categoryLeafSlug).toBe('carbonated');
     expect(attr?.pendingCategorySlug).toBeNull();
-    expect(attr?.rankable).toBe(false);
+    expect(attr?.rankable).toBe(true);
+    // Provenance: the leaf edge is sourced store-map (tier1 missed).
+    expect(attr?.tags.find((t) => t.slug === 'carbonated')?.source).toBe('store-map');
   });
 
   it('backfill closure membership: a carbonated product is a member of soft-drink AND root', async () => {
@@ -502,5 +507,92 @@ describe('runBackfill — full stock, idempotent, no LLM (3.2/3.4)', () => {
     expect(await repo.listProductIdsInCategoryNode('carbonated')).toContain(id);
     expect(await repo.listProductIdsInCategoryNode('soft-drink')).toContain(id);
     expect(await repo.listProductIdsInCategoryNode('beverage')).toContain(id);
+  });
+});
+
+describe('listProductsForBackfill — reads product_raw.native_category_id (1.3/1.4)', () => {
+  it('surfaces native_category_id from the dedicated column (NOT category_hint), null when omitted', async () => {
+    const { repo, db, handle } = await openSeeded();
+    const withNative = await landProduct(repo, {
+      title: '神秘饮料 330ml*24',
+      price: 30,
+      store: 'sam',
+      storeSku: 's-native-read',
+      nativeCategoryId: '10003380',
+    });
+    const withoutNative = await landProduct(repo, {
+      title: '可口可乐 330ml*24听',
+      price: 40,
+      store: 'sam',
+      storeSku: 's-no-native',
+    });
+
+    const inputs = await listProductsForBackfill(db);
+    const byId = new Map(inputs.map((i) => [i.productId, i]));
+    expect(byId.get(withNative)?.nativeCategoryId).toBe('10003380');
+    expect(byId.get(withoutNative)?.nativeCategoryId).toBeNull();
+
+    // The native id lands on product_raw.native_category_id, NOT category_hint
+    // (which stays the domain passthrough source of product.category).
+    const raw = handle
+      .prepare(
+        "SELECT native_category_id AS n, category_hint AS h FROM product_raw WHERE store_sku = 's-native-read'",
+      )
+      .get() as { n: string | null; h: string | null };
+    expect(raw.n).toBe('10003380');
+    expect(raw.h).toBeNull();
+  });
+
+  it('end-to-end backfill-read: native_category_id (via upsertRaw field) → listProductsForBackfill → runBackfill store-map hit', async () => {
+    // Land a row whose ONLY classification signal is its native_category_id (no
+    // tier1 keyword in the title), written via the real upsertRaw field — NOT
+    // category_hint. The backfill must read the column and fire store-map.
+    const { repo, db, handle } = await openSeeded();
+    const id = await landProduct(repo, {
+      title: '神秘饮料 330ml*24', // tier1 miss
+      price: 30,
+      store: 'sam',
+      storeSku: 's-e2e',
+      nativeCategoryId: '10012164', // seeded → baijiu
+    });
+
+    // Column written; domain category_hint untouched.
+    const raw = handle
+      .prepare(
+        "SELECT native_category_id AS n, category_hint AS h FROM product_raw WHERE store_sku = 's-e2e'",
+      )
+      .get() as { n: string | null; h: string | null };
+    expect(raw.n).toBe('10012164');
+    expect(raw.h).toBeNull();
+
+    // listProductsForBackfill surfaces it; runBackfill fires store-map → baijiu leaf.
+    const inputs = await listProductsForBackfill(db);
+    expect(inputs.find((i) => i.productId === id)?.nativeCategoryId).toBe('10012164');
+
+    const result = await runBackfill(repo, db);
+    expect(result.classified).toBe(1);
+    expect(result.storeMapDecisions).toBe(1);
+    const attr = await repo.getProductAttribution(id);
+    expect(attr?.state).toBe('classified-leaf');
+    expect(attr?.categoryLeafSlug).toBe('baijiu');
+    expect(attr?.tags.find((t) => t.slug === 'baijiu')?.source).toBe('store-map');
+  });
+});
+
+describe('runBackfill — storeMapDecisions counting (1.5)', () => {
+  it('store-map deciding leaf (tier1-miss / cross-cohort) counts; same-leaf agreement does NOT', async () => {
+    const { repo, db } = await openSeeded();
+    // tier1-miss filled by store-map leaf → store-map DECISION (counts).
+    await landProduct(repo, { title: '剑南春礼盒', price: 100, store: 'sam', storeSku: 'sm-decide', nativeCategoryId: '10012164' });
+    // tier1 hits 啤酒=beer AND store-map=beer (SAME leaf) → recorded tier1, NOT counted.
+    await landProduct(repo, { title: '某啤酒礼盒', price: 80, store: 'sam', storeSku: 'sm-same', nativeCategoryId: '10012172' });
+    // tier1 carbonated, no native → tier1, NOT counted.
+    await landProduct(repo, { title: '可口可乐 330ml*24听', price: 40, store: 'sam', storeSku: 'sm-tier1' });
+
+    const result = await runBackfill(repo, db);
+    expect(result.classified).toBe(3);
+    // Only the 剑南春 row is a store-map decision; the same-leaf beer agreement
+    // and the pure-tier1 carbonated row are recorded tier1.
+    expect(result.storeMapDecisions).toBe(1);
   });
 });

@@ -55,8 +55,20 @@ export const ParseResponseSchema = z.object({
  * MUST be non-empty at the request layer (empty → 400 invalid-request) so an
  * empty key never reaches the repository. `capturedAt` is epoch ms (int only;
  * ISO strings are rejected). Provenance fields (store/storeSku/source/sourceUrl/
- * capturedAt) are NOT part of RawProductSchema — only `categoryHint` rides in
- * the domain `raw` object.
+ * capturedAt/nativeCategoryId) are NOT part of RawProductSchema — only
+ * `categoryHint` rides in the domain `raw` object.
+ *
+ * `nativeCategoryId` is a DEDICATED store-provenance field (the store's native
+ * categoryIdList leaf id, e.g. Sam's "10012164"). It is NOT reused from
+ * `categoryHint` (which is the passthrough source of product.category) and is
+ * NOT part of the core domain schema — it lands on product_raw.native_category_id
+ * to feed the store-map tagging lookup. Unlike the dedupe keys, an empty /
+ * whitespace-only / explicit-null value is NOT a 400: it is treated as OMITTED
+ * (→ null + success), so a generative client that serializes the absent field as
+ * `null`/`""` still succeeds and the row simply falls back to tier1. The
+ * preprocess collapses null/empty/whitespace to undefined BEFORE min(1) (a bare
+ * `z.string().trim().min(1).optional()` would 400 on "" / null); a non-string
+ * (e.g. a number) still fails validation → 400.
  */
 export const ContributeRequestSchema = z.object({
   // Domain fields (aligned with RawProductSchema).
@@ -72,6 +84,13 @@ export const ContributeRequestSchema = z.object({
   source: z.string().optional(),
   sourceUrl: z.string().optional(),
   capturedAt: z.number().int('capturedAt must be an integer epoch-ms timestamp').optional(),
+  // Store-provenance native category id (feeds store-map). null/empty/whitespace
+  // → omitted (null + success), not 400; a non-string → 400. See docstring.
+  nativeCategoryId: z.preprocess(
+    (v) =>
+      v == null || (typeof v === 'string' && v.trim() === '') ? undefined : v,
+    z.string().trim().min(1).optional(),
+  ),
 });
 
 export type ContributeRequest = z.infer<typeof ContributeRequestSchema>;
@@ -398,6 +417,7 @@ async function upsertRawOrNull(
       source: req.source,
       sourceUrl: req.sourceUrl,
       capturedAt: req.capturedAt,
+      nativeCategoryId: req.nativeCategoryId,
     });
   } catch {
     return null;
@@ -978,14 +998,17 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     console.warn('[admin/backfill]', {
       keyHash, cursor: cursor ?? null, limit,
       total: result.total, classified: result.classified, pending: result.pending,
-      manual: result.manual, rankable: result.rankable, nextCursor: result.nextCursor,
+      manual: result.manual, rankable: result.rankable,
+      storeMapDecisions: result.storeMapDecisions, nextCursor: result.nextCursor,
       at: new Date().toISOString(),
     });
 
-    // 响应:只回计数 + nextCursor(投影掉 results[])。
+    // 响应:只回计数 + nextCursor(投影掉 results[])。storeMapDecisions = 本块内
+    // store-map 定叶(异叶)的决定数;backfill 分块续跑时门值须跨所有块累加。
     return c.json({
       total: result.total, classified: result.classified, pending: result.pending,
-      manual: result.manual, rankable: result.rankable, nextCursor: result.nextCursor,
+      manual: result.manual, rankable: result.rankable,
+      storeMapDecisions: result.storeMapDecisions, nextCursor: result.nextCursor,
     });
   });
 

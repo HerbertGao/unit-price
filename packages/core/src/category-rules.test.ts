@@ -312,12 +312,19 @@ describe('arbitrate — taxonomy §五', () => {
     expect(v).toEqual({ verdict: 'leaf', leafSlug: 'carbonated', decidedBy: 'tier1' });
   });
 
-  it('② same-granularity different leaf → tier1 > store-map', () => {
+  it('② same-granularity different leaf → native store-map leaf ≻ tier1', () => {
     const v = arbitrate(tier1Leaf('carbonated'), smLeaf('juice-plant'));
-    expect(v).toEqual({ verdict: 'leaf', leafSlug: 'carbonated', decidedBy: 'tier1' });
+    expect(v).toEqual({ verdict: 'leaf', leafSlug: 'juice-plant', decidedBy: 'store-map' });
   });
 
-  it('② both hit same leaf → that leaf', () => {
+  // 燕麦牛奶 误判正例: tier1 因含全词「牛奶」误命中 milk,native 叶 juice-plant
+  // 纠正其跨 cohort 误归(植物饮归软饮、非乳品)。
+  it('② 燕麦牛奶: tier1 milk vs native juice-plant → juice-plant (store-map)', () => {
+    const v = arbitrate(tier1Leaf('milk'), smLeaf('juice-plant'));
+    expect(v).toEqual({ verdict: 'leaf', leafSlug: 'juice-plant', decidedBy: 'store-map' });
+  });
+
+  it('② both hit same leaf → that leaf, decidedBy tier1', () => {
     const v = arbitrate(tier1Leaf('carbonated'), smLeaf('carbonated'));
     expect(v).toEqual({ verdict: 'leaf', leafSlug: 'carbonated', decidedBy: 'tier1' });
   });
@@ -353,6 +360,11 @@ describe('arbitrate — taxonomy §五', () => {
 
   it('③ only store-map coarse node → 待细化 (pending)', () => {
     const v = arbitrate(tier1None, smCoarse);
+    expect(v).toEqual({ verdict: 'pending', pendingNodeSlug: 'soft-drink' });
+  });
+
+  it('③ tier1 tie + store-map coarse node → 待细化 (pending, points at coarse node)', () => {
+    const v = arbitrate(tier1Tie, smCoarse);
     expect(v).toEqual({ verdict: 'pending', pendingNodeSlug: 'soft-drink' });
   });
 
