@@ -150,6 +150,39 @@ describe('POST /ingest — happy path lands all three tables (4.1)', () => {
   });
 });
 
+describe('POST /ingest — nativeCategoryId provenance (2.1/2.3)', () => {
+  it('nativeCategoryId lands on product_raw.native_category_id (shared upsertRaw map)', async () => {
+    const { repo, handle } = openRepo();
+    const { res } = await ingest({
+      port: throwingPort,
+      makeRepo: () => repo,
+      body: { ...CLEAN, store: 'sam', storeSku: 'coke-native', nativeCategoryId: '10012164' },
+    });
+    expect(res.status).toBe(202);
+    const raw = handle
+      .prepare(
+        'SELECT native_category_id AS n, category_hint AS h FROM product_raw WHERE store_sku = ?',
+      )
+      .get('coke-native') as { n: string | null; h: string | null };
+    expect(raw.n).toBe('10012164');
+    expect(raw.h).toBeNull(); // never touches the domain category column
+  });
+
+  it('empty-string nativeCategoryId → null + 202 (not 400)', async () => {
+    const { repo, handle } = openRepo();
+    const { res } = await ingest({
+      port: throwingPort,
+      makeRepo: () => repo,
+      body: { ...CLEAN, store: 'sam', storeSku: 'n-empty', nativeCategoryId: '' },
+    });
+    expect(res.status).toBe(202);
+    const raw = handle
+      .prepare('SELECT native_category_id AS n FROM product_raw WHERE store_sku = ?')
+      .get('n-empty') as { n: string | null };
+    expect(raw.n).toBeNull();
+  });
+});
+
 describe('POST /ingest — invalid request writes nothing, no background (4.2)', () => {
   it.each([
     ['missing store', { ...CLEAN, storeSku: 'x' }],

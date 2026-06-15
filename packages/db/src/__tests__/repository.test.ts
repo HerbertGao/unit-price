@@ -277,6 +277,53 @@ describe('upsertRaw', () => {
     expect(row.source_url).toBe('https://x/2');
     expect(row.category_hint).toBe('乳品');
   });
+
+  it('writes native_category_id and COALESCEs it on resubmit (provenance semantics)', async () => {
+    // First land without native-id (column NULL).
+    const id1 = await t.repo.upsertRaw({
+      store: 'sam',
+      storeSku: 'sku-1',
+      raw: { title: '剑南春', price: 39.9 },
+      capturedAt: 1_000,
+    });
+    let row = t.handle
+      .prepare(
+        'SELECT native_category_id, category_hint FROM product_raw WHERE id = ?',
+      )
+      .get(id1) as Record<string, unknown>;
+    expect(row.native_category_id).toBeNull();
+
+    // Resubmit with a native-id → written; not via category_hint.
+    const id2 = await t.repo.upsertRaw({
+      store: 'sam',
+      storeSku: 'sku-1',
+      raw: { title: '剑南春(新价)', price: 35.5 },
+      nativeCategoryId: '10012164',
+      capturedAt: 2_000,
+    });
+    expect(id2).toBe(id1);
+    row = t.handle
+      .prepare(
+        'SELECT title, price, native_category_id, category_hint FROM product_raw WHERE id = ?',
+      )
+      .get(id1) as Record<string, unknown>;
+    expect(row.native_category_id).toBe('10012164');
+    expect(row.title).toBe('剑南春(新价)'); // latest observation
+    expect(row.price).toBe(3550); // latest observation
+    expect(row.category_hint).toBeNull(); // native-id never touches the domain column
+
+    // Price-only resubmit omitting native-id → preserved (COALESCE), not nulled.
+    await t.repo.upsertRaw({
+      store: 'sam',
+      storeSku: 'sku-1',
+      raw: { title: '剑南春(再降)', price: 30 },
+      capturedAt: 3_000,
+    });
+    row = t.handle
+      .prepare('SELECT native_category_id FROM product_raw WHERE id = ?')
+      .get(id1) as Record<string, unknown>;
+    expect(row.native_category_id).toBe('10012164'); // preserved
+  });
 });
 
 describe('saveParsed + getProduct', () => {

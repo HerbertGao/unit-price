@@ -491,14 +491,18 @@ export type ArbitrationVerdict = z.infer<typeof ArbitrationVerdictSchema>;
  * "命中粗节点" state):
  *
  * - ① 两方都命中、粒度冲突(tier1 细叶 vs store-map 粗节点)→ 取更深叶(tier1 叶)。
- * - ② 两方都命中叶、同粒度异叶 → tier1 > store-map(标题细证据强于商超粗映射)。
- *      (Same leaf → that leaf, attributed to tier1.)
+ * - ② 两方都命中叶、同粒度:**异叶** → native 叶 store-map ≻ tier1 叶(门店权威
+ *      叶级 native 分类纠正 tier1 关键词启发式的跨 cohort 误判,`decidedBy=store-map`);
+ *      **同叶** → 取该叶、`decidedBy=tier1`(两叶一致不翻 provenance,避免对本已
+ *      分对的商品批量 churn `product_tag.source`)。
  * - ③ 仅一方有确定叶输出(含 tier1 多叶tie 视为 tier1 无确定输出):
  *      仅 tier1 命中叶 → 采该叶;仅 store-map 命中叶 → 采该叶(含 tier1 tie 但
  *      store-map 有干净叶时采 store-map 叶,不锁待人工);仅 store-map 命中粗节点
  *      → 待细化(pending)。
  * - ④ 两方都无确定叶(tier1 tie/未命中 且 store-map 未命中)→ 待人工。
  *      (本期无 LLM 候选。)
+ *
+ * 全序:`native 异叶 ≻ tier1 叶 ≻ 粗 native(pending) ≻ 待人工`(同叶取该叶、记 tier1)。
  */
 export function arbitrate(
   tier1: Tier1LeafResult,
@@ -509,8 +513,12 @@ export function arbitrate(
   // ② / part of ① — tier1 has a determinate leaf.
   if (tier1HasLeaf) {
     if (storeMap.kind === 'leaf') {
-      // Same leaf → that leaf; different leaf at same granularity → tier1 wins.
-      // Either way tier1's leaf is the verdict (② / same-leaf).
+      // ② same granularity, both leaves. Different leaf → native store-map leaf
+      // wins (authoritative store leaf corrects tier1 keyword heuristic);
+      // same leaf → keep tier1 provenance (don't churn product_tag.source).
+      if (storeMap.leafSlug !== tier1.leaf) {
+        return { verdict: 'leaf', leafSlug: storeMap.leafSlug, decidedBy: 'store-map' };
+      }
       return { verdict: 'leaf', leafSlug: tier1.leaf!, decidedBy: 'tier1' };
     }
     // store-map coarse (① granularity conflict: take deeper = tier1 leaf) or

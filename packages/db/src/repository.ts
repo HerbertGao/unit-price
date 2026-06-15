@@ -133,6 +133,13 @@ export interface UpsertRawInput {
   raw: RawProduct;
   source?: string | null;
   sourceUrl?: string | null;
+  /**
+   * Store-origin provenance: leaf id from the store's native `categoryIdList`
+   * path end. Nullable; NOT the same as the domain `categoryHint`. COALESCE'd
+   * on conflict like other provenance — a resubmit that omits it keeps the
+   * prior value.
+   */
+  nativeCategoryId?: string | null;
   /** Observation time (epoch ms or Date); defaults to now. */
   capturedAt?: number | Date;
 }
@@ -692,6 +699,7 @@ export function createRepository(db: Db | null | undefined): Repository {
         title: raw.title,
         price: yuanToCents(raw.price),
         categoryHint: raw.categoryHint ?? null,
+        nativeCategoryId: input.nativeCategoryId ?? null,
         source: input.source ?? null,
         sourceUrl: input.sourceUrl ?? null,
         capturedAt: toEpochMillis(input.capturedAt ?? Date.now()),
@@ -709,6 +717,7 @@ export function createRepository(db: Db | null | undefined): Repository {
             title: row.title,
             price: row.price,
             categoryHint: sql`coalesce(${row.categoryHint}, ${productRaw.categoryHint})`,
+            nativeCategoryId: sql`coalesce(${row.nativeCategoryId}, ${productRaw.nativeCategoryId})`,
             source: sql`coalesce(${row.source}, ${productRaw.source})`,
             sourceUrl: sql`coalesce(${row.sourceUrl}, ${productRaw.sourceUrl})`,
             capturedAt: row.capturedAt,

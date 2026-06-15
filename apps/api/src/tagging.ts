@@ -37,12 +37,12 @@ export interface TagProductInput {
   store: string | null;
   /**
    * The store's NATIVE category id (e.g. Sam's numeric categoryIdList leaf) used
-   * to hit store_category_map. A DIRECT `tagProduct` call (e.g. a unit test, or a
-   * future manual entry) may pass it to exercise the store-map arbitration. The
-   * production backfill passes null this period — no ingest field carries a store
-   * native category id yet (do NOT reuse product_raw.category_hint: it is the
-   * passthrough source of product.category, "beverage" for all Sam stock — not a
-   * native id). null → no store-map lookup.
+   * to hit store_category_map. ingest collects it into product_raw.native_category_id
+   * and the backfill reads that column (see listProductsForBackfill), so a real
+   * native-bearing row exercises the store-map arbitration. Do NOT reuse
+   * product_raw.category_hint to carry it: category_hint is the passthrough source
+   * of product.category ("beverage" for all Sam stock), a separate domain column —
+   * native_category_id is its own store-provenance column. null → no store-map lookup.
    */
   nativeCategoryId: string | null;
 }
@@ -166,6 +166,15 @@ export interface BackfillResult {
   manual: number;
   /** Count with rankable=true after recompute. */
   rankable: number;
+  /**
+   * Count of leaf verdicts the store-map DECIDED (decidedBy='store-map' — a
+   * store-map leaf that DIFFERS from tier1's leaf, or tier1-miss filled by a
+   * store-map leaf). By design this EXCLUDES same-leaf agreement (recorded as
+   * tier1) and coarse native (lands pending) — so >0 proves store-map actively
+   * decided leaves. backfill is chunked: the >0 gate must be summed across all
+   * cursor chunks (a single chunk's count is not the full run).
+   */
+  storeMapDecisions: number;
   /** Per-product results (in processing order). */
   results: TagProductResult[];
   /** keyset 续跑游标:本次读到行数 < limit(耗尽)或无参全量 → null;否则 = 本块最大已处理 product.id(严格 > 入参 cursor)。 */
@@ -178,28 +187,29 @@ export interface BackfillResult {
  * 5–9 次 D1 子请求:resolveComparableUnit 沿 is-a 树逐级上行找最近非空
  * comparable_unit(每级一读) + reconcileCategory 的 product 存在性读 +
  * loadCategoryLeafTagIds + 每 leaf/pending/属性 slug 的 loadTagBySlug + 末尾 batch。
- * 预算:1(列表读) + limit × 9 ≤ 50 ⇒ limit ≤ 5。**临时值、待实测定稿**;实测每商品
- * 最坏 >9 则下调;升高须先确认生产 Worker 为 PAID(1000 子请求),对齐 MAX_BATCH 纪律。
- * 不得在实测前把 5 当 load-bearing。
+ * **native-id 接通后(本期)**:多数行 native_category_id 非空,tagProduct 每条会
+ * 多一次 lookupStoreCategory D1 子请求(上面 5–9 的估算是按 LAZY/无 lookup 路径
+ * 写的,接通后每商品须 +1)。原 "limit × 9 ≤ 50 ⇒ limit ≤ 5" 的预算未把这一次
+ * lookup 计入——故 5 现在更应视作待实测复核值,而非已留好 lookup 余量的定数。
+ * 预算:1(列表读) + limit ×(≈9 旧估 + 1 lookup)≤ 50 ⇒ limit 须按「每商品 +1
+ * lookup」重核。**临时值、待实测定稿**;实测每商品最坏超预算则下调;升高须先确认
+ * 生产 Worker 为 PAID(1000 子请求),对齐 MAX_BATCH 纪律。不得在实测前把 5 当
+ * load-bearing。
  */
 export const ADMIN_BACKFILL_DEFAULT_LIMIT = 5;
 export const ADMIN_BACKFILL_MAX_LIMIT = 5;
 
 /**
- * Read every product joined to its raw row (id + title + store) for the backfill.
- * A pure read — no parse/calc, no writes.
+ * Read every product joined to its raw row (id + title + store + native id) for
+ * the backfill. A pure read — no parse/calc, no writes.
  *
- * store-map is LAZY this period: no ingest field carries a store native category
- * id (product_raw.category_hint is the passthrough source of product.category =
- * "beverage" for all Sam stock, NOT a native id; ingest never collects Sam's
- * numeric categoryIdList). So the backfill does NOT feed the store-map — every
- * input gets `nativeCategoryId: null`, and tier1 keyword rules are this period's
- * ONLY active classification path in production. The store_category_map seed +
- * the arbiter's store-map branch are rails laid for a later phase, covered by
- * unit tests; they get wired into the backfill once ingest adds a DEDICATED
- * store-native-category-id field (must NOT reuse category_hint — that would
- * pollute product.category). Both drivers share the sqlite-core query-builder
- * surface for this non-transactional read (mirrors repository.ts / seed.ts).
+ * store-map fires off product_raw.native_category_id: ingest collects the store's
+ * native category id into that DEDICATED column (NOT category_hint — that is the
+ * passthrough source of product.category = "beverage" for all Sam stock, a
+ * separate domain column), and this read surfaces it so tagProduct's lookup runs
+ * for native-bearing rows. Rows with a NULL native_category_id fall back to tier1
+ * keyword rules (store-map skipped). Both drivers share the sqlite-core query-
+ * builder surface for this non-transactional read (mirrors repository.ts / seed.ts).
  *
  * 现支持 keyset 游标分页(cursor/limit)+ 全序读:始终 ORDER BY product.id(确定性
  * 全序,text 列按字典序);有 cursor 时下推 WHERE product.id > :cursor(无 cursor
@@ -215,6 +225,7 @@ export async function listProductsForBackfill(
       productId: product.id,
       title: productRaw.title,
       store: productRaw.store,
+      nativeCategoryId: productRaw.nativeCategoryId,
     })
     .from(product)
     .innerJoin(productRaw, eq(productRaw.id, product.rawId))
@@ -231,24 +242,23 @@ export async function listProductsForBackfill(
     productId: r.productId,
     title: r.title,
     store: r.store,
-    // No ingest field carries a store native category id this period → store-map
-    // stays lazy in the backfill (store kept; tagProduct skips the lookup when
-    // nativeCategoryId is null). See the docstring above.
-    nativeCategoryId: null,
+    // Native id read from product_raw.native_category_id — null rows skip the
+    // store-map lookup in tagProduct and fall back to tier1.
+    nativeCategoryId: r.nativeCategoryId,
   }));
 }
 
 /**
- * Backfill the existing stock (≈445 products in production): run the tagging
+ * Backfill the existing stock (~376 products in production): run the tagging
  * pipeline over EVERY landed product. Does NOT replay /ingest (first-write-wins
  * — see [[ingest-write-once-needs-backfill]]); it composes the repo's category-
- * attribution atoms only. store-map is LAZY this period — no ingest field carries
- * a store native category id (see listProductsForBackfill), so tier1 keyword
- * rules are the only active classification path; a product classifiable only by a
- * store native id lands 待人工 in the backfill until that field exists. Idempotent:
- * re-running on the same snapshot yields the same state, and a rule re-decision
- * leaves only the new leaf. Provided as a callable function so it can be driven
- * from a one-off script or an admin entry.
+ * attribution atoms only. store-map fires off product_raw.native_category_id (read
+ * by listProductsForBackfill): native-bearing rows can classify via the store-map
+ * leaf (filling tier1 misses + correcting cross-cohort tier1 mistakes), while rows
+ * with a NULL native id fall back to tier1 keyword rules. Idempotent: re-running
+ * on the same snapshot yields the same state, and a rule re-decision leaves only
+ * the new leaf. Provided as a callable function so it can be driven from a one-off
+ * script or an admin entry.
  */
 export async function runBackfill(
   repo: Repository,
@@ -261,6 +271,7 @@ export async function runBackfill(
   let pending = 0;
   let manual = 0;
   let rankableCount = 0;
+  let storeMapDecisions = 0;
   for (const input of inputs) {
     const result = await tagProduct(repo, input);
     results.push(result);
@@ -268,6 +279,11 @@ export async function runBackfill(
     else if (result.verdict.verdict === 'pending') pending += 1;
     else manual += 1;
     if (result.rankable) rankableCount += 1;
+    // store-map 定叶:仲裁判 leaf 且 decidedBy='store-map'(异叶纠偏 / tier1-miss
+    // 由 native 叶兜住)。同叶认同记 tier1、粗 native 落 pending,按设计不计入。
+    if (result.verdict.verdict === 'leaf' && result.verdict.decidedBy === 'store-map') {
+      storeMapDecisions += 1;
+    }
   }
   // keyset 续跑游标:无参全量(limit 缺省)→ null;读到行数 < limit(游标耗尽)→
   // null;否则 = 本块最大已处理 product.id。因 orderBy asc + where id>cursor +
@@ -288,6 +304,7 @@ export async function runBackfill(
     pending,
     manual,
     rankable: rankableCount,
+    storeMapDecisions,
     results,
     nextCursor,
   };

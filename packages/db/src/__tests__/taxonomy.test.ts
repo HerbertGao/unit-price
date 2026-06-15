@@ -547,6 +547,54 @@ describe('migration: non-empty product table + replay', () => {
     handle.close();
   });
 
+  it('adds native_category_id (nullable TEXT) onto a non-empty product_raw table', async () => {
+    // Apply migrations through 0003 (journaled DDL up to the rankable add), seed
+    // a product_raw row, then apply the 0006 ADD COLUMN — adding a nullable TEXT
+    // column to a non-empty table must succeed and leave existing rows NULL (no
+    // DEFAULT, no backfill required), per the persistence spec.
+    const handle = new Database(':memory:');
+    handle.pragma('foreign_keys = ON');
+
+    const upTo0003 = [
+      '0000_deep_enchantress.sql',
+      '0001_fast_mephisto.sql',
+      '0002_natural_jubilee.sql',
+      '0003_daffy_lilandra.sql',
+    ];
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    for (const file of upTo0003) {
+      const sql = fs.readFileSync(path.join(migrationsFolder, file), 'utf8');
+      for (const stmt of sql.split('--> statement-breakpoint')) {
+        if (stmt.trim()) handle.exec(stmt);
+      }
+    }
+    // Seed a row into the (pre-0006) product_raw table.
+    handle
+      .prepare(
+        "INSERT INTO product_raw (id, store, store_sku, title, price, captured_at) VALUES ('r1','sam','s1','t',100,1)",
+      )
+      .run();
+    expect(countRows(handle, 'product_raw')).toBe(1);
+
+    // Apply 0006 — must not throw on the non-empty table.
+    const sql0006 = fs.readFileSync(
+      path.join(migrationsFolder, '0006_parched_maelstrom.sql'),
+      'utf8',
+    );
+    expect(() => {
+      for (const stmt of sql0006.split('--> statement-breakpoint')) {
+        if (stmt.trim()) handle.exec(stmt);
+      }
+    }).not.toThrow();
+
+    const row = handle
+      .prepare('SELECT native_category_id AS n FROM product_raw WHERE id = ?')
+      .get('r1') as { n: string | null };
+    expect(row.n).toBeNull();
+    handle.close();
+  });
+
   it('drizzle migrate replay is idempotent', async () => {
     const handle = new Database(':memory:');
     handle.pragma('foreign_keys = ON');

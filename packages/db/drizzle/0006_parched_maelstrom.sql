@@ -1,0 +1,1 @@
+ALTER TABLE `product_raw` ADD `native_category_id` text;
