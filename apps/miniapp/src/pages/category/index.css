@@ -10,6 +10,7 @@
 
 .placeholder__card {
   width: 100%;
+  box-sizing: border-box;
   background: var(--paper-card);
   border-radius: var(--r-card);
   box-shadow: var(--shadow);
@@ -42,4 +43,56 @@
   color: var(--muted);
   text-align: center;
   line-height: 1.6;
+}
+
+/* 品类树 — 缩进列表(深度 × 缩进由内联 paddingLeft 控制),仅引 token。 */
+.ctree {
+  min-height: 100vh;
+  background: var(--paper);
+  box-sizing: border-box;
+  padding: var(--sp-2) 0 var(--sp-5);
+}
+
+.ctree__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  padding-right: var(--sp-4);
+  border-bottom: 2rpx solid var(--line);
+}
+
+/* 可点叶(可比 cohort):纸卡底 + 名称用墨色。 */
+.ctree__row--clickable {
+  background: var(--paper-card);
+}
+
+/* 分组头(root 饮料 / 酒类 parent):不可点,弱化为分区标题。 */
+.ctree__row--group .ctree__name {
+  color: var(--muted);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+}
+
+.ctree__name {
+  flex: 1;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+}
+
+.ctree__count {
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  color: var(--blue);
+  background: var(--blue-bg);
+  padding: 2rpx var(--sp-2);
+  border-radius: var(--r-pill);
+}
+
+.ctree__chev {
+  color: var(--muted);
+  font-size: var(--fs-lg);
 }

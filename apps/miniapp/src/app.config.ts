@@ -1,5 +1,7 @@
 export default defineAppConfig({
-  pages: ['pages/index/index', 'pages/category/index', 'pages/mine/index'],
+  // pages/board is a non-tab page (category-scoped 分类榜, reached via
+  // navigateTo from the 分类 Tab); it keeps a back button and a per-category title.
+  pages: ['pages/index/index', 'pages/category/index', 'pages/mine/index', 'pages/board/index'],
   // Inject only the custom components each page actually uses, cutting startup
   // cost. Satisfies WeChat's "组件按需注入" optimization check.
   lazyCodeLoading: 'requiredComponents',
@@ -7,7 +9,7 @@ export default defineAppConfig({
     backgroundTextStyle: 'light',
     // P0 浅纸底(=--paper),品牌蓝只用于前景与选中态,导航栏不刷蓝。
     navigationBarBackgroundColor: '#F1F3F6',
-    navigationBarTitleText: 'Sams值不值',
+    navigationBarTitleText: '会员商店值不值',
     navigationBarTextStyle: 'black',
   },
   // 原生 tabBar 配色字段不能引 CSS 变量,故写字面量;取值与 app.css token 同值:
