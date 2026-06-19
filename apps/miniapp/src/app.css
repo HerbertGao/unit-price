@@ -1,5 +1,5 @@
 /* ============================================================
-   Sams值不值 — 设计 tokens(视觉 SOT,翻译自 design/sams-zhibuzhi/index.html 的 :root)
+   会员商店值不值 — 设计 tokens(视觉 SOT,翻译自 design/sams-zhibuzhi/index.html 的 :root)
    概念:诚实验货单 / 价格透视眼。冷灰白卡 + 山姆蓝(主)+ 绿(值)+ 红(贵)。
    尺度从原型 px 按 1px≈2rpx 翻译为 rpx。色值仅允许出现在本文件 token 定义处;
    页面 / 组件一律引用 var(--…)。

@@ -58,7 +58,7 @@ export interface RankingsApi extends RankingsState {
 /** One validated /rankings page fetch. Throws on network failure OR validation
  *  failure (parseRankingsResponse bubbles ZodError) — callers map to error
  *  state. */
-async function fetchPage(offset: number): Promise<RankingsItem[]> {
+async function fetchPage(offset: number, category?: string): Promise<RankingsItem[]> {
   // Loud, clear failure on an unfilled BASE placeholder (the `[手动验证]` step):
   // surfaces a distinct "BASE 未配置" message via the error state instead of a
   // generic URL-parse error, so the placeholder can never be mistaken for a real
@@ -67,13 +67,18 @@ async function fetchPage(offset: number): Promise<RankingsItem[]> {
   if (BASE_IS_PLACEHOLDER) {
     throw new Error('BASE 未配置：请在 src/pages/index/config.ts 填入 prod worker 域名（[手动验证]，见任务 5.2）');
   }
-  const url = buildRankingsUrl(BASE, { limit: PAGE_SIZE, offset });
+  // category undefined → buildRankingsUrl omits it (identical to the un-scoped
+  // 榜单 Tab URL); a slug scopes the board to that single comparable cohort.
+  const url = buildRankingsUrl(BASE, { limit: PAGE_SIZE, offset, category });
   const res = await Taro.request({ url, method: 'GET' });
   // parseRankingsResponse is fail-closed: a bad body throws ZodError here.
   return parseRankingsResponse(res.data);
 }
 
-export function useRankings(): RankingsApi {
+// `category` (optional) scopes every page fetch to one cohort via
+// /rankings?category=<slug>. Stable per mount (a route param) — passing it
+// undefined yields the original un-scoped 榜单 Tab behavior unchanged.
+export function useRankings(category?: string): RankingsApi {
   const [state, setState] = useState<RankingsState>({
     phase: 'idle',
     items: [],
@@ -94,7 +99,7 @@ export function useRankings(): RankingsApi {
     inFlightRef.current = true;
     setState((s) => ({ ...s, phase: s.items.length ? s.phase : 'loading' }));
     try {
-      const page = await fetchPage(0);
+      const page = await fetchPage(0, category);
       offsetRef.current = page.length;
       setState({
         phase: 'ready',
@@ -116,7 +121,7 @@ export function useRankings(): RankingsApi {
     } finally {
       inFlightRef.current = false;
     }
-  }, []);
+  }, [category]);
 
   const loadFirst = useCallback(() => {
     setState((s) => {
@@ -137,7 +142,7 @@ export function useRankings(): RankingsApi {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
-      const page = await fetchPage(0);
+      const page = await fetchPage(0, category);
       offsetRef.current = page.length;
       setState({
         phase: 'ready',
@@ -167,14 +172,14 @@ export function useRankings(): RankingsApi {
     } finally {
       inFlightRef.current = false;
     }
-  }, []);
+  }, [category]);
 
   const runNext = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     setState((s) => ({ ...s, pageLoading: true, pageError: false }));
     try {
-      const page = await fetchPage(offsetRef.current);
+      const page = await fetchPage(offsetRef.current, category);
       if (page.length === 0) {
         // Empty page → reached the end, stop requesting.
         setState((s) => ({ ...s, pageLoading: false, reachedEnd: true }));
@@ -194,7 +199,7 @@ export function useRankings(): RankingsApi {
     } finally {
       inFlightRef.current = false;
     }
-  }, []);
+  }, [category]);
 
   const loadNext = useCallback(() => {
     setState((s) => {
