@@ -96,6 +96,8 @@ describe('readHistory — robustness: bad container + bad items filtered/deduped
       { input: unitReq(), summary: 's', ts: 0 }, // ts not positive
       { input: unitReq(), summary: 's', ts: -5 }, // ts negative
       { input: unitReq(), summary: 's', ts: 1.5 }, // ts not integer
+      { input: unitReq(), summary: 's', ts: NaN }, // ts NaN
+      { input: unitReq(), summary: 's', ts: Infinity }, // ts Infinity
       { input: unitReq(), summary: 's', ts: Number.MAX_SAFE_INTEGER + 2 }, // unsafe
       { summary: 's', ts: 103 }, // missing input
       { input: { totalPrice: 12, category: 'x' }, summary: 's', ts: 104 }, // 退化: neither amount
@@ -112,6 +114,36 @@ describe('readHistory — robustness: bad container + bad items filtered/deduped
     const h = readHistory();
     expect(h).toHaveLength(1);
     expect(h[0]).toEqual(first); // first wins
+  });
+
+  it('② getStorageSync throws → [] (no bubble)', async () => {
+    const Taro = (await import('@tarojs/taro')).default;
+    const spy = vi.spyOn(Taro, 'getStorageSync').mockImplementationOnce(() => {
+      throw new Error('storage unavailable');
+    });
+    let result: HistoryItem[] = [{} as HistoryItem];
+    expect(() => {
+      result = readHistory();
+    }).not.toThrow();
+    expect(result).toEqual([]);
+    spy.mockRestore();
+  });
+
+  it('② ts === MAX_SAFE_INTEGER is dropped (cap sentinel reserved)', () => {
+    const good = item(unitReq(), 100, 'keep');
+    seedRaw([good, item(unitReq({ totalPrice: 2 }), Number.MAX_SAFE_INTEGER, 'cap')]);
+    const h = readHistory();
+    expect(h.map((x) => x.summary)).toEqual(['keep']);
+  });
+
+  it('② normalize-on-read: extra unknown key stripped → input is parsed.data, dedups', () => {
+    seedRaw([{ input: { ...unitReq(), junk: 1 }, summary: 's', ts: 300 }]);
+    const h = readHistory();
+    expect(h).toHaveLength(1);
+    expect('junk' in (h[0].input as Record<string, unknown>)).toBe(false);
+    // a subsequent append of the canonical same input dedups (length stays 1)
+    appendHistory(unitReq(), 's2');
+    expect(readHistory()).toHaveLength(1);
   });
 });
 
@@ -130,6 +162,24 @@ describe('appendHistory — dedupe same input (recompute moves to front, no grow
     expect(h[0].summary).toBe('a2');
     // no duplicate of totalPrice=1 remains
     expect(h.filter((x) => x.input.totalPrice === 1)).toHaveLength(1);
+  });
+
+  it('③b build-order input (category 2nd, like form.ts) dedups across a read roundtrip — NON-VACUOUS: fails without write-side normalization', () => {
+    // form.ts buildComputeRequest emits keys as {totalPrice, category, quantity, unitSize}
+    // (category 2nd, NOT schema order). A raw JSON.stringify of that differs from a
+    // read-normalized (schema-order) stored item, so without appendHistory's
+    // write-side ComputeRequestSchema normalization this recompute would STACK (len 2).
+    const buildOrder = {
+      totalPrice: 9.9,
+      category: 'soft-drink',
+      quantity: 2,
+      unitSize: { value: 330, unit: 'ml' },
+    } as ComputeRequest;
+    appendHistory(buildOrder, 'a');
+    appendHistory(buildOrder, 'a-again');
+    const h = readHistory();
+    expect(h).toHaveLength(1);
+    expect(h[0].summary).toBe('a-again');
   });
 });
 

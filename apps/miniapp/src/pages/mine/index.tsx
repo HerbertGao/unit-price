@@ -42,12 +42,12 @@ export default function Mine() {
   // 常驻「即时比价」入口 — 绝对路径 + /index + 对象形式,与既有 navigateTo 约定一致;
   // 入口本身不发网络请求(请求由比价表单页发起)。
   const openCompute = () => {
-    Taro.navigateTo({ url: COMPUTE_PATH });
+    void Taro.navigateTo({ url: COMPUTE_PATH });
   };
 
   // 点击历史项 → 以该项稳定 ts 作 handle 回填比价表单(非数组索引)。
   const openHistory = (ts: number) => {
-    Taro.navigateTo({ url: `${COMPUTE_PATH}?h=${ts}` });
+    void Taro.navigateTo({ url: `${COMPUTE_PATH}?h=${ts}` });
   };
 
   return (

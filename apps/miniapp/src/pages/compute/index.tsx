@@ -121,6 +121,8 @@ export default function Compute() {
     setCohortIdx(finalIdx);
     if (idx < 0) {
       setHint('原品类已变动，请重选');
+    } else {
+      setHint('');
     }
     // 容错② unit 不在最终(命中或退回默认)cohort 轴上 → 钳制到该轴首单位。
     const finalCohort = cs[finalIdx];
@@ -168,7 +170,7 @@ export default function Compute() {
       // 比价成功后写一条端上历史(去重 + 环形,见 history.appendHistory)。写失败
       // 仅丢历史、不阻断结果展示——appendHistory 内部已包 try/catch,此处不再抛。
       const cohortName = cohort ? cohort.name : '';
-      appendHistory(built.request, summarizeInput(built.request, cohortName), cohortName);
+      appendHistory(built.request, summarizeInput(built.request, cohortName));
     } catch (e) {
       // Surface the server's specific 400 message (axis mismatch / 未知品类 /
       // per_100g 不支持 / 输入集不足) rather than a generic failure string.

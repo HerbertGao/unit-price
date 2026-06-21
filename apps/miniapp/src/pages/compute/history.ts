@@ -47,20 +47,31 @@ function meetsRequiredSet(input: ComputeRequest): boolean {
   );
 }
 
-/** A read-time per-item validator: wrapper fields + schema + required set. */
-function isValidItem(raw: unknown): raw is HistoryItem {
-  if (typeof raw !== 'object' || raw === null) return false;
+/**
+ * A read-time per-item normalizer: wrapper fields + schema + required set. On
+ * success returns the NORMALIZED item (`input` = Zod's `parsed.data`, canonical
+ * keys, unknown keys stripped) so later dedup by `JSON.stringify(input)` is robust
+ * regardless of stored key order; on any failure returns `null`.
+ */
+function normalizeItem(raw: unknown): HistoryItem | null {
+  if (typeof raw !== 'object' || raw === null) return null;
   const item = raw as { summary?: unknown; ts?: unknown; input?: unknown };
   // Wrapper fields — plain guards (no zod). `Number.isSafeInteger` rejects
-  // 0/negative/decimal/NaN/Infinity and out-of-safe-range tampered values, so a
+  // 0/negative/decimal/NaN/Infinity and out-of-safe-range tampered values, and we
+  // also reserve `MAX_SAFE_INTEGER` (the write-time cap sentinel) so a tampered
+  // entry at the cap can't pin `prevMaxTs` and degrade the ring to one entry — a
   // surviving `ts` is always a legal positive integer usable as handle/React key.
-  if (typeof item.summary !== 'string') return false;
-  if (!Number.isSafeInteger(item.ts) || (item.ts as number) <= 0) return false;
+  if (typeof item.summary !== 'string') return null;
+  const ts = item.ts;
+  if (!Number.isSafeInteger(ts) || (ts as number) <= 0 || (ts as number) >= Number.MAX_SAFE_INTEGER) {
+    return null;
+  }
   // input — reuse the api-client schema; jitless is the weapp hard constraint.
   const parsed = ComputeRequestSchema.safeParse(item.input, { jitless: true });
-  if (!parsed.success) return false;
+  if (!parsed.success) return null;
   // Complete required set (server-mirrored presence): drop degenerate items.
-  return meetsRequiredSet(parsed.data);
+  if (!meetsRequiredSet(parsed.data)) return null;
+  return { input: parsed.data, summary: item.summary, ts: ts as number };
 }
 
 /**
@@ -84,10 +95,11 @@ export function readHistory(): HistoryItem[] {
   const seen = new Set<number>();
   const out: HistoryItem[] = [];
   for (const candidate of raw) {
-    if (!isValidItem(candidate)) continue;
-    if (seen.has(candidate.ts)) continue; // dedupe ts — keep first
-    seen.add(candidate.ts);
-    out.push(candidate);
+    const item = normalizeItem(candidate);
+    if (!item) continue;
+    if (seen.has(item.ts)) continue; // dedupe ts — keep first
+    seen.add(item.ts);
+    out.push(item);
   }
   return out;
 }
@@ -95,11 +107,18 @@ export function readHistory(): HistoryItem[] {
 /**
  * Write one entry after a successful compute.
  *
+ * - normalize the incoming `input` through `ComputeRequestSchema` first so the
+ *   STORED item is canonical (schema key order, unknown keys stripped) — same
+ *   shape `readHistory` returns. Without this, the caller's `buildComputeRequest`
+ *   order (`{totalPrice, category, …}`) differs from the read-normalized order
+ *   (`{totalPrice, quantity, unitSize, totalAmount, category}`), and the
+ *   order-sensitive `JSON.stringify` dedupe below would never match a re-stored
+ *   item → a recompute would stack instead of moving to front.
  * - `base` = current clean history (`readHistory`).
  * - `prevMaxTs` is taken BEFORE dedupe (full-set max) — taking it after dedupe
  *   would lose monotonicity exactly when the dropped item is the newest one.
- * - dedupe: drop the old item whose `input` deep-equals (JSON.stringify) the new
- *   one — a "recompute" is treated as moving that item to the front.
+ * - dedupe: drop the old item whose `input` deep-equals (JSON.stringify of the
+ *   canonical form) the new one — a "recompute" is treated as moving it to front.
  * - `ts = Math.min(MAX_SAFE_INTEGER, Math.max(Date.now(), prevMaxTs + 1))`:
  *   monotonically unique (two different inputs in the same millisecond never
  *   collide) and capped so a tampered `MAX_SAFE_INTEGER` entry can't push the new
@@ -108,24 +127,24 @@ export function readHistory(): HistoryItem[] {
  * - `setStorageSync` wrapped in try/catch — a write failure (quota full /
  *   storage unavailable) only loses this one history entry; it never blocks the
  *   compute result display.
- *
- * `cohortName` is the category display name (input.category is only a slug); it
- * is forwarded to `summarizeInput` for a readable summary snapshot.
  */
-export function appendHistory(
-  input: ComputeRequest,
-  summary: string,
-  _cohortName?: string,
-): void {
+export function appendHistory(input: ComputeRequest, summary: string): void {
+  // Canonicalize the incoming input so stored items match read-normalized ones
+  // and the JSON.stringify dedupe is key-order-stable. built.request is always
+  // valid, so a parse failure here is defensive — skip the write rather than
+  // store a non-canonical / invalid entry.
+  const parsed = ComputeRequestSchema.safeParse(input, { jitless: true });
+  if (!parsed.success) return;
+  const normInput = parsed.data;
   const base = readHistory();
   const prevMaxTs = Math.max(0, ...base.map((h) => h.ts));
-  const key = JSON.stringify(input);
+  const key = JSON.stringify(normInput);
   const rest = base.filter((h) => JSON.stringify(h.input) !== key);
   const ts = Math.min(
     Number.MAX_SAFE_INTEGER,
     Math.max(Date.now(), prevMaxTs + 1),
   );
-  const next: HistoryItem[] = [{ input, summary, ts }, ...rest].slice(
+  const next: HistoryItem[] = [{ input: normInput, summary, ts }, ...rest].slice(
     0,
     HISTORY_MAX,
   );
