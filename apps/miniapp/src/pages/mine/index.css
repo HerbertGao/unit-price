@@ -1,46 +1,184 @@
-/* 我的占位页 — P0 设计语言。仅引用 app.css token,禁任何 hex/rgb。 */
-.placeholder {
+/* 我的页 — 比价工具区 + 关于区。P0 设计语言:仅引用 app.css token,禁任何 hex/rgb 字面量。
+   px→rpx ~1:2。冷灰白底 + 白卡 + 山姆蓝。 */
+
+.mine {
   min-height: 100vh;
   background: var(--paper);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--sp-5) var(--sp-4);
+  padding: var(--sp-4) var(--sp-4) var(--sp-6);
+  box-sizing: border-box;
 }
 
-.placeholder__card {
-  width: 100%;
-  box-sizing: border-box;
+/* — 分区 — */
+.mine-sec {
+  margin-bottom: var(--sp-5);
+}
+.mine-sec__title {
+  display: block;
+  margin: 0 var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-black);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+/* — 即时比价常驻入口 — */
+.mine-entry {
+  display: flex;
+  align-items: center;
   background: var(--paper-card);
   border-radius: var(--r-card);
   box-shadow: var(--shadow);
-  padding: var(--sp-6) var(--sp-4);
+  padding: var(--sp-4);
+}
+.mine-entry__main {
+  flex: 1;
+  min-width: 0;
+}
+.mine-entry__title {
+  display: block;
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  color: var(--blue);
+}
+.mine-entry__sub {
+  display: block;
+  margin-top: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.mine-entry__caret {
+  flex-shrink: 0;
+  width: 16rpx;
+  height: 16rpx;
+  margin-left: var(--sp-2);
+  border-right: 3rpx solid var(--muted);
+  border-bottom: 3rpx solid var(--muted);
+  transform: rotate(-45deg);
+}
+
+/* — 历史比价列表 — */
+.mine-hist {
+  margin-top: var(--sp-3);
+  background: var(--paper-card);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  padding: var(--sp-3) var(--sp-4);
+}
+.mine-hist__h {
+  display: block;
+  margin-bottom: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+}
+.mine-hist__row {
+  display: flex;
+  align-items: center;
+  min-height: 96rpx;
+  border-bottom: 3rpx solid var(--line);
+}
+.mine-hist__row:last-child {
+  border-bottom: none;
+}
+.mine-hist__body {
+  flex: 1;
+  min-width: 0;
+}
+.mine-hist__summary {
+  display: block;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mine-hist__time {
+  display: block;
+  margin-top: var(--sp-1);
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.mine-hist__caret {
+  flex-shrink: 0;
+  width: 14rpx;
+  height: 14rpx;
+  margin-left: var(--sp-2);
+  border-right: 3rpx solid var(--muted);
+  border-bottom: 3rpx solid var(--muted);
+  transform: rotate(-45deg);
+}
+
+/* — 空历史态 — */
+.mine-empty {
+  margin-top: var(--sp-3);
+  background: var(--paper-card);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  padding: var(--sp-5) var(--sp-4);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--sp-2);
 }
-
-.placeholder__title {
-  font-size: var(--fs-xl);
-  font-weight: var(--fw-black);
+.mine-empty__t {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
   color: var(--ink);
-  letter-spacing: -0.01em;
 }
-
-.placeholder__hint {
-  font-family: var(--f-mono);
-  font-size: var(--fs-lg);
-  font-weight: var(--fw-medium);
-  color: var(--blue);
-  background: var(--blue-bg);
-  padding: var(--sp-1) var(--sp-3);
-  border-radius: var(--r-pill);
-}
-
-.placeholder__sub {
+.mine-empty__sub {
   font-size: var(--fs-sm);
   color: var(--muted);
   text-align: center;
-  line-height: 1.6;
+}
+.mine-empty__cta {
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-5);
+  background: var(--blue-bg);
+  border-radius: var(--r-pill);
+}
+.mine-empty__cta-t {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--blue);
+}
+
+/* — 关于区 — */
+.mine-about {
+  background: var(--paper-card);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  padding: var(--sp-4);
+}
+.mine-about__h {
+  display: block;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  color: var(--ink);
+}
+.mine-about__p {
+  display: block;
+  margin-top: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
+/* — 意见反馈(微信原生反馈按钮)— */
+.mine-feedback {
+  margin-top: var(--sp-3);
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper-card);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  color: var(--ink-soft);
+}
+/* 抹掉微信 Button 默认描边 / 伪元素边框,统一为卡片观感 */
+.mine-feedback::after {
+  border: none;
 }

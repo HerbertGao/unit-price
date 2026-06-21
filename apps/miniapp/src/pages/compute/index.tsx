@@ -11,7 +11,7 @@
 import { View, Text, Input, Picker } from '@tarojs/components';
 import type { BaseEventOrig } from '@tarojs/components';
 import Taro, { useLoad } from '@tarojs/taro';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   buildCategoriesUrl,
@@ -34,6 +34,7 @@ import {
   type Cohort,
   type AmountMode,
 } from './form';
+import { appendHistory, summarizeInput, findHistoryByTs } from './history';
 
 import './index.css';
 
@@ -62,20 +63,74 @@ export default function Compute() {
   const [errMsg, setErrMsg] = useState('');
   const [showFormula, setShowFormula] = useState(false);
 
+  // 回填挂起的历史 handle(`?h=<ts>`)。useLoad 触发时 cohorts 仍为空,故先暂存,
+  // 待 cohorts 落地后在同一 .then 内消费;`/categories` 失败时 .catch 不清,留待重试。
+  const pendingH = useRef<string | number | undefined>(undefined);
+
   const loadCohorts = () => {
     setCatPhase('loading');
-    fetchCohorts()
+    // 返回 promise 链使其可消费(原 fire-and-forget 返回 void,loadCohorts().then 会抛);
+    // 回填消费放进这同一 .then,用回调局部 `cs`(非 cohorts state——setState 异步、此刻仍旧值)。
+    return fetchCohorts()
       .then((cs) => {
         setCohorts(cs);
+        // 默认值:首个 cohort + 其轴首单位。须排在回填消费之前,否则会盖掉回填的 cohort。
         setCohortIdx(0);
-        // 单位随首个 cohort 的轴预约束。
         if (cs.length > 0) setUnit(unitsForAxis(cs[0].axis)[0]);
         setCatPhase('ready');
+        hydrateFromPending(cs);
       })
-      .catch(() => setCatPhase('error'));
+      .catch(() => setCatPhase('error')); // pendingH 不清,重试加载成功时再消费
   };
 
-  useLoad(() => {
+  // 用回调局部 `cs` 消费 pendingH,把历史项水合回表单(D4)。
+  const hydrateFromPending = (cs: Cohort[]) => {
+    const h = pendingH.current;
+    if (h == null) return;
+    // ⓪ 成功但无可比品类(终态、无表单)→ 跳过水合并清 pendingH,不取 cs[0]。
+    if (cs.length === 0) {
+      pendingH.current = undefined;
+      return;
+    }
+    // handle 校验:正整数 ts。非法/未命中 → 不回填、维持空表单(不崩),清挂起。
+    const n = Number(h);
+    if (!(Number.isInteger(n) && n > 0)) {
+      pendingH.current = undefined;
+      return;
+    }
+    const found = findHistoryByTs(n);
+    if (!found) {
+      pendingH.current = undefined;
+      return;
+    }
+    pendingH.current = undefined;
+
+    const { input } = found;
+    // 标量字段:数字 → 字符串态。
+    setTotalPrice(String(input.totalPrice));
+    setQuantity(input.quantity != null ? String(input.quantity) : '1');
+    // mode 反推:有 unitSize → 按单件容量,否则按总容量。
+    const nextMode: AmountMode = input.unitSize != null ? 'unit' : 'total';
+    setMode(nextMode);
+    const m = input.unitSize ?? input.totalAmount;
+    setAmount(m != null ? String(m.value) : '');
+
+    // cohort 解析:slug → 索引。容错① slug 已下架(-1,cs 非空)→ 退回默认 cohort + 提示重选。
+    const idx = cs.findIndex((c) => c.slug === input.category);
+    const finalIdx = idx >= 0 ? idx : 0;
+    setCohortIdx(finalIdx);
+    if (idx < 0) {
+      setHint('原品类已变动，请重选');
+    }
+    // 容错② unit 不在最终(命中或退回默认)cohort 轴上 → 钳制到该轴首单位。
+    const finalCohort = cs[finalIdx];
+    const u = m?.unit;
+    setUnit(u != null && isUnitOnAxis(u, finalCohort.axis) ? u : unitsForAxis(finalCohort.axis)[0]);
+  };
+
+  useLoad((options) => {
+    // 仅暂存 handle,不在此水合(此刻 cohorts 未就绪);消费在 loadCohorts 的 .then 内。
+    pendingH.current = options?.h;
     loadCohorts();
   });
 
@@ -110,6 +165,10 @@ export default function Compute() {
       setResult(r);
       setShowFormula(false);
       setResPhase('result');
+      // 比价成功后写一条端上历史(去重 + 环形,见 history.appendHistory)。写失败
+      // 仅丢历史、不阻断结果展示——appendHistory 内部已包 try/catch,此处不再抛。
+      const cohortName = cohort ? cohort.name : '';
+      appendHistory(built.request, summarizeInput(built.request, cohortName), cohortName);
     } catch (e) {
       // Surface the server's specific 400 message (axis mismatch / 未知品类 /
       // per_100g 不支持 / 输入集不足) rather than a generic failure string.
