@@ -50,6 +50,7 @@
 #### 场景:结构化输入提交后得到单价与定位
 - **当** 用户在比价表单页填入总价、数量、单件容量(或总容量)、单位、品类并提交(输入集足够、单位轴与品类一致)
 - **那么** **必须**经 `buildComputeUrl`/`parseComputeResponse` 调 `POST /compute`,渲染单价 + 可展开 `formula` + 该 cohort 的 `rank`/`total` + **服务端返回的 `percentile`**(「比 X% 便宜」直接用服务端 `percentile`,**禁止**在端上用 rank/total 另算一个口径不同的百分比) + 最接近的同类品;**禁止**端上跑 core 计算、**禁止**写库
+- **注**:`percentile` **始终为数值**(契约 `number`,`total=0` 时为 `0`,**永不** null/缺省),故客户端无需处理 null;裁决/位置点/百分比**全部由 `percentile` 单源派生**(口径一致、不会自相矛盾),空态(`total=0`)的中性渲染据 `total===0` 判定(见下「空 cohort」场景),不依赖 `percentile` 判空
 
 #### 场景:服务端 400 文案必须呈现给用户
 - **当** `POST /compute` 返回非 `200`(如跨轴不可比、未知品类、per_100g 不支持)

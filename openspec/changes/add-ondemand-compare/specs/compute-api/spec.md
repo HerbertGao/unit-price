@@ -14,7 +14,7 @@
 3. `calculate` 进 uncomputable 终态（价格非正 / 无可识别单位轴 / 规格不自洽，两轴皆 null）时**禁止**静默返回 `200`——**必须** `400` 并回带 core 的 warning 文案（不得让客户端拿到「成功但全空」的歧义结果）。
 4. **必须**先把 `category` 对照既有品类 slug 全集（`/rankings` 同款 `CATEGORY_SLUGS`）校验：非该集合成员 → `400 未知品类`（区别于下面的跨 cohort 文案，避免把拼写错误误诊为「跨多口径」）。再用既有 `resolveComparableUnitStatic(category)` 守卫可比性：解析为 `null`（跨 cohort 节点，如 `beverage`/`alcohol`）→ `400`；解析非 null 但与输入轴不一致（如输入按 `g`、cohort 按 `per_100ml`）→ `400` 且文案**必须**指明该品类的比价单位轴（不追求万物可比，核心原则①）。
    - **本期 per_100g cohort 必须显式 `400`「暂不支持按重量（每100g）比价」**：定位读复用的 `/rankings` 查询是 **per100ml-only** 构造（`isNotNull(per100ml)` + 按 per100ml 排序），无法对 per_100g cohort 给出正确总体。故 cohortAxis 解析为 `per100g` 时**禁止**进入定位（否则会拿 per100ml 榜给 g 值定位、返回貌似成功的垃圾 rank/total），**必须** `400`。per_100g 全量支持是本期非目标（待重量轴 backfill 同时扩 `listRankings`/`RankingsItem` 的 per100g 榜后解禁）。客户端 `toCohorts` **同步只派生 per_100ml cohort**，使 UI 根本不提供 per_100g 选项。
-5. 定位：在该 cohort 的 **rankable 行**（复用 `/rankings` 同一 cohort 闭包 + rankable 守卫口径，保证「定位」与「榜单」同一总体）中算 `rank`（该轴单价 `<` 用户值的条数 + 1）、`total`（cohort rankable 总数）、`percentile`，并取用户值两侧最近的若干 `neighbors`（默认上下各 3，投影同 `RankingsItem`）。
+5. 定位：在该 cohort 的 **rankable 行**（复用 `/rankings` 同一 cohort 闭包 + rankable 守卫口径，保证「定位」与「榜单」同一总体）中算 `rank`（该轴单价 `<` 用户值的条数 + 1，∈ `[1, total+1]`）、`total`（cohort rankable 总数，≥ 0）、`percentile`（= **严格贵于**用户值的同类占比 × 100，即「比 X% 同类便宜」，∈ `[0,100]`；**`total=0` 时 `percentile` 必须为 `0`**），并取用户值两侧最近的若干 `neighbors`（默认上下各 3，投影同 `RankingsItem`）。
 
 **响应契约** `ComputeResultSchema`：`{ per100ml:number|null, per100g:number|null, formula:string, axis:'per_100ml'|'per_100g', rank:int, total:int, percentile:number, neighbors:RankingsItem[] }`（恰一个 per100 轴非 null）。响应**必须**带 `Cache-Control: no-store`（每次输入不同、几乎不复用，缓存无意义且会无界填充 CDN）。
 
@@ -50,7 +50,7 @@
 #### 场景:该 cohort 无同类时返回空 neighbors 而非报错
 
 - **当** 客户端提交合法输入但该 cohort 当前无 rankable 行（或用户值在边界、无某侧邻居）
-- **那么** `200` + `neighbors` 为空（或仅一侧）、`rank`/`total` 仍按现状给出（`total=0` 时 `rank=1`、`percentile` 取确定性约定值）；**禁止** `404`
+- **那么** `200` + `neighbors` 为空（或仅一侧）、`rank`/`total` 仍按现状给出（`total=0` 时 `rank=1`、**`percentile=0`**）；**禁止** `404`
 
 #### 场景:无状态、no-store、schema 客户端安全
 
