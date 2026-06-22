@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
-    "@babel/preset-react": "^7.24.0",
+    "@babel/preset-react": "^8.0.1",
     "@tarojs/cli": "4.2.0",
     "esbuild": "^0.28.1",
     "@tarojs/webpack5-runner": "4.2.0",
