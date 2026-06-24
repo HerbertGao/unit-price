@@ -19,6 +19,7 @@ import {
   type RankingsItem,
 } from '@unit-price/api-client';
 import { BASE, BASE_IS_PLACEHOLDER, PAGE_SIZE } from './config';
+import { readBoard, writeBoard, cohortKeyFor } from './boardCache';
 
 /** Coarse lifecycle phase driving the screen-level three-state render. */
 export type RankingsPhase =
@@ -69,6 +70,58 @@ export function buildPageUrl(
   return buildRankingsUrl(base, { limit: PAGE_SIZE, offset, category, q });
 }
 
+/** PURE: SWR cache is only read/written for the cohort FIRST page with no active
+ *  search — i.e. offset 0 and a normalized q of undefined (useRankings already
+ *  resolves an empty/whitespace q to undefined upstream). offset>0 (runNext) and
+ *  a valid q (search) bypass the cache entirely, same as the server's no-store on
+ *  a valid q. Extracted so the predicate is unit-testable without the Taro/React
+ *  runtime. */
+export function shouldUseBoardCache(offset: number, q?: string): boolean {
+  return offset === 0 && q === undefined;
+}
+
+/** PURE: the single setState shape for a cache HIT — render the cached snapshot
+ *  immediately as `ready`, SKIPPING the whole-screen loading phase. The paired
+ *  offset cursor MUST be set to cached.length by the caller (so a bottom-reach
+ *  runNext continues from cached.length, not 0 — otherwise it re-fetches and
+ *  duplicates the first page). reachedEnd mirrors the happy-path runFirst rule. */
+export function boardHitState(cached: RankingsItem[]): RankingsState {
+  return {
+    phase: 'ready',
+    items: cached,
+    pageLoading: false,
+    pageError: false,
+    reachedEnd: cached.length < PAGE_SIZE,
+  };
+}
+
+/** PURE: first-screen catch decision, mirroring refresh's catch — if a list is
+ *  already on screen (cache hit being revalidated, or any prior list), a failed
+ *  first-page fetch MUST keep it (`ready`) rather than wipe to a whole-screen
+ *  error; only an empty screen falls back to the first-screen error state. Caller
+ *  resets offsetRef to 0 only on the error branch. */
+export function firstScreenCatchState(prev: RankingsState): RankingsState {
+  if (prev.items.length) {
+    return { ...prev, phase: 'ready', pageLoading: false, pageError: false };
+  }
+  return {
+    phase: 'error',
+    items: [],
+    pageLoading: false,
+    pageError: false,
+    reachedEnd: false,
+  };
+}
+
+/** PURE: state after a runFirst background-revalidate FAILURE. A cache HIT (incl. an
+ *  empty []) means a snapshot is already on screen → SWR keeps it (`ready`), even empty
+ *  (spec「重验失败保留旧数据」). Without a hit, fall to the first-screen fork:
+ *  a present list stays ready, an empty screen → whole-screen error. */
+export function revalidateFailState(prev: RankingsState, hadCache: boolean): RankingsState {
+  if (hadCache) return { ...prev, phase: 'ready', pageLoading: false, pageError: false };
+  return firstScreenCatchState(prev);
+}
+
 /** One validated /rankings page fetch. Throws on network failure OR validation
  *  failure (parseRankingsResponse bubbles ZodError) — callers map to error
  *  state. */
@@ -110,11 +163,31 @@ export function useRankings(category?: string, q?: string): RankingsApi {
   const offsetRef = useRef(0);
   // Guards against overlapping in-flight requests (double pull / rapid scroll).
   const inFlightRef = useRef(false);
+  // Fires the first load exactly once (idempotent across lifecycle re-invocations).
+  const loadedRef = useRef(false);
 
   const runFirst = useCallback(async () => {
+    // Order is load-bearing: claim inFlightRef FIRST, then read the SWR cache,
+    // then the synchronous hit-render + offset, then the background fetch — the
+    // whole "show cache + revalidate" lives in ONE inFlightRef occupancy, sharing
+    // the same mutex as refresh/loadNext (so a mount-time pull-to-refresh can't
+    // interleave with the background revalidation).
     if (inFlightRef.current) return;
     inFlightRef.current = true;
-    setState((s) => ({ ...s, phase: s.items.length ? s.phase : 'loading' }));
+    const canCache = shouldUseBoardCache(0, q);
+    const cohortKey = cohortKeyFor(category);
+    const cached = canCache ? readBoard(cohortKey) : null;
+    if (cached) {
+      // HIT (cached may be []: a valid empty-cohort snapshot — instant empty render,
+      // skips loading; do NOT "fix" to cached?.length). Render the snapshot as `ready`
+      // and sync the cursor to cached.length so a subsequent bottom-reach continues
+      // from there, not 0.
+      offsetRef.current = cached.length;
+      setState(boardHitState(cached));
+    } else {
+      // MISS: existing behavior — loading (only if we have no list to keep).
+      setState((s) => ({ ...s, phase: s.items.length ? s.phase : 'loading' }));
+    }
     try {
       const page = await fetchPage(0, category, q);
       offsetRef.current = page.length;
@@ -125,15 +198,16 @@ export function useRankings(category?: string, q?: string): RankingsApi {
         pageError: false,
         reachedEnd: page.length < PAGE_SIZE,
       });
+      if (canCache) writeBoard(cohortKey, page);
     } catch {
-      // First-screen error: initial load/parse failed → whole-screen error.
-      offsetRef.current = 0;
-      setState({
-        phase: 'error',
-        items: [],
-        pageLoading: false,
-        pageError: false,
-        reachedEnd: false,
+      // A revalidate failure keeps a HIT snapshot (incl. empty []) as `ready`; with
+      // no hit it forks on the live list — only a no-hit empty screen falls to the
+      // first-screen error (and only that branch resets the cursor; a hit keeps it at
+      // cached.length).
+      const hadCache = cached !== null;
+      setState((s) => {
+        if (!hadCache && !s.items.length) offsetRef.current = 0;
+        return revalidateFailState(s, hadCache);
       });
     } finally {
       inFlightRef.current = false;
@@ -141,12 +215,11 @@ export function useRankings(category?: string, q?: string): RankingsApi {
   }, [category, q]);
 
   const loadFirst = useCallback(() => {
-    setState((s) => {
-      if (s.phase === 'idle') {
-        void runFirst();
-      }
-      return s;
-    });
+    // Guard via a ref (not the setState updater) so runFirst — a side effect — never
+    // runs inside a pure updater (React dev double-invokes those). Fires once.
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    void runFirst();
   }, [runFirst]);
 
   const retryFirst = useCallback(() => {
@@ -158,6 +231,8 @@ export function useRankings(category?: string, q?: string): RankingsApi {
     // the screen was previously in a first-screen error state.
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    const canCache = shouldUseBoardCache(0, q);
+    const cohortKey = cohortKeyFor(category);
     try {
       const page = await fetchPage(0, category, q);
       offsetRef.current = page.length;
@@ -168,24 +243,15 @@ export function useRankings(category?: string, q?: string): RankingsApi {
         pageError: false,
         reachedEnd: page.length < PAGE_SIZE,
       });
+      if (canCache) writeBoard(cohortKey, page);
     } catch {
-      setState((s) => {
-        // If we already had a list, refresh failure must NOT wipe it. Keep the
-        // list as-is WITHOUT raising pageError: that footer's retry maps to
-        // next-page loading (retryNext → runNext → append), which is wrong for a
-        // failed refresh. The pull-to-refresh gesture is itself the retry
-        // affordance. If we had nothing, fall back to the whole-screen error.
-        if (s.items.length) {
-          return { ...s, phase: 'ready', pageLoading: false, pageError: false };
-        }
-        return {
-          phase: 'error',
-          items: [],
-          pageLoading: false,
-          pageError: false,
-          reachedEnd: false,
-        };
-      });
+      // If we already had a list, refresh failure must NOT wipe it. Keep the
+      // list as-is WITHOUT raising pageError: that footer's retry maps to
+      // next-page loading (retryNext → runNext → append), which is wrong for a
+      // failed refresh. The pull-to-refresh gesture is itself the retry
+      // affordance. If we had nothing, fall back to the whole-screen error.
+      // (Same fork as runFirst, so share firstScreenCatchState.)
+      setState((s) => firstScreenCatchState(s));
     } finally {
       inFlightRef.current = false;
     }
