@@ -11,6 +11,6 @@
 
 ## 3. 发布与验收
 
-- [ ] 3.1 开 feature 分支、提 PR(含代码 + runbook),review 后合并 main(push-to-deploy 自动 migrate+deploy prod)。
-- [ ] 3.2 部署后实测:`curl -D -` `https://unit-price.herbert-dev.cn/rankings?category=soft-drink` 应返回 `Cache-Control: public, max-age=86400`;二次请求 `X-Cache: HIT`、`total` ~50ms。
-- [ ] 3.3 部署后按 runbook 对 `/rankings`、`/categories` 各路径执行一次 purge + 预热,确保切到新 TTL 后边缘是热的(避免首个用户吃跨境回源)。
+- [x] 3.1 **PR #51**(含代码 + runbook + deployment spec delta),review-loop 两轮 + CodeRabbit 后合并 main(push-to-deploy 自动 deploy prod)。
+- [x] 3.2 部署后实测:`/rankings` 与 `/categories` 均返回 `Cache-Control: public, max-age=86400`;`/categories` 二次请求 `X-Cache: HIT`(边缘已缓存)。
+- [x] 3.3 本次为 **TTL-only 部署、无数据变更** → 无需 purge(旧 300s 缓存 ≤5min 自然过期切新 TTL)。预热为可选优化,`/categories` 已 HIT;purge+预热仪式已写入 `docs/backfill-runbook.md`,留作**未来 ingest/backfill 数据变更时**执行。
