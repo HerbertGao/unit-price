@@ -76,13 +76,17 @@ jobs:
             URLS+=("${BASE}/rankings?limit=${PAGE_SIZE}&offset=0&category=${slug}")
           done
 
+          # `timeout 60` bounds EACH push: a hung CLI call → SIGTERM → non-zero →
+          # caught by `if !` → retry/fail, so one stall can't block the rest of the
+          # loop or burn the whole job timeout (completes per-URL isolation, which
+          # otherwise only covers non-zero exits, not hangs).
           fail=0; total=0
           for u in "${URLS[@]}"; do
             total=$((total+1))
             echo "push: $u"
-            if ! aliyun cdn PushObjectCache --ObjectPath "$u"; then
+            if ! timeout 60 aliyun cdn PushObjectCache --ObjectPath "$u"; then
               sleep 2
-              if ! aliyun cdn PushObjectCache --ObjectPath "$u"; then
+              if ! timeout 60 aliyun cdn PushObjectCache --ObjectPath "$u"; then
                 echo "WARN push failed: $u"; fail=$((fail+1)); continue
               fi
             fi
