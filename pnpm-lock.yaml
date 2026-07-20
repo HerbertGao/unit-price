@@ -27,8 +27,8 @@ importers:
         specifier: ^2.0.51
         version: 2.0.51(zod@4.4.3)
       '@hono/node-server':
-        specifier: ^2.0.5
-        version: 2.0.5(hono@4.12.26)
+        specifier: ^2.0.8
+        version: 2.0.8(hono@4.12.28)
       '@unit-price/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -42,8 +42,8 @@ importers:
         specifier: ^6.0.208
         version: 6.0.208(zod@4.4.3)
       hono:
-        specifier: ^4.12.26
-        version: 4.12.26
+        specifier: ^4.12.28
+        version: 4.12.28
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -1667,8 +1667,8 @@ packages:
   '@hapi/topo@5.1.0':
     resolution: {integrity: sha512-foQZKJig7Ob0BMAYBfcJk8d77QtOe7Wo4ox7ff1lQYoNNAb6jwcY1ncdoy2e9wQZzvNy7ODZCYJkK8kzmcAnAg==}
 
-  '@hono/node-server@2.0.5':
-    resolution: {integrity: sha512-yQFvDmyDo3y6rEOJZDUYPJ49DIKTPpIk4kGvm40xx4Ejne0Pu9a1+exxPN+C1UppWK/WGZX9F++/Xs231tE86g==}
+  '@hono/node-server@2.0.8':
+    resolution: {integrity: sha512-GuCWzLxwg218fy1JaHculFsdcuY12hxit83V+algozTPnwhNjLrRL/Alg9OYjLZLoUZ1rw/S4CdTMsnkSKCmFA==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4
@@ -4232,8 +4232,8 @@ packages:
   hls.js@1.6.16:
     resolution: {integrity: sha512-VSIRpLfRwlAAdGL4wiTucx2ScRipo0ed1FBatWkyt832jC4CReKstga6yIhYVwGu9LOBjuX9wzmRMeQdBJtzEA==}
 
-  hono@4.12.26:
-    resolution: {integrity: sha512-uyZtpnYxM9CmQ7QsQknM4zN8EftNqhON1qYeIKM0Se67CCEe2c44xyGURwB0axX2fBDu1dqHrHAc1hmNT8ITkw==}
+  hono@4.12.28:
+    resolution: {integrity: sha512-YwUvVpSF7m1yOblFPrU3Hbo8XhPheBoiyfGuII6z19LnOr6JpDnyyp7LFNrfV56wS8tpvtBFGRISHN02pDdLOA==}
     engines: {node: '>=16.9.0'}
 
   hpack.js@2.1.6:
@@ -7941,9 +7941,9 @@ snapshots:
     dependencies:
       '@hapi/hoek': 9.3.0
 
-  '@hono/node-server@2.0.5(hono@4.12.26)':
+  '@hono/node-server@2.0.8(hono@4.12.28)':
     dependencies:
-      hono: 4.12.26
+      hono: 4.12.28
 
   '@humanwhocodes/config-array@0.11.14':
     dependencies:
@@ -10665,7 +10665,7 @@ snapshots:
 
   hls.js@1.6.16: {}
 
-  hono@4.12.26: {}
+  hono@4.12.28: {}
 
   hpack.js@2.1.6:
     dependencies:
