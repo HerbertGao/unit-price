@@ -19,6 +19,8 @@ export const BRAND_TAGLINE = '拆穿超市单价障眼法';
 /** Receipt document-type eyebrow. */
 export const BRAND_RECEIPT_LABEL = '单价验货单';
 
+/** 验货小票风格的品牌头(纯展示):`单价验货单` eyebrow +「会员商店值不值」wordmark
+ *  + 「拆穿超市单价障眼法」tagline,虚线账本线收尾。无状态、无 props。 */
 export default function BrandHead() {
   return (
     <View className="brandhead">

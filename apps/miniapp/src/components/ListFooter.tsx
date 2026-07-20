@@ -19,6 +19,8 @@ export interface ListFooterProps {
   onRetryNext: () => void;
 }
 
+/** 榜单列表页脚(纯展示、props 驱动):按 loading / page-error 本地重试 / 到底
+ *  三态之一渲染;无状态机、无 useRankings、无 Taro 生命周期(D4)。 */
 export default function ListFooter({
   pageLoading,
   pageError,

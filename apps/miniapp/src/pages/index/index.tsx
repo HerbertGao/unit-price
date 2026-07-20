@@ -57,6 +57,8 @@ function Header() {
   );
 }
 
+/** 榜单只读首页(榜单 Tab):按 P0 基线依次组合 品牌头 → 搜索入口 → 静态范围条 →
+ *  榜单列表;经 useRankings 消费 GET /rankings,端上不做 tier1 / 单价计算。 */
 export default function Index() {
   const r = useRankings();
 

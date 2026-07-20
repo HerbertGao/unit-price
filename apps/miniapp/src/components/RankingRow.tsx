@@ -53,6 +53,9 @@ function formatRank(rank: number): string {
   return rank < 10 ? `0${rank}` : String(rank);
 }
 
+/** 单条榜单行:`#rank` 徽标 + 商品名 + `per100ml` 大字(可比真值)+ 整件参考价;
+ *  `>30` 天未重报整行置灰(仍留榜)、现价高于历史低点时标「历史低 ¥X」,缺字段优雅降级。
+ *  同一组件亦复用于即时比价页的邻居行。 */
 export default function RankingRow({ item }: { item: RankingsItem }) {
   // rank 1 is the cheapest real unit price → 「值」highlight + blue 验讫 stamp.
   const isTop = item.rank === 1;
