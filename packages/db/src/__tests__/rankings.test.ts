@@ -682,6 +682,41 @@ describe('listRankings (node-scoped)', () => {
     expect(row.sourceUrl).toBeNull();
   });
 
+  it('projects captured_at and the COALESCE(lowest_price, price) low-water mark', async () => {
+    // seedRow inserts captured_at=1000 and NO lowest_price (NULL) — so the mark
+    // degrades to the current price via COALESCE (the pre-backfill / no-positive-
+    // history edge case).
+    seedRow(t.handle, {
+      suffix: 'lp',
+      per100ml: 0.5,
+      formula: 'f',
+      upConfidence: 0.95,
+      productConfidence: 0.5,
+      warnings: '[]',
+      priceCents: 3990,
+    });
+    const [nullMark] = await t.repo.listRankings({
+      limit: 50,
+      offset: 0,
+      category: 'beverage',
+    });
+    expect(nullMark.capturedAt).toBe(1000);
+    expect(nullMark.lowestPriceCents).toBe(3990); // COALESCE(NULL, price)
+
+    // A real accumulated low below the current price projects verbatim; priceCents
+    // stays the latest observed price (the two are the client's compare basis).
+    t.handle
+      .prepare('UPDATE product_raw SET lowest_price = 2990 WHERE id = ?')
+      .run('raw-lp');
+    const [realMark] = await t.repo.listRankings({
+      limit: 50,
+      offset: 0,
+      category: 'beverage',
+    });
+    expect(realMark.lowestPriceCents).toBe(2990);
+    expect(realMark.priceCents).toBe(3990);
+  });
+
   // --- q (title substring) push-down ------------------------------------
 
   it('q non-empty returns only title-substring matches, still per100ml ASC', async () => {

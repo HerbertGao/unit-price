@@ -35,7 +35,10 @@ import './index.css';
 function Header() {
   return (
     <Fragment>
+      {/* 小票头:商户抬头 → 口径 scope(dashed 收口)→ 搜索框。scope 属于小票头的一部分,
+          故排在搜索之前。 */}
       <BrandHead />
+      <ScopeBar />
       {/* Real input: on confirm it navigates to the board list page reused for
           search (board?q=…). NO request fires here; the board page makes the
           read-only GET /rankings?q=… call. See SearchEntry. */}
@@ -50,11 +53,12 @@ function Header() {
           店里有、榜上没有的？<Text className="homecalc__lnk">输入规格算单价 ›</Text>
         </Text>
       </View>
-      <ScopeBar />
     </Fragment>
   );
 }
 
+/** 榜单只读首页(榜单 Tab):按 P0 基线依次组合 品牌头 → 搜索入口 → 静态范围条 →
+ *  榜单列表;经 useRankings 消费 GET /rankings,端上不做 tier1 / 单价计算。 */
 export default function Index() {
   const r = useRankings();
 

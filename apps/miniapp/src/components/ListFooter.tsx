@@ -19,6 +19,8 @@ export interface ListFooterProps {
   onRetryNext: () => void;
 }
 
+/** 榜单列表页脚(纯展示、props 驱动):按 loading / page-error 本地重试 / 到底
+ *  三态之一渲染;无状态机、无 useRankings、无 Taro 生命周期(D4)。 */
 export default function ListFooter({
   pageLoading,
   pageError,
@@ -41,8 +43,10 @@ export default function ListFooter({
         </View>
       ) : null}
       {reachedEnd && !pageError ? (
-        <View className="lfoot">
-          <Text className="lfoot__hint">已到底</Text>
+        <View className="lfoot lfoot--end">
+          {/* 撕纸/剪口收口:小票在真实末尾「验讫」撕下 */}
+          <View className="lfoot__cut"><Text className="lfoot__scissors">✂</Text></View>
+          <Text className="lfoot__hint">单已验讫 · 已到底</Text>
         </View>
       ) : null}
     </View>

@@ -50,6 +50,21 @@ export const productRaw = sqliteTable(
     sourceUrl: text('source_url'),
     /** Epoch (ms) of the most recent observation; set at ingest time. */
     capturedAt: integer('captured_at').notNull(),
+    /**
+     * Lowest **positive** integer-cents price ever observed for this `(store,
+     * store_sku)` — the running low-water mark. This is `product_raw`'s FIRST
+     * cross-observation-run aggregate column: every other column is a point-in-
+     * time attribute of the current/first observation (conflicts COALESCE or
+     * overwrite), whereas this folds `min` across all reports. Nullable:
+     * unset until a `price > 0` observation initializes it, and backfilled to
+     * the then-current price for existing positive-price rows (存量无流水 → only
+     * initializable to the current price, not the true historical low). Only
+     * positive observations fold in — a ≤0/negative price never initializes or
+     * lowers it (`RawProductSchema` admits ≤0 prices; letting one into the
+     * monotonically-non-increasing `min` would permanently poison the mark). The
+     * read projection COALESCEs it back to `price`.
+     */
+    lowestPrice: integer('lowest_price'),
   },
   (t) => [
     // Dedupe key: deterministic, price-independent — a price change is an

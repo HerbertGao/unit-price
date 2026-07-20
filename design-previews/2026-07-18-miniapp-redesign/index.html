@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>会员商店值不值 · 重设计方向样机</title>
+<style>
+  :root{
+    /* 品牌锚:山姆蓝(保留为主色) + 功能语义色 */
+    --sam:#014B90; --sam-bg:#E0EAF5; --sam-line:#B9CEE6;
+    --worth:#137A4C; --worth-bg:#E0EFE6;
+    --pricey:#DE1C24; --pricey-bg:#FBE6E5;
+    --cjk:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#e8ebf0;color:#1B2735;font-family:var(--cjk);-webkit-font-smoothing:antialiased}
+  body{padding:32px 20px 80px;max-width:1500px;margin:0 auto}
+
+  /* — 顶部说明条 — */
+  .top{background:#fff;border:1px solid #dde2ea;border-radius:16px;padding:22px 26px;margin-bottom:22px}
+  .top__k{font-size:12px;letter-spacing:.14em;color:var(--sam);font-weight:700;font-family:var(--mono)}
+  .top h1{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:6px 0 8px}
+  .top p{font-size:13.5px;color:#54606E;line-height:1.7;max-width:70ch}
+  .top .warn{margin-top:12px;font-size:12.5px;color:#8B6a00;background:#FFF6DE;border:1px solid #F0DFA6;border-radius:10px;padding:8px 12px;display:inline-block}
+  .dials{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .dial{font-size:12px;color:#54606E;background:#F1F3F6;border:1px solid #e2e7ee;border-radius:999px;padding:6px 14px}
+  .dial b{color:var(--sam);font-family:var(--mono)}
+
+  /* — 方向网格 — */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:26px;align-items:start;justify-items:center}
+  .col{width:100%;max-width:380px;display:flex;flex-direction:column;align-items:center}
+  .meta{width:100%;background:#fff;border:1px solid #dde2ea;border-radius:14px;padding:16px 18px;margin-bottom:16px;position:relative}
+  .meta__id{font-family:var(--mono);font-size:12px;color:#8B95A2;letter-spacing:.1em}
+  .meta__name{font-size:19px;font-weight:800;margin:2px 0 6px;letter-spacing:-.01em}
+  .meta__q{font-size:13px;color:#54606E;line-height:1.6}
+  .meta__row{margin-top:10px;font-size:12px;color:#54606E;line-height:1.7}
+  .meta__row b{color:#1B2735;font-weight:600}
+  .rec{position:absolute;top:-11px;right:14px;background:var(--sam);color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;padding:4px 12px;border-radius:999px;box-shadow:0 6px 16px -6px rgba(1,75,144,.6)}
+  .pick{margin-top:16px;width:100%;max-width:300px;height:44px;border:none;border-radius:12px;background:var(--sam);color:#fff;font-size:14px;font-weight:700;font-family:var(--cjk);letter-spacing:.02em}
+  .pick--ghost{background:#fff;color:var(--sam);border:1.5px solid var(--sam-line)}
+
+  /* ===== 通用手机外壳 ===== */
+  .phone{width:340px;height:660px;border-radius:38px;background:#000;padding:9px;box-shadow:0 30px 70px -30px rgba(20,35,55,.55);overflow:hidden}
+  .screen{width:100%;height:100%;border-radius:30px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+  .statusbar{height:26px;flex:0 0 26px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:11px;font-weight:600;font-family:var(--mono)}
+  .statusbar .dots{display:flex;gap:3px;align-items:center}
+  .statusbar .dots i{width:4px;height:4px;border-radius:50%;background:currentColor;display:inline-block;opacity:.85}
+  .nav{height:38px;flex:0 0 38px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
+  .body{flex:1;overflow:hidden;position:relative}
+  .tabbar{height:52px;flex:0 0 52px;display:flex;border-top:1px solid rgba(0,0,0,.06)}
+  .tabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10px}
+  .tabbar .tab i{width:16px;height:16px;border-radius:5px;display:block}
+
+  /* =========================================================
+     方向 A · 验货小票（等宽账本 + 蓝色验讫章）  —— 推荐
+     互斥约束:纸面 + 等宽结构 + 无卡片 + 蓝色官检印章
+  ========================================================= */
+  /* 热敏纸:冷调灰白 #F6F7F9 + 炭灰蓝黑墨 #1E2833(非纯白纯黑),贴真实小票材质 */
+  .dA .screen{background:#F6F7F9}
+  .dA .statusbar{color:#5b6472}
+  .dA .nav{color:#1E2833;background:#F6F7F9;font-family:var(--mono);letter-spacing:.06em}
+  .dA .body{padding:0 18px;background:
+     repeating-linear-gradient(#F6F7F9 0 27px,#EFF2F5 27px 28px)}
+  .dA__head{text-align:center;padding:14px 0 8px;border-bottom:2px dashed #C6CFD9}
+  .dA__store{font-family:var(--mono);font-size:12px;letter-spacing:.3em;color:#7A8593}
+  .dA__title{font-size:20px;font-weight:800;letter-spacing:.02em;margin-top:4px;color:#1E2833}
+  .dA__title b{color:var(--sam)}
+  .dA__scope{font-family:var(--mono);font-size:10.5px;color:#8B95A2;margin-top:6px;letter-spacing:.04em}
+  .dA__search{display:flex;align-items:center;gap:8px;margin:12px 0;padding:9px 12px;border:1.5px solid #1E2833;background:#FCFCFD;font-family:var(--mono);font-size:11px;color:#8B95A2}
+  .dA__ico{width:12px;height:12px;border:1.5px solid #8B95A2;border-radius:50%;position:relative;flex:0 0 12px}
+  .dA__ico::after{content:"";position:absolute;right:-3px;bottom:-2px;width:6px;height:1.5px;background:#8B95A2;transform:rotate(45deg)}
+  .dA__row{position:relative;padding:11px 0;border-bottom:1.5px dashed #C6CFD9;display:flex;gap:12px;align-items:flex-start}
+  .dA__rk{font-family:var(--mono);font-size:13px;font-weight:700;color:#AEB7C2;padding-top:3px;flex:0 0 26px}
+  .dA__main{flex:1;min-width:0}
+  .dA__name{font-size:13px;font-weight:600;line-height:1.35;color:#242E39}
+  .dA__nums{display:flex;align-items:baseline;justify-content:space-between;margin-top:6px}
+  .dA__per{font-family:var(--mono);font-weight:800;font-size:24px;letter-spacing:-.03em;color:#1E2833;line-height:1}
+  .dA__per u{font-size:10px;font-weight:500;text-decoration:none;color:#8B95A2;margin-left:2px}
+  .dA__pkg{font-family:var(--mono);font-size:11px;color:#8B95A2}
+  .dA__row--top{background:linear-gradient(90deg,rgba(1,75,144,.06),transparent)}
+  .dA__row--top .dA__rk{color:var(--sam)}
+  .dA__stamp{position:absolute;right:2px;top:8px;transform:rotate(-11deg);border:2px solid var(--sam);color:var(--sam);font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:.08em;padding:2px 7px;border-radius:4px;opacity:.92}
+  .dA__warn{display:inline-block;margin-top:5px;font-family:var(--mono);font-size:9.5px;color:var(--pricey);background:var(--pricey-bg);padding:1px 6px;border-radius:3px}
+  .dA__tear{height:12px;background:
+     radial-gradient(circle at 7px 12px, transparent 6px, #F6F7F9 6.5px) repeat-x;
+     background-size:14px 12px;margin:0 -18px}
+  .dA .tabbar{background:#F6F7F9;border-top:2px dashed #C6CFD9}
+  .dA .tab{color:#AEB7C2;font-family:var(--mono)}
+  .dA .tab:first-child{color:var(--sam)}
+  .dA .tab i{background:currentColor;border-radius:3px}
+
+  /* =========================================================
+     方向 B · 深色价格终端（深海军蓝 + 数据密排 + 价位微条）
+     互斥约束:深色 + 高密度 + 表格化数字 + 海军蓝底
+  ========================================================= */
+  .dB .screen{background:#0A1626;color:#cdd9ea}
+  .dB .statusbar{color:#7f93ac}
+  .dB .nav{background:#0A1626;color:#eaf1fb;font-family:var(--mono);letter-spacing:.04em;border-bottom:1px solid #16273f}
+  .dB .body{padding:0 12px;background:#0A1626;overflow:hidden}
+  .dB__ticker{display:flex;align-items:center;gap:7px;padding:10px 2px 8px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:#7f93ac}
+  .dB__live{width:6px;height:6px;border-radius:50%;background:#35C07A}
+  .dB__ticker b{color:#4C9BE6}
+  .dB__colh{display:grid;grid-template-columns:26px 1fr 74px;gap:8px;padding:6px 4px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:#5f7characters}
+  .dB__colh{color:#5f739a;border-bottom:1px solid #16273f}
+  .dB__row{display:grid;grid-template-columns:26px 1fr 74px;gap:8px;align-items:center;padding:9px 4px;border-bottom:1px solid #101f34}
+  .dB__rk{font-family:var(--mono);font-size:12px;font-weight:700;color:#4C9BE6;text-align:center}
+  .dB__nm{min-width:0}
+  .dB__nm b{display:block;font-size:12px;font-weight:500;color:#e6eefb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dB__bar{margin-top:5px;height:4px;border-radius:2px;background:#16273f;position:relative;overflow:hidden}
+  .dB__bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px}
+  .dB__pkg{font-family:var(--mono);font-size:9.5px;color:#5f739a;margin-top:4px}
+  .dB__per{text-align:right;font-family:var(--mono);font-weight:800;font-size:17px;letter-spacing:-.03em}
+  .dB__per u{display:block;font-size:8.5px;font-weight:500;text-decoration:none;color:#5f739a;letter-spacing:0}
+  .dB__row--top{background:linear-gradient(90deg,rgba(53,192,122,.08),transparent)}
+  .g{color:#35C07A}.gb i{background:#35C07A}
+  .y{color:#E6C34C}.yb i{background:#E6C34C}
+  .r{color:#F2555A}.rb i{background:#F2555A}
+  .dB__warn{display:inline-block;margin-top:4px;font-family:var(--mono);font-size:8.5px;color:#F2555A;border:1px solid rgba(242,85,90,.4);padding:0 5px;border-radius:3px}
+  .dB .tabbar{background:#081120;border-top:1px solid #16273f}
+  .dB .tab{color:#4f6party;color:#4f6488;font-family:var(--mono)}
+  .dB .tab:first-child{color:#4C9BE6}
+  .dB .tab i{background:currentColor;border-radius:4px}
+
+  /* =========================================================
+     方向 C · 杂志揭秘（大标题 + 蓝墨 + 非对称头条块）
+     互斥约束:亮面印刷 + 展示体大标题 + 非对称编辑网格
+  ========================================================= */
+  .dC .screen{background:#FBFAF7;color:#141414}
+  .dC .statusbar{color:#141414}
+  .dC .nav{display:none}
+  .dC .body{padding:0 20px;overflow:hidden}
+  .dC__eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.24em;color:var(--sam);font-weight:700;padding-top:16px}
+  .dC__hl{font-size:31px;font-weight:900;line-height:1.02;letter-spacing:-.03em;margin-top:8px;text-wrap:balance}
+  .dC__hl b{color:var(--sam)}
+  .dC__lead{font-size:12px;color:#5a5a5a;line-height:1.6;margin-top:10px;max-width:32ch}
+  .dC__feat{margin-top:16px;padding-top:14px;border-top:2px solid #141414;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+  .dC__feat .n{font-size:12.5px;font-weight:700;line-height:1.3}
+  .dC__feat .n u{display:block;font-family:var(--mono);font-size:10px;font-weight:500;text-decoration:none;color:#8a8a8a;margin-top:4px}
+  .dC__big{font-family:var(--mono);font-weight:900;font-size:44px;letter-spacing:-.05em;color:var(--sam);line-height:.85;text-align:right}
+  .dC__big u{display:block;font-size:11px;font-weight:600;text-decoration:none;color:#8a8a8a;letter-spacing:0}
+  .dC__list{margin-top:6px}
+  .dC__li{display:flex;align-items:baseline;gap:12px;padding:11px 0;border-bottom:1px solid #e4e1d8}
+  .dC__li .rk{font-family:var(--mono);font-size:11px;color:#b0aca0;flex:0 0 20px}
+  .dC__li .nm{flex:1;min-width:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dC__li .pv{font-family:var(--mono);font-weight:800;font-size:16px;letter-spacing:-.02em}
+  .dC__li .pv u{font-size:9px;font-weight:500;text-decoration:none;color:#a0a0a0;margin-left:1px}
+  .dC .tabbar{background:#FBFAF7;border-top:1px solid #141414}
+  .dC .tab{color:#b0aca0}
+  .dC .tab:first-child{color:var(--sam)}
+  .dC .tab i{background:currentColor;border-radius:4px}
+
+  /* =========================================================
+     方向 D · 果冻卡片（蓝主软卡 + 值奖章 + 圆润友好）
+     互斥约束:亮面 + 强圆角软卡 + 蓝主 + 值奖章
+  ========================================================= */
+  .dD .screen{background:#EEF3F9}
+  .dD .statusbar{color:#3a4a5e}
+  .dD .nav{background:transparent;color:#0e2b4a;font-weight:800}
+  .dD .body{padding:2px 16px 0;overflow:hidden}
+  .dD__hero{background:var(--sam);border-radius:22px;padding:16px 18px;color:#fff;box-shadow:0 14px 30px -14px rgba(1,75,144,.6)}
+  .dD__hero h2{font-size:17px;font-weight:800;letter-spacing:-.01em}
+  .dD__hero p{font-size:11.5px;opacity:.85;margin-top:4px}
+  .dD__search{margin-top:12px;background:rgba(255,255,255,.16);border-radius:999px;padding:8px 14px;font-size:11px;color:rgba(255,255,255,.8);display:flex;align-items:center;gap:8px}
+  .dD__search i{width:11px;height:11px;border:1.5px solid rgba(255,255,255,.8);border-radius:50%;display:block}
+  .dD__card{background:#fff;border-radius:18px;padding:13px 15px;margin-top:12px;display:flex;align-items:center;gap:12px;box-shadow:0 10px 24px -18px rgba(20,35,55,.5)}
+  .dD__medal{flex:0 0 40px;width:40px;height:40px;border-radius:14px;background:var(--worth-bg);color:var(--worth);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;font-weight:800}
+  .dD__medal b{font-size:15px;line-height:1}
+  .dD__rk{flex:0 0 40px;width:40px;height:40px;border-radius:14px;background:var(--sam-bg);color:var(--sam);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:15px;font-weight:800}
+  .dD__mid{flex:1;min-width:0}
+  .dD__nm{font-size:12.5px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dD__pkg{font-size:10.5px;color:#8B95A2;margin-top:3px}
+  .dD__chip{flex:0 0 auto;text-align:right}
+  .dD__per{font-family:var(--mono);font-weight:800;font-size:19px;letter-spacing:-.02em;color:var(--sam)}
+  .dD__per u{font-size:9px;font-weight:500;text-decoration:none;color:#8B95A2;display:block;letter-spacing:0}
+  .dD__warn{display:inline-block;margin-top:4px;font-size:9px;color:var(--pricey);background:var(--pricey-bg);padding:1px 7px;border-radius:999px}
+  .dD .tabbar{background:#fff;border-top:1px solid #e4e9f0}
+  .dD .tab{color:#a3aec0}
+  .dD .tab:first-child{color:var(--sam)}
+  .dD .tab i{background:currentColor;border-radius:6px}
+
+  .foot{margin-top:40px;text-align:center;font-size:11px;color:#9aa3af;font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="top__k">QIAOMU-DESIGN · 方向样机</div>
+  <h1>会员商店值不值 — 重设计方向样机</h1>
+  <p>四个方向都以 <b style="color:var(--sam)">山姆蓝 #014B90</b> 为主色/品牌色,靠版式、密度、字体、明暗发散;绿=值 / 红=贵·警示 为功能语义色不变。每个方向展示「榜单首页」这一主屏(真实山姆软饮单价数据)。</p>
+  <div class="dials">
+    <span class="dial">视觉冒险度 <b>7/10</b> · 允许非对称强记忆点</span>
+    <span class="dial">动效强度 <b>3/10</b> · 克制反馈</span>
+    <span class="dial">信息密度 <b>6/10</b> · 保留扫读节奏</span>
+  </div>
+  <div class="warn">⚠ 这是设计方向样机,用于选气质,<b>不是最终小程序</b>。选定方向(或混搭)后才进入正式实现。</div>
+</div>
+
+<div class="grid">
+
+  <!-- ============ A ============ -->
+  <div class="col">
+    <div class="meta">
+      <span class="rec">★ 推荐</span>
+      <div class="meta__id">方向 A</div>
+      <div class="meta__name">验货小票</div>
+      <div class="meta__q">像一张收银小票替你验货,把「真实单价」盖章盖出来。</div>
+      <div class="meta__row"><b>记忆点</b> 蓝色官检验讫章 + 虚线账本 + 撕纸边</div>
+      <div class="meta__row"><b>为什么推荐</b> 最贴产品内核「拆穿单价障眼法」,放大现状里已有的验货基因(小票 tape / 盖戳警示),记忆点最强、和通用卡片列表差异最大。</div>
+    </div>
+    <div class="phone"><div class="screen dA">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="nav">单价验货单</div>
+      <div class="body">
+        <div class="dA__head">
+          <div class="dA__store">SAM'S CLUB · 软饮</div>
+          <div class="dA__title">会员商店<b>值不值</b></div>
+          <div class="dA__scope">真实单价榜 · 元/100ml · 越低越抵</div>
+        </div>
+        <div class="dA__search"><span class="dA__ico"></span>搜软饮名,如 元气森林 / 无糖可乐</div>
+        <div class="dA__row dA__row--top">
+          <div class="dA__rk">#01</div>
+          <div class="dA__main">
+            <div class="dA__name">MM 弱碱性饮用水 4L</div>
+            <div class="dA__nums"><span class="dA__per">0.22<u>元/100ml</u></span><span class="dA__pkg">¥8.80/件</span></div>
+            <span class="dA__warn">⚠ 数量按单件推断</span>
+          </div>
+          <span class="dA__stamp">验讫·最抵</span>
+        </div>
+        <div class="dA__row">
+          <div class="dA__rk">#02</div>
+          <div class="dA__main">
+            <div class="dA__name">Inikin 长白山天然矿泉水 500mL×24</div>
+            <div class="dA__nums"><span class="dA__per">0.22<u>元/100ml</u></span><span class="dA__pkg">¥26.80/件</span></div>
+          </div>
+        </div>
+        <div class="dA__row">
+          <div class="dA__rk">#03</div>
+          <div class="dA__main">
+            <div class="dA__name">MM 弱碱性矿泉水 300mL×24</div>
+            <div class="dA__nums"><span class="dA__per">0.32<u>元/100ml</u></span><span class="dA__pkg">¥22.50/件</span></div>
+          </div>
+        </div>
+        <div class="dA__row">
+          <div class="dA__rk">#04</div>
+          <div class="dA__main">
+            <div class="dA__name">阿尔卑斯山气泡水 FONTE LINDA 24×500mL</div>
+            <div class="dA__nums"><span class="dA__per">0.36<u>元/100ml</u></span><span class="dA__pkg">¥35.80/件</span></div>
+          </div>
+        </div>
+        <div class="dA__tear"></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><i></i>榜单</div><div class="tab"><i></i>分类</div><div class="tab"><i></i>我的</div>
+      </div>
+    </div></div>
+    <button class="pick">选 A · 验货小票</button>
+  </div>
+
+  <!-- ============ B ============ -->
+  <div class="col">
+    <div class="meta">
+      <div class="meta__id">方向 B</div>
+      <div class="meta__name">深色价格终端</div>
+      <div class="meta__q">像交易终端一样把价格排成榜,数字是主角,一眼看谁最抵。</div>
+      <div class="meta__row"><b>记忆点</b> 深海军蓝底 + 每行价位微条 + 绿抵红贵</div>
+      <div class="meta__row"><b>取舍</b> 最专业、密度最高、极客感强;偏冷,离「大众消费」气质稍远。</div>
+    </div>
+    <div class="phone"><div class="screen dB">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="nav">值不值 · 单价榜</div>
+      <div class="body">
+        <div class="dB__ticker"><span class="dB__live"></span><b>SAM</b> · 软饮 · 单价 元/100ml · 越低越抵</div>
+        <div class="dB__colh"><span>#</span><span>品名</span><span style="text-align:right">单价 / 整件</span></div>
+        <div class="dB__row dB__row--top">
+          <div class="dB__rk">01</div>
+          <div class="dB__nm"><b>MM 弱碱性饮用水 4L</b><div class="dB__bar gb"><i style="width:14%"></i></div><span class="dB__warn">数量推断</span></div>
+          <div class="dB__per g">0.22<u>元/100ml · ¥8.80</u></div>
+        </div>
+        <div class="dB__row">
+          <div class="dB__rk">02</div>
+          <div class="dB__nm"><b>Inikin 长白山天然矿泉水 500mL×24</b><div class="dB__bar gb"><i style="width:15%"></i></div></div>
+          <div class="dB__per g">0.22<u>元/100ml · ¥26.80</u></div>
+        </div>
+        <div class="dB__row">
+          <div class="dB__rk">03</div>
+          <div class="dB__nm"><b>MM 弱碱性矿泉水 300mL×24</b><div class="dB__bar yb"><i style="width:30%"></i></div></div>
+          <div class="dB__per y">0.32<u>元/100ml · ¥22.50</u></div>
+        </div>
+        <div class="dB__row">
+          <div class="dB__rk">04</div>
+          <div class="dB__nm"><b>阿尔卑斯山气泡水 FONTE LINDA 24×500mL</b><div class="dB__bar yb"><i style="width:37%"></i></div></div>
+          <div class="dB__per y">0.36<u>元/100ml · ¥35.80</u></div>
+        </div>
+        <div class="dB__row">
+          <div class="dB__rk">05</div>
+          <div class="dB__nm"><b>可口可乐 汽水小支 300mL×24</b><div class="dB__bar rb"><i style="width:52%"></i></div></div>
+          <div class="dB__per y">0.42<u>元/100ml · ¥29.90</u></div>
+        </div>
+        <div class="dB__row" style="border:none">
+          <div class="dB__rk">06</div>
+          <div class="dB__nm"><b>农夫山泉 东方树叶 400mL×24</b><div class="dB__bar rb"><i style="width:88%"></i></div></div>
+          <div class="dB__per r">0.60<u>元/100ml · ¥57.90</u></div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><i></i>榜单</div><div class="tab"><i></i>分类</div><div class="tab"><i></i>我的</div>
+      </div>
+    </div></div>
+    <button class="pick pick--ghost">选 B · 深色终端</button>
+  </div>
+
+  <!-- ============ C ============ -->
+  <div class="col">
+    <div class="meta">
+      <div class="meta__id">方向 C</div>
+      <div class="meta__name">杂志揭秘</div>
+      <div class="meta__q">像一篇打假特稿,用大标题先甩结论,再列榜。</div>
+      <div class="meta__row"><b>记忆点</b> 巨号头条 + 蓝墨 + 非对称头条块</div>
+      <div class="meta__row"><b>取舍</b> 气质最独特、最有态度;首屏能装的榜单条数少,更像内容页。</div>
+    </div>
+    <div class="phone"><div class="screen dC">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="nav"></div>
+      <div class="body">
+        <div class="dC__eyebrow">真实单价 · 揭秘</div>
+        <div class="dC__hl">同样是水,<br>贵的多付 <b>近 3 倍</b></div>
+        <div class="dC__lead">山姆软饮按 100ml 真实单价重排,标价障眼法一目了然。</div>
+        <div class="dC__feat">
+          <div class="n">MM 弱碱性饮用水 4L<u>整件 ¥8.80 · 数量按单件推断</u></div>
+          <div class="dC__big">0.22<u>元/100ml · 全场最抵</u></div>
+        </div>
+        <div class="dC__list">
+          <div class="dC__li"><span class="rk">02</span><span class="nm">Inikin 长白山天然矿泉水</span><span class="pv">0.22<u>/100ml</u></span></div>
+          <div class="dC__li"><span class="rk">03</span><span class="nm">MM 弱碱性矿泉水</span><span class="pv">0.32<u>/100ml</u></span></div>
+          <div class="dC__li"><span class="rk">04</span><span class="nm">阿尔卑斯山气泡水</span><span class="pv">0.36<u>/100ml</u></span></div>
+          <div class="dC__li"><span class="rk">05</span><span class="nm">可口可乐 汽水小支</span><span class="pv">0.42<u>/100ml</u></span></div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><i></i>榜单</div><div class="tab"><i></i>分类</div><div class="tab"><i></i>我的</div>
+      </div>
+    </div></div>
+    <button class="pick pick--ghost">选 C · 杂志揭秘</button>
+  </div>
+
+  <!-- ============ D ============ -->
+  <div class="col">
+    <div class="meta">
+      <div class="meta__id">方向 D</div>
+      <div class="meta__name">果冻卡片</div>
+      <div class="meta__q">蓝色软卡 + 值奖章,友好、易上手、大众化。</div>
+      <div class="meta__row"><b>记忆点</b> 蓝主软卡 + 第一名「值」奖章 + 圆润</div>
+      <div class="meta__row"><b>取舍</b> 最亲和、门槛最低;偏安全,记忆点弱于 A/C。</div>
+    </div>
+    <div class="phone"><div class="screen dD">
+      <div class="statusbar"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+      <div class="nav">值不值</div>
+      <div class="body">
+        <div class="dD__hero">
+          <h2>会员商店值不值</h2>
+          <p>拆穿超市单价障眼法 · 按 100ml 真实单价排</p>
+          <div class="dD__search"><i></i>搜软饮名,如 元气森林 / 无糖可乐</div>
+        </div>
+        <div class="dD__card">
+          <div class="dD__medal"><b>值</b>最抵</div>
+          <div class="dD__mid"><div class="dD__nm">MM 弱碱性饮用水 4L</div><div class="dD__pkg">整件 ¥8.80 · <span style="color:var(--pricey)">数量推断</span></div></div>
+          <div class="dD__chip"><div class="dD__per">0.22<u>元/100ml</u></div></div>
+        </div>
+        <div class="dD__card">
+          <div class="dD__rk">02</div>
+          <div class="dD__mid"><div class="dD__nm">Inikin 长白山天然矿泉水 500mL×24</div><div class="dD__pkg">整件 ¥26.80</div></div>
+          <div class="dD__chip"><div class="dD__per">0.22<u>元/100ml</u></div></div>
+        </div>
+        <div class="dD__card">
+          <div class="dD__rk">03</div>
+          <div class="dD__mid"><div class="dD__nm">MM 弱碱性矿泉水 300mL×24</div><div class="dD__pkg">整件 ¥22.50</div></div>
+          <div class="dD__chip"><div class="dD__per">0.32<u>元/100ml</u></div></div>
+        </div>
+        <div class="dD__card">
+          <div class="dD__rk">04</div>
+          <div class="dD__mid"><div class="dD__nm">阿尔卑斯山气泡水 FONTE LINDA</div><div class="dD__pkg">整件 ¥35.80</div></div>
+          <div class="dD__chip"><div class="dD__per">0.36<u>元/100ml</u></div></div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab"><i></i>榜单</div><div class="tab"><i></i>分类</div><div class="tab"><i></i>我的</div>
+      </div>
+    </div></div>
+    <button class="pick pick--ghost">选 D · 果冻卡片</button>
+  </div>
+
+</div>
+
+<div class="foot">方向样机 · 非最终小程序 · 数据为山姆软饮真实单价 · 回复「选 A/B/C/D」或混搭要求即进入实现</div>
+
+</body>
+</html>

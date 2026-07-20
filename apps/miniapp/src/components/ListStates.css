@@ -16,13 +16,15 @@
 
 .lstate__title {
   font-size: var(--fs-xl);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   color: var(--ink);
   margin-bottom: 16rpx;
 }
 
 .lstate__hint {
-  font-size: var(--fs-md);
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
   color: var(--muted);
 }
 
