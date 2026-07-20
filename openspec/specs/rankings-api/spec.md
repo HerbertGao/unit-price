@@ -23,7 +23,9 @@
 
 **节点路径查询计划口径**：沿用 P3——节点查询带闭包+rankable 两等值过滤；EXPLAIN 计划测试先 `ANALYZE`、断言 `category_closure` 与 `unit_price` 均 `SEARCH ... USING INDEX`（经各自唯一键），允许 `USE TEMP B-TREE`（ORDER BY + DISTINCT）与驱动表（`product`/`product_tag`）全扫；不断言「从 closure/product_tag 驱动」或「不出现 SCAN unit_price」（详见既有 P3 口径，本期不变）。
 
-**响应 schema（Zod 单一事实源）**：响应体必须由 `RankingsResponseSchema`（居 `@unit-price/api-client`）定义、**本变更不改该 schema**。每项含 `rank`(1-based、`offset+序号`、读时投影)、`title`(`product_raw.title`)、`priceCents`(整数分、禁服务端换算)、`per100ml`(存储值)、`formula`(存储值、`CalcResultGate` 保证非空)、`confidence`(`unit_price.confidence` 权威 band、非 `product.confidence`)、`warnings`(`string[]`、经 `decodeJson`+`WarningsSchema` 还原、禁透原始 JSON)、`store`/`storeSku`/`sourceUrl`(`product_raw`，`sourceUrl` 可空)。
+**响应 schema（Zod 单一事实源）**：响应体必须由 `RankingsResponseSchema`（居 `@unit-price/api-client`）定义、**本变更为该 schema 增加 `capturedAt`/`lowestPriceCents` 两个投影字段**。每项含 `rank`(1-based、`offset+序号`、读时投影)、`title`(`product_raw.title`)、`priceCents`(整数分、禁服务端换算)、`per100ml`(存储值)、`formula`(存储值、`CalcResultGate` 保证非空)、`confidence`(`unit_price.confidence` 权威 band、非 `product.confidence`)、`warnings`(`string[]`、经 `decodeJson`+`WarningsSchema` 还原、禁透原始 JSON)、`store`/`storeSku`/`sourceUrl`(`product_raw`，`sourceUrl` 可空)、`capturedAt`(整数 epoch ms、= `product_raw.captured_at`)、`lowestPriceCents`(整数分、= `COALESCE(product_raw.lowest_price, product_raw.price)`)。**`capturedAt`/`lowestPriceCents` 在 schema 中设 `.optional()`**：服务端投影**恒发**二字段（`captured_at` NOT NULL、`lowestPriceCents` 经 `COALESCE` 恒有值），故**在线响应两字段总是存在**；`.optional()` 只为让共依赖同一 `RankingsItemSchema` 的独立发布客户端容忍**跨版本旧服务端**与 **CDN 24h TTL 缓存的旧响应**（缺字段），避免新客户端解旧响应时 ZodError 整屏错——契约字段设必填会在每次改 schema 的部署后制造最长 24h 的整屏错窗口。
+
+**失效标注与历史最低价（读侧透出、不在服务端判定）**：每项在线响应**必须**透出 `capturedAt`（最近一次上报观测时刻）与 `lowestPriceCents`（历次正价观测最低整件价）——二者均为投影自 `product_raw` 的存储事实、**读路径不重算**（契约设 `.optional()` 仅为跨版本/旧缓存容错，不改「在线恒发」）。「失效」（>30 天未重报）**必须由客户端**用 `now - capturedAt > 阈值` 判定，**禁止**服务端返回随时间衰减的 `stale` 布尔——`/rankings` 经边缘 + 端上缓存，时间相对布尔烤进响应体会随缓存龄期变陈旧，而 `capturedAt` 不可变、缓存安全；失效项**仍入榜**（不因失效改入榜门 / 排序 / 分页）。`lowestPriceCents` 仅为透出，是否呈现「历史低」由客户端按 `priceCents > lowestPriceCents` 决定（见 `miniapp`）。
 
 **口径漂移与 warnings 透出**：`priceCents`(整件总价分) 与 `per100ml`(按总容量摊算) 分母不同、前端禁互推、可比量一律用 `per100ml`；调价后 `priceCents`(最新) 与 `per100ml`(旧价算、first-write-wins 不刷新) 可能漂移、本期接受。带 `warnings`（尤其「数量按单件推断为 1」）的项照常入榜、原样透出、禁静默剔除。
 
@@ -67,6 +69,21 @@
 
 - **当** 某入榜项 `unit_price.warnings` 含「数量按单件推断为 1」
 - **那么** 该项照常入榜、`warnings` 原样含该提示，**禁止**因含单件推断剔除或清空
+
+#### 场景:响应每项透出 capturedAt 与 lowestPriceCents
+
+- **当** 某入榜行 `product_raw.captured_at = 1_700_000_000_000`、`price = 1490`、`lowest_price = 990`
+- **那么** 该项**必须**含 `capturedAt = 1_700_000_000_000`（整数 epoch ms、取存储值不重算）与 `lowestPriceCents = 990`（= `COALESCE(lowest_price, price)`）；`priceCents` 仍为 `1490`（最新价）
+
+#### 场景:失效项仍入榜、服务端不判失效
+
+- **当** 某入榜行 `captured_at` 已早于当前 30 天以上
+- **那么** 该行**必须**照常出现在榜内（不因失效被剔除、不改排序 / 分页），响应**禁止**含服务端 `stale` 布尔；失效判定由客户端按 `now - capturedAt > 阈值` 自行完成
+
+#### 场景:历史低价仅透出、呈现条件在客户端
+
+- **当** 某行 `priceCents = 990`、`lowestPriceCents = 990`（现价 = 历史低点）
+- **那么** 服务端**必须**照常透出二字段；是否呈现「历史低」由客户端按 `priceCents > lowestPriceCents` 判定（此例相等 → 客户端不呈现），服务端**不**下达呈现与否
 
 ### 需求:分页与查询参数边界
 
@@ -161,3 +178,4 @@
 - **那么** 响应**必须**带 `Cache-Control: no-store`（不只是省略 `public`）
 - **当** 客户端 `GET /rankings?q=`/`?q=%20%20`（校验后 `undefined`）或无 `q`
 - **那么** 响应**必须**与无-`q` cohort board 一样带既有 `public Cache-Control`（**禁止**因 URL 含 `q` 键而误判 `no-store`）
+
