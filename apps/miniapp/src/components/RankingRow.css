@@ -1,41 +1,40 @@
-/* RankingRow — translated from design/sams-zhibuzhi/index.html ".row"/".rank"/
-   ".per"/".pkg"/".t-warn". px→rpx ~1:2. Colors are var(--…) only (tokens in
-   app.css); the card shadow goes through var(--shadow). */
+/* RankingRow — 验货小票账本行(见 apps/miniapp/DESIGN.md §4)。
+   无卡片、无每行阴影;行间靠 dashed --line-dash 分隔。颜色仅 var(--…)。 */
 
 .rrow {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 26rpx;
-  background: var(--paper-card);
-  border-radius: var(--r-card);
-  padding: 28rpx;
-  margin-bottom: 20rpx;
-  box-shadow: var(--shadow);
-  /* keep the 1.5px-equivalent top-row border slot from collapsing the layout */
-  border: 3rpx solid transparent;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-1);
+  border-bottom: 2rpx dashed var(--line-dash);
 }
 
-/* rank 1 / top → "值" highlight outline (P0 .row.top) */
+/* rank 1 / top → 极淡蓝渐变底(值 highlight) */
 .rrow--top {
-  border-color: var(--worth);
+  background: linear-gradient(90deg, rgba(1, 75, 144, 0.06), transparent 70%);
+}
+
+/* 失效置灰 — >30 天未重报(纯视觉;与 rrow--top 正交、可并存)。grayscale 降饱和
+   + opacity 淡出;仅 filter / opacity 数值,无颜色字面量。 */
+.rrow--stale {
+  filter: grayscale(0.9);
+  opacity: 0.55;
 }
 
 .rrow__rank {
   flex-shrink: 0;
-  width: 68rpx;
-  text-align: center;
-}
-
-.rrow__rank-num {
+  width: 72rpx;
+  padding-top: 6rpx;
   font-family: var(--f-mono);
-  font-weight: var(--fw-medium);
-  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-md);
+  letter-spacing: -0.02em;
   color: var(--muted);
 }
 
-.rrow--top .rrow__rank-num {
-  color: var(--worth);
+.rrow--top .rrow__rank {
+  color: var(--blue);
 }
 
 .rrow__body {
@@ -47,22 +46,28 @@
   display: block;
   font-size: var(--fs-md);
   font-weight: var(--fw-medium);
-  color: var(--ink);
+  color: var(--ink-soft);
   line-height: 1.35;
+}
+
+/* rank 1 title keeps clear of the stamp in the top-right corner */
+.rrow--top .rrow__title {
+  padding-right: 132rpx;
 }
 
 .rrow__meta {
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  margin-top: 14rpx;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
 }
 
 /* per100ml — the COMPARABLE big number (D1: size + weight + tracking) */
 .rrow__per {
   display: inline-flex;
   align-items: baseline;
+  flex: 1;
+  min-width: 0;
 }
 
 .rrow__per-num {
@@ -77,26 +82,66 @@
 .rrow__per-unit {
   font-size: var(--fs-xs);
   color: var(--muted);
-  margin-left: 4rpx;
+  margin-left: 6rpx;
 }
 
-/* per-package reference price — small, muted, reference only */
+/* per-package reference price — mono, muted, right-aligned, reference only */
 .rrow__pkg {
+  flex-shrink: 0;
   font-family: var(--f-mono);
   font-size: var(--fs-xs);
   color: var(--muted);
 }
 
-/* warnings chip — honest warn "盖戳" (P0 .stamp-tag.t-warn) */
+/* chip 行 — 历史低价徽标 + 诚实 warn "盖戳"(数量推断 等);flex 换行、可并存 */
+.rrow__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+
+/* 历史低价徽标 — 现价高于历史低点时提示;走既有徽标 token(--blue-bg 即「徽标底」),
+   与 per100ml 大字视觉分离,只对比整件分口径。 */
+.rrow__lowest {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  letter-spacing: 0.02em;
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
 .rrow__warn {
   display: inline-flex;
   align-items: center;
   font-family: var(--f-mono);
   font-size: var(--fs-xs);
   line-height: 1.6;
-  padding: 4rpx 14rpx;
-  border-radius: 10rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
   letter-spacing: 0.02em;
   background: var(--pricey-bg);
   color: var(--pricey);
+}
+
+/* 验讫·最抵 — blue inspection stamp, rank 1 only; the single memory point. */
+.rrow__stamp {
+  position: absolute;
+  right: 6rpx;
+  top: 22rpx;
+  transform: rotate(-11deg);
+  border: 3rpx solid var(--blue);
+  border-radius: var(--r-stamp);
+  padding: 3rpx 14rpx;
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.08em;
+  color: var(--blue);
+  opacity: 0.92;
 }

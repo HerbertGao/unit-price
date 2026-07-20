@@ -557,6 +557,8 @@ function projectNeighbor(row: RankingRow, boardRank: number): RankingsItem {
     store: row.store,
     storeSku: row.storeSku,
     sourceUrl: row.sourceUrl,
+    capturedAt: row.capturedAt,
+    lowestPriceCents: row.lowestPriceCents,
   };
 }
 
@@ -702,6 +704,8 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       store: row.store,
       storeSku: row.storeSku,
       sourceUrl: row.sourceUrl,
+      capturedAt: row.capturedAt,
+      lowestPriceCents: row.lowestPriceCents,
     }));
 
     // ── Validate the response shape before returning (contract enforcement,

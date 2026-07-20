@@ -230,6 +230,15 @@ export interface RankingRow {
   title: string;
   /** product_raw.price as integer cents (latest observed price). */
   priceCents: number;
+  /** product_raw.captured_at (epoch ms of the latest observation). */
+  capturedAt: number;
+  /**
+   * Lowest observed price as integer cents = `COALESCE(product_raw.lowest_price,
+   * product_raw.price)` — always an integer (degrades to the current price when
+   * the mark is NULL / only anomalous history). Compared against `priceCents`
+   * client-side to flag a below-history price.
+   */
+  lowestPriceCents: number;
   /** product_raw.store. */
   store: string;
   /** product_raw.store_sku. */
@@ -532,6 +541,9 @@ interface RawRankingRow {
   warnings: string;
   title: string;
   priceCents: number;
+  capturedAt: number;
+  // COALESCE(lowest_price, price) — non-null integer by construction.
+  lowestPriceCents: number;
   store: string;
   storeSku: string;
   sourceUrl: string | null;
@@ -577,6 +589,10 @@ export function buildRankingsQuery(
       warnings: unitPrice.warnings,
       title: productRaw.title,
       priceCents: productRaw.price,
+      capturedAt: productRaw.capturedAt,
+      // COALESCE so the projection is always a non-null integer: a NULL mark
+      // (no positive history / pre-backfill edge) degrades to the current price.
+      lowestPriceCents: sql<number>`coalesce(${productRaw.lowestPrice}, ${productRaw.price})`,
       store: productRaw.store,
       storeSku: productRaw.storeSku,
       sourceUrl: productRaw.sourceUrl,
@@ -746,17 +762,21 @@ export function createRepository(db: Db | null | undefined): Repository {
       });
       const raw = RawProductSchema.parse(input.raw);
       FiniteRawPriceGate.parse({ price: raw.price });
+      const priceCents = yuanToCents(raw.price);
       const row = {
         id: newId(),
         store: key.store,
         storeSku: key.storeSku,
         title: raw.title,
-        price: yuanToCents(raw.price),
+        price: priceCents,
         categoryHint: raw.categoryHint ?? null,
         nativeCategoryId: input.nativeCategoryId ?? null,
         source: input.source ?? null,
         sourceUrl: input.sourceUrl ?? null,
         capturedAt: toEpochMillis(input.capturedAt ?? Date.now()),
+        // Low-water mark seed on first insert: current price when positive, else
+        // NULL (a ≤0 observation must not initialize the mark — see schema).
+        lowestPrice: priceCents > 0 ? priceCents : null,
       };
       const rows = await queryOrm(db)
         .insert(productRaw)
@@ -775,6 +795,14 @@ export function createRepository(db: Db | null | undefined): Repository {
             source: sql`coalesce(${row.source}, ${productRaw.source})`,
             sourceUrl: sql`coalesce(${row.sourceUrl}, ${productRaw.sourceUrl})`,
             capturedAt: row.capturedAt,
+            // Fold only positive prices into the low-water mark; an anomalous
+            // ≤0 report keeps the prior mark. `${productRaw.lowestPrice}` here
+            // reads the ACCUMULATED pre-update mark (the DO UPDATE SET row's
+            // stored value), while `${row.price}` is the new value bind param —
+            // do NOT rewrite it as `excluded.lowest_price`, which would read
+            // THIS insert's to-be-inserted value and destroy the watermark.
+            // `coalesce` seeds the mark with the new price when it was NULL.
+            lowestPrice: sql`CASE WHEN ${row.price} > 0 THEN min(coalesce(${productRaw.lowestPrice}, ${row.price}), ${row.price}) ELSE ${productRaw.lowestPrice} END`,
           },
         })
         .returning({ id: productRaw.id });
@@ -1026,6 +1054,8 @@ export function createRepository(db: Db | null | undefined): Repository {
         warnings: WarningsSchema.parse(decodeJson(row.warnings)),
         title: row.title,
         priceCents: row.priceCents,
+        capturedAt: row.capturedAt,
+        lowestPriceCents: row.lowestPriceCents,
         store: row.store,
         storeSku: row.storeSku,
         sourceUrl: row.sourceUrl,

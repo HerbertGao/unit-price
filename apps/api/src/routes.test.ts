@@ -397,6 +397,8 @@ function row(over: Partial<RankingRow> & Pick<RankingRow, 'id' | 'per100ml'>): R
     store: 'sam',
     storeSku: `sku-${over.id}`,
     sourceUrl: null,
+    capturedAt: 1_700_000_000_000,
+    lowestPriceCents: 1000,
     ...over,
   };
 }
@@ -502,6 +504,38 @@ describe('GET /rankings — ascending leaderboard, verbatim stored values', () =
     for (const item of json) {
       expect(item.per100ml).not.toBeNull();
       expect(typeof item.per100ml).toBe('number');
+    }
+  });
+});
+
+describe('GET /rankings — capturedAt + lowestPriceCents projected online (staleness/low-price)', () => {
+  it('online item carries capturedAt (int epoch ms) + lowestPriceCents; price above the low → lowestPriceCents < priceCents', async () => {
+    const CAP = 1_700_000_000_000;
+    // Current price 1490 sits above the historical low 990 → the two differ,
+    // proving lowestPriceCents = COALESCE(lowest_price, price) is passed through
+    // verbatim (not re-derived from priceCents).
+    const board = [
+      row({ id: 'lo', per100ml: 1.0, priceCents: 1490, lowestPriceCents: 990, capturedAt: CAP }),
+    ];
+    const { app } = rankingsApp(board);
+    const { res, json } = await getRankings(app);
+    expect(res.status).toBe(200);
+    const item = json[0];
+    expect(item.capturedAt).toBe(CAP);
+    expect(Number.isInteger(item.capturedAt)).toBe(true);
+    expect(item.priceCents).toBe(1490);
+    expect(item.lowestPriceCents).toBe(990);
+    expect(item.lowestPriceCents).toBeLessThan(item.priceCents);
+  });
+
+  it('both fields are always present on the online response (server sends them, not merely schema-optional)', async () => {
+    const { app } = rankingsApp(SNAPSHOT);
+    const { json } = await getRankings(app);
+    for (const item of json) {
+      expect(item).toHaveProperty('capturedAt');
+      expect(item).toHaveProperty('lowestPriceCents');
+      expect(Number.isInteger(item.capturedAt)).toBe(true);
+      expect(Number.isInteger(item.lowestPriceCents)).toBe(true);
     }
   });
 });
@@ -1621,6 +1655,30 @@ describe('POST /compute — sufficient input -> 200 + price + positioning', () =
     expect(json.axis).toBe('per_100ml');
     // rank: strictly cheaper = p-1 (0.4) only → rank 2.
     expect(json.rank).toBe(2);
+  });
+
+  it('positioned neighbors carry capturedAt + lowestPriceCents (compute reuses RankingsItemSchema); price above the low → lowestPriceCents < priceCents', async () => {
+    const CAP = 1_700_000_000_000;
+    const cohort: RankingRow[] = [
+      row({ id: 'n-1', per100ml: 0.4, storeSku: 'sku-1', priceCents: 1490, lowestPriceCents: 990, capturedAt: CAP }),
+      row({ id: 'n-2', per100ml: 0.6, storeSku: 'sku-2', priceCents: 1490, lowestPriceCents: 990, capturedAt: CAP }),
+      row({ id: 'n-3', per100ml: 1.0, storeSku: 'sku-3', priceCents: 1490, lowestPriceCents: 990, capturedAt: CAP }),
+    ];
+    const { app } = computeApp(cohort);
+    // per100ml 0.6 → cheaper n-1, slot-side n-2 (tie) + n-3 → neighbors non-empty.
+    const { res, json } = await postCompute(app, {
+      totalPrice: 9,
+      totalAmount: { value: 1500, unit: 'ml' },
+      category: 'soft-drink',
+    });
+    expect(res.status).toBe(200);
+    expect(json.neighbors.length).toBeGreaterThan(0);
+    for (const n of json.neighbors) {
+      expect(n.capturedAt).toBe(CAP);
+      expect(Number.isInteger(n.capturedAt)).toBe(true);
+      expect(n.lowestPriceCents).toBe(990);
+      expect(n.lowestPriceCents).toBeLessThan(n.priceCents);
+    }
   });
 
   it('sets Cache-Control: no-store on the 200', async () => {

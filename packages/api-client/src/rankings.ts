@@ -27,6 +27,21 @@ import { WarningsSchema } from '@unit-price/core';
  *  - `warnings` reuses core's `WarningsSchema` (`string[]`), the same shape the
  *    write path stores; passed through verbatim (single-unit-inference warnings
  *    are NOT silently dropped).
+ *  - `capturedAt` (integer epoch ms, = `product_raw.captured_at`) and
+ *    `lowestPriceCents` (integer cents, = `COALESCE(product_raw.lowest_price,
+ *    price)`) are `.optional()` yet the server's ONLINE projection ALWAYS emits
+ *    both (captured_at is NOT NULL; lowestPriceCents is COALESCE'd non-null), so a
+ *    live response necessarily carries them. `.optional()` exists ONLY so the
+ *    independently-deployed clients sharing this one schema tolerate a
+ *    cross-version OLD server, or a CDN-cached (24h TTL) OLD response, that
+ *    predates these fields: a missing field still parses (no whole-board ZodError)
+ *    and the client degrades for free — its `isStale`/`historicalLowYuan` helpers
+ *    guard on the field's presence, so an absent field means no grey / no
+ *    historical-low badge (they short-circuit on `!== undefined`, not on NaN). If
+ *    present they MUST still be integers (`z.number().int()`): `capturedAt` is
+ *    epoch ms, `lowestPriceCents` is cents — a string/decimal is a real contract
+ *    violation and fails. `ComputeResultSchema` reuses this schema by reference
+ *    for `neighbors`, so the same optionality/integrality holds for /compute rows.
  */
 export const RankingsItemSchema = z.object({
   rank: z.number().int().min(1),
@@ -39,6 +54,8 @@ export const RankingsItemSchema = z.object({
   store: z.string().min(1),
   storeSku: z.string().min(1),
   sourceUrl: z.string().nullable(),
+  capturedAt: z.number().int().optional(),
+  lowestPriceCents: z.number().int().optional(),
 });
 
 export type RankingsItem = z.infer<typeof RankingsItemSchema>;
