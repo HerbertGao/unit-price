@@ -55,8 +55,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^25.9.2
-        version: 25.9.2
+        specifier: ^26.1.1
+        version: 26.1.1
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
@@ -168,8 +168,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^25.9.2
-        version: 25.9.2
+        specifier: ^26.1.1
+        version: 26.1.1
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
@@ -184,7 +184,7 @@ importers:
         version: 4.23.1
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.2)(jsdom@24.1.3)(vite@7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(jsdom@24.1.3)(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))
 
   packages/eval:
     dependencies:
@@ -196,11 +196,11 @@ importers:
         version: 4.4.3
     devDependencies:
       '@types/node':
-        specifier: ^25.9.2
-        version: 25.9.2
+        specifier: ^26.1.1
+        version: 26.1.1
       vitest:
         specifier: ^4.1.10
-        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.2)(jsdom@24.1.3)(vite@7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(jsdom@24.1.3)(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))
 
 packages:
 
@@ -2650,9 +2650,6 @@ packages:
 
   '@types/node-forge@1.3.14':
     resolution: {integrity: sha512-mhVF2BnD4BO+jtOp7z1CdzaK4mbuK0LLQYAvdOLqHTavxFNq4zA1EmYkpnFjP8HOUzedfQkRnp0E2ulSAYSzAw==}
-
-  '@types/node@25.9.2':
-    resolution: {integrity: sha512-G05zqtJhcDLb8uslf5EjCxXg9G1KQxiV8OS0R26IC//Eoyitzqe8z37I7cqvnZlrlSfgocQRfSn/AHBZJJFyGw==}
 
   '@types/node@26.1.1':
     resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==}
@@ -6304,9 +6301,6 @@ packages:
   unbzip2-stream@1.4.3:
     resolution: {integrity: sha512-mlExGW4w71ebDJviH16lQLtZS32VKqsSfk80GCfUlwT/4/hNRFsoscrF/c++9xinkMzECL1uL9DDwXqFWkruPg==}
 
-  undici-types@7.24.6:
-    resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
-
   undici-types@8.3.0:
     resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
@@ -8111,7 +8105,7 @@ snapshots:
     dependencies:
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       '@types/yargs': 15.0.20
       chalk: 4.1.2
 
@@ -8120,7 +8114,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -8782,16 +8776,16 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/bonjour@3.5.13':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/chai@5.2.3':
     dependencies:
@@ -8801,11 +8795,11 @@ snapshots:
   '@types/connect-history-api-fallback@1.5.4':
     dependencies:
       '@types/express-serve-static-core': 5.1.2
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/debug@4.1.13':
     dependencies:
@@ -8827,14 +8821,14 @@ snapshots:
 
   '@types/express-serve-static-core@4.19.9':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
 
   '@types/express-serve-static-core@5.1.2':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -8848,12 +8842,12 @@ snapshots:
 
   '@types/fs-extra@8.1.5':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/glob@7.2.0':
     dependencies:
       '@types/minimatch': 6.0.0
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/html-minifier-terser@6.1.0': {}
 
@@ -8861,7 +8855,7 @@ snapshots:
 
   '@types/http-proxy@1.17.17':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/istanbul-lib-coverage@2.0.6': {}
 
@@ -8877,7 +8871,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/lodash.debounce@4.0.9':
     dependencies:
@@ -8895,20 +8889,15 @@ snapshots:
 
   '@types/node-forge@1.3.14':
     dependencies:
-      '@types/node': 25.9.2
-
-  '@types/node@25.9.2':
-    dependencies:
-      undici-types: 7.24.6
+      '@types/node': 26.1.1
 
   '@types/node@26.1.1':
     dependencies:
       undici-types: 8.3.0
-    optional: true
 
   '@types/postcss-url@10.0.4':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       postcss: 8.5.15
 
   '@types/qs@6.15.1': {}
@@ -8921,7 +8910,7 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/retry@0.12.0': {}
 
@@ -8932,11 +8921,11 @@ snapshots:
   '@types/send@0.17.6':
     dependencies:
       '@types/mime': 1.3.5
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/serve-index@1.9.4':
     dependencies:
@@ -8945,18 +8934,18 @@ snapshots:
   '@types/serve-static@1.15.10':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       '@types/send': 0.17.6
 
   '@types/sockjs@0.3.36':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/webpack-env@1.18.8': {}
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -8978,14 +8967,6 @@ snapshots:
       '@vitest/utils': 4.1.10
       chai: 6.2.2
       tinyrainbow: 3.1.0
-
-  '@vitest/mocker@4.1.10(vite@7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))':
-    dependencies:
-      '@vitest/spy': 4.1.10
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1)
 
   '@vitest/mocker@4.1.10(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))':
     dependencies:
@@ -11047,7 +11028,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -11055,13 +11036,13 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
   jest-worker@29.7.0:
     dependencies:
-      '@types/node': 25.9.2
+      '@types/node': 26.1.1
       jest-util: 29.7.0
       merge-stream: 2.0.0
       supports-color: 8.1.1
@@ -12790,10 +12771,7 @@ snapshots:
       buffer: 5.7.1
       through: 2.3.8
 
-  undici-types@7.24.6: {}
-
-  undici-types@8.3.0:
-    optional: true
+  undici-types@8.3.0: {}
 
   undici@7.28.0: {}
 
@@ -12869,24 +12847,6 @@ snapshots:
 
   vary@1.1.2: {}
 
-  vite@7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1):
-    dependencies:
-      esbuild: 0.27.7
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
-      postcss: 8.5.20
-      rollup: 4.62.2
-      tinyglobby: 0.2.17
-    optionalDependencies:
-      '@types/node': 25.9.2
-      fsevents: 2.3.3
-      jiti: 2.7.0
-      lightningcss: 1.32.0
-      sass: 1.101.0
-      stylus: 0.64.0
-      terser: 5.49.0
-      tsx: 4.23.1
-
   vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1):
     dependencies:
       esbuild: 0.27.7
@@ -12904,35 +12864,6 @@ snapshots:
       stylus: 0.64.0
       terser: 5.49.0
       tsx: 4.23.1
-
-  vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.9.2)(jsdom@24.1.3)(vite@7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1)):
-    dependencies:
-      '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))
-      '@vitest/pretty-format': 4.1.10
-      '@vitest/runner': 4.1.10
-      '@vitest/snapshot': 4.1.10
-      '@vitest/spy': 4.1.10
-      '@vitest/utils': 4.1.10
-      es-module-lexer: 2.3.0
-      expect-type: 1.4.0
-      magic-string: 0.30.21
-      obug: 2.1.3
-      pathe: 2.0.3
-      picomatch: 4.0.5
-      std-env: 4.1.0
-      tinybench: 2.9.0
-      tinyexec: 1.2.4
-      tinyglobby: 0.2.17
-      tinyrainbow: 3.1.0
-      vite: 7.3.5(@types/node@25.9.2)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.1
-      '@types/node': 25.9.2
-      jsdom: 24.1.3
-    transitivePeerDependencies:
-      - msw
 
   vitest@4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.1.1)(jsdom@24.1.3)(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1)):
     dependencies:
