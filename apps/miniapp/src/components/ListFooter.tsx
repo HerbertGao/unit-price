@@ -41,8 +41,10 @@ export default function ListFooter({
         </View>
       ) : null}
       {reachedEnd && !pageError ? (
-        <View className="lfoot">
-          <Text className="lfoot__hint">已到底</Text>
+        <View className="lfoot lfoot--end">
+          {/* 撕纸/剪口收口:小票在真实末尾「验讫」撕下 */}
+          <View className="lfoot__cut"><Text className="lfoot__scissors">✂</Text></View>
+          <Text className="lfoot__hint">单已验讫 · 已到底</Text>
         </View>
       ) : null}
     </View>

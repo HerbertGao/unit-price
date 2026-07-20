@@ -7,8 +7,8 @@ export default defineAppConfig({
   lazyCodeLoading: 'requiredComponents',
   window: {
     backgroundTextStyle: 'light',
-    // P0 浅纸底(=--paper),品牌蓝只用于前景与选中态,导航栏不刷蓝。
-    navigationBarBackgroundColor: '#F1F3F6',
+    // 热敏纸底(=--paper),品牌蓝只用于前景与选中态,导航栏不刷蓝。
+    navigationBarBackgroundColor: '#F6F7F9',
     navigationBarTitleText: '会员商店值不值',
     navigationBarTextStyle: 'black',
   },
@@ -17,7 +17,7 @@ export default defineAppConfig({
   tabBar: {
     color: '#8B95A2',
     selectedColor: '#014B90',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FCFCFD',
     borderStyle: 'white',
     list: [
       {

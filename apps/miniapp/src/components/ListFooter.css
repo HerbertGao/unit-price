@@ -1,11 +1,10 @@
-/* List footer presentation. Mirrors the existing .footer / state__* / btn--small
-   styling, colors via var(--…) only. */
+/* List footer presentation — 验货小票语言。加载/翻页失败/末尾收口。颜色仅 var(--…)。 */
 
 .lfoot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32rpx 24rpx 48rpx;
+  padding: var(--sp-4) var(--sp-3) var(--sp-5);
 }
 
 .lfoot__hint {
@@ -15,7 +14,7 @@
 }
 
 .lfoot__btn {
-  margin-top: 16rpx;
+  margin-top: var(--sp-2);
   padding: 12rpx 36rpx;
   background: var(--blue);
   border-radius: var(--r-pill);
@@ -24,4 +23,24 @@
 .lfoot__btn-text {
   font-size: var(--fs-md);
   color: var(--paper-card);
+}
+
+/* 末尾剪口收口:一条 dashed 剪裁线 + 剪刀,再落「单已验讫」 */
+.lfoot--end {
+  padding-top: var(--sp-2);
+}
+.lfoot__cut {
+  position: relative;
+  width: 100%;
+  border-top: 2rpx dashed var(--line-dash);
+  margin-bottom: var(--sp-3);
+}
+.lfoot__scissors {
+  position: absolute;
+  left: var(--sp-4);
+  top: -18rpx;
+  padding: 0 8rpx;
+  background: var(--paper);
+  font-size: var(--fs-sm);
+  color: var(--muted);
 }

@@ -38,7 +38,7 @@
   display: flex;
   align-items: center;
   min-height: 96rpx;
-  border-bottom: 3rpx solid var(--line);
+  border-bottom: 2rpx dashed var(--line-dash);
 }
 .cfield:last-child {
   border-bottom: none;
@@ -333,7 +333,7 @@
 /* 计算留痕 */
 .cres__formula {
   padding: var(--sp-3) var(--sp-4);
-  border-top: 3rpx solid var(--line);
+  border-top: 2rpx dashed var(--line-dash);
 }
 .cres__formula-h {
   font-size: var(--fs-sm);
@@ -352,7 +352,7 @@
 /* 邻居 */
 .cres__near {
   padding: var(--sp-3) var(--sp-3) var(--sp-4);
-  border-top: 3rpx solid var(--line);
+  border-top: 2rpx dashed var(--line-dash);
   background: var(--paper);
 }
 .cres__near-h {

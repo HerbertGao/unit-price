@@ -53,14 +53,14 @@
 
 .ccta__title {
   font-size: var(--fs-xl);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   color: var(--ink);
   margin-bottom: var(--sp-2);
 }
 .ccta__hint {
-  font-size: var(--fs-md);
-  color: var(--muted);
-  line-height: 1.6;
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+  line-height: 1.7;
   margin-bottom: var(--sp-5);
 }
 .ccta__btn {

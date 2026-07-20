@@ -1,4 +1,7 @@
-/* 分类占位页 — P0 设计语言。仅引用 app.css token,禁任何 hex/rgb。 */
+/* 分类品类树 — 验货小票语言:品类索引账本(见 apps/miniapp/DESIGN.md)。
+   扁平 dashed 行、无卡片;可点叶 = 索引行,分组头 = 小票分区标题。颜色仅 var(--…)。 */
+
+/* — 加载/失败/空 占位(居中态,mono hint)— */
 .placeholder {
   min-height: 100vh;
   background: var(--paper);
@@ -6,51 +9,49 @@
   align-items: center;
   justify-content: center;
   padding: var(--sp-5) var(--sp-4);
+  box-sizing: border-box;
 }
-
 .placeholder__card {
   width: 100%;
   box-sizing: border-box;
   background: var(--paper-card);
+  border: 3rpx dashed var(--line-dash);
   border-radius: var(--r-card);
-  box-shadow: var(--shadow);
   padding: var(--sp-6) var(--sp-4);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-3);
 }
-
 .placeholder__title {
   font-size: var(--fs-xl);
   font-weight: var(--fw-black);
   color: var(--ink);
   letter-spacing: -0.01em;
 }
-
 .placeholder__hint {
   font-family: var(--f-mono);
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   font-weight: var(--fw-medium);
   color: var(--blue);
   background: var(--blue-bg);
   padding: var(--sp-1) var(--sp-3);
   border-radius: var(--r-pill);
 }
-
 .placeholder__sub {
+  font-family: var(--f-mono);
   font-size: var(--fs-sm);
   color: var(--muted);
   text-align: center;
   line-height: 1.6;
 }
 
-/* 品类树 — 缩进列表(深度 × 缩进由内联 paddingLeft 控制),仅引 token。 */
+/* — 品类树:缩进索引账本(深度 × 缩进由内联 paddingLeft 控制)— */
 .ctree {
   min-height: 100vh;
   background: var(--paper);
   box-sizing: border-box;
-  padding: var(--sp-2) 0 var(--sp-5);
+  padding: var(--sp-3) var(--sp-4) var(--sp-5);
 }
 
 .ctree__row {
@@ -59,25 +60,32 @@
   gap: var(--sp-2);
   padding-top: var(--sp-3);
   padding-bottom: var(--sp-3);
-  padding-right: var(--sp-4);
-  border-bottom: 2rpx solid var(--line);
+  padding-right: var(--sp-2);
+  border-bottom: 2rpx dashed var(--line-dash);
 }
 
-/* 可点叶(可比 cohort):纸卡底 + 名称用墨色。 */
-.ctree__row--clickable {
-  background: var(--paper-card);
+/* 可点叶(可比 cohort):名称墨色,可点。无卡片底(扁平账本)。 */
+.ctree__row--clickable:active {
+  opacity: 0.6;
 }
 
-/* 分组头(root 饮料 / 酒类 parent):不可点,弱化为分区标题。 */
+/* 分组头(root 饮料 / 酒类 parent):小票分区标题,mono 宽字距、弱墨,不可点。 */
+.ctree__row--group {
+  border-bottom-color: transparent;
+  padding-top: var(--sp-4);
+  padding-bottom: var(--sp-1);
+}
 .ctree__row--group .ctree__name {
+  font-family: var(--f-mono);
   color: var(--muted);
   font-weight: var(--fw-bold);
   font-size: var(--fs-sm);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.16em;
 }
 
 .ctree__name {
   flex: 1;
+  min-width: 0;
   font-size: var(--fs-md);
   font-weight: var(--fw-semibold);
   color: var(--ink);

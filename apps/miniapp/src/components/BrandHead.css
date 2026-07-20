@@ -1,23 +1,29 @@
-/* BrandHead — translated from P0 ".appbar"/".brand"/".lens". px→rpx ~1:2.
-   Colors via var(--…) only; the lens handle uses currentColor (inherits --ink). */
+/* BrandHead — 验货小票 merchant header(见 apps/miniapp/DESIGN.md §4)。
+   居中,底部 dashed 分隔。颜色仅 var(--…)。 */
 
 .brandhead {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 12rpx 40rpx 24rpx;
+  text-align: center;
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
 }
 
-.brandhead__brand {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+/* 文档类型眉批(小票「单据名」)— mono、宽字距、弱墨 */
+.brandhead__label {
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.42em;
+  /* 右侧多留一个字距量,视觉居中(letter-spacing 会在末字后多推一格) */
+  text-indent: 0.42em;
+  color: var(--muted);
 }
 
 .brandhead__wm {
-  font-size: 52rpx;
+  margin-top: var(--sp-2);
+  font-size: 48rpx;
   font-weight: var(--fw-black);
-  line-height: 0.95;
+  line-height: 1;
   letter-spacing: -0.01em;
 }
 
@@ -32,38 +38,7 @@
 .brandhead__tag {
   font-family: var(--f-mono);
   font-size: var(--fs-xs);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--muted);
-  margin-top: 8rpx;
-}
-
-/* 价格透视镜 — ringed ¥ with a small handle (P0 .lens) */
-.brandhead__lens {
-  position: relative;
-  flex-shrink: 0;
-  width: 76rpx;
-  height: 76rpx;
-  border-radius: 50%;
-  border: 4rpx solid var(--ink);
-  color: var(--ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brandhead__lens-yen {
-  font-size: 32rpx;
-  font-weight: var(--fw-black);
-  color: var(--blue);
-}
-
-.brandhead__lens-handle {
-  position: absolute;
-  right: -10rpx;
-  bottom: 4rpx;
-  width: 24rpx;
-  height: 6rpx;
-  border-radius: 4rpx;
-  background: currentColor;
-  transform: rotate(45deg);
+  margin-top: var(--sp-2);
 }

@@ -35,7 +35,10 @@ import './index.css';
 function Header() {
   return (
     <Fragment>
+      {/* 小票头:商户抬头 → 口径 scope(dashed 收口)→ 搜索框。scope 属于小票头的一部分,
+          故排在搜索之前。 */}
       <BrandHead />
+      <ScopeBar />
       {/* Real input: on confirm it navigates to the board list page reused for
           search (board?q=…). NO request fires here; the board page makes the
           read-only GET /rankings?q=… call. See SearchEntry. */}
@@ -50,7 +53,6 @@ function Header() {
           店里有、榜上没有的？<Text className="homecalc__lnk">输入规格算单价 ›</Text>
         </Text>
       </View>
-      <ScopeBar />
     </Fragment>
   );
 }

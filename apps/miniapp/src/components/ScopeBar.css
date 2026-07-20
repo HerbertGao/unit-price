@@ -1,16 +1,16 @@
-/* ScopeBar — translated from P0 ".tape" (receipt-tape banner). px→rpx ~1:2.
-   Colors via var(--…) only. */
+/* ScopeBar — 验货小票 scope 行(见 apps/miniapp/DESIGN.md §4)。榜单口径的静态说明,
+   居中 mono,底部 dashed 收口小票头。颜色仅 var(--…)。 */
 
 .scopebar {
-  margin: 0 40rpx 28rpx;
-  padding: 18rpx 28rpx;
-  background: var(--paper-sink);
-  border-left: 6rpx solid var(--blue);
-  border-radius: 20rpx;
+  margin: 0 var(--sp-4);
+  padding: 0 0 var(--sp-3);
+  text-align: center;
+  border-bottom: 2rpx dashed var(--line-dash);
 }
 
 .scopebar__text {
   font-family: var(--f-mono);
   font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
   color: var(--ink-soft);
 }

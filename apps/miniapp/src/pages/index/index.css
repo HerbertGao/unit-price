@@ -4,19 +4,21 @@
   box-sizing: border-box;
 }
 
+/* 账本区:行自带 dashed 分隔 + 横向 padding 对齐小票头 */
 .list {
-  padding: 16rpx 24rpx 0;
+  padding: var(--sp-1) var(--sp-4) 0;
 }
 
-/* 比价辅入口 — 搜索行下方、右对齐、视觉次于搜索(链接非大按钮)。
+/* 比价辅入口 — 搜索行下方、右对齐、mono 链接(视觉次于搜索)。
    主入口是搜索无结果态的 ComputeCta;此处覆盖「搜索前就知道没收录」的用户。 */
 .homecalc {
   display: flex;
   justify-content: flex-end;
-  margin: -12rpx 40rpx 24rpx;
+  margin: 0 var(--sp-4) var(--sp-3);
 }
 .homecalc__t {
-  font-size: var(--fs-sm);
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
   color: var(--muted);
 }
 .homecalc__lnk {

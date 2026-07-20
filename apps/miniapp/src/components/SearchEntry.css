@@ -1,17 +1,17 @@
-/* SearchEntry — real input bar (P4 ".search"). px→rpx ~1:2. The icon inherits
-   color: var(--muted) so its currentColor strokes match the placeholder text;
-   no color literals. */
+/* SearchEntry — 验货小票 search box(见 apps/miniapp/DESIGN.md §4)。
+   硬边框小票框感(非胶囊):1.5px solid --ink + 直角微圆。放大镜用 currentColor 描边。
+   px→rpx ~1:2。颜色仅 var(--…)。 */
 
 .searchentry {
   display: flex;
   align-items: center;
-  gap: 20rpx;
-  margin: 4rpx 40rpx 28rpx;
-  height: 88rpx;
-  padding: 0 36rpx;
+  gap: var(--sp-2);
+  margin: var(--sp-3) var(--sp-4) var(--sp-3);
+  height: 84rpx;
+  padding: 0 var(--sp-3);
   background: var(--paper-card);
-  border: 3rpx solid var(--line-strong);
-  border-radius: var(--r-pill);
+  border: 3rpx solid var(--ink);
+  border-radius: 10rpx;
   color: var(--muted);
 }
 
@@ -51,6 +51,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--fs-sm);
+  color: var(--ink);
 }
 
 /* placeholderClass target — muted, matching the magnifier glyph. */
