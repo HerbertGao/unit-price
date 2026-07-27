@@ -36,6 +36,14 @@ jobs:
       - name: Test
         run: pnpm -r test
 
+      # `pnpm -r build` skips apps/miniapp: it has no `build` script, only
+      # `build:weapp`. So the Taro/weapp bundling path — babel presets, the
+      # esbuild vendor step that keeps Zod's classes intact — had zero CI
+      # coverage, and a @babel/* major bump could go green here while breaking
+      # the bundle outright. Building it is the only thing that catches that.
+      - name: Build weapp bundle
+        run: pnpm --filter miniapp build:weapp
+
       # Schema and generated migrations must stay in sync: regenerating must
       # produce no diff. Catches a schema.ts change committed without its migration.
       - name: Drizzle migration drift
