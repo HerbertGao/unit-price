@@ -144,7 +144,11 @@ export const product = sqliteTable(
  * Calculator output (`CalcResult`, not just `UnitPrice`) for a product.
  * `per100ml`/`per100g`/`formula` come straight from core (never recomputed
  * from the stored integer-cents price); `formula` embeds yuan amounts and is
- * self-contained for replay. A product falls on exactly one axis: `per100ml`
+ * self-contained for replay. The row is NOT a first-observation snapshot: a
+ * `product` dedupe-key hit in `saveParsed` rewrites these three columns plus
+ * `confidence`/`warnings` from the CalcResult that orchestration just produced,
+ * so the stored values track the latest successful parse (still core's output —
+ * this layer never recomputes them from the cents price). A product falls on exactly one axis: `per100ml`
  * (volume) XOR `per100g` (weight) — at most one is non-null. "Definitely not
  * computable" is expressed as `per100ml = per100g = NULL` (never 0 or a
  * missing row).

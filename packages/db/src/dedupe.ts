@@ -8,6 +8,13 @@
 // parse confidence, not part of the result structure, so the same rawId+spec
 // with a different confidence is the same product (keep oldest), not a new row.
 //
+// "Keep oldest" scopes differently per table. The `product` row is frozen
+// column for column (its parse-time `confidence` included). For `unit_price` it
+// means only the ROW and its ID: a dedupe hit refreshes that row's derived
+// columns (per100ml/per100g/formula/confidence/warnings) from the orchestrated
+// CalcResult, because those track a price the key deliberately ignores —
+// freezing them would leave the board sorting on the first observed price.
+//
 // To avoid drift between the key and the stored column values, measurement and
 // JSON serialization MUST reuse the storage codecs directly rather than
 // re-implementing equivalent serialization.

@@ -1,18 +1,18 @@
-# Taxonomy Backfill 运维 Runbook
+# 派生数据回填与修正 运维 Runbook
 
 ## 目的
 
-首次部署后,对**生产存量商品**跑 Taxonomy 打标签 backfill:经打标签管线产出品类归属(叶 `product_tag` / `pending_category_tag_id`)、重算 `rankable`、补 `category_closure` 命中。该入口为可重复驱动的受控运维端点,**不重放 `/ingest`**。
+对**生产存量商品**跑派生数据的回填与修正:①打标签 backfill(经打标签管线产出品类归属、重算 `rankable`、补 `category_closure` 命中);②native-id 回填(给存量行补 `product_raw.native_category_id`);③单价偏差修正(重灌 + 逐行检测器,把冻结在旧价上的 `unit_price` 派生值追平)。三者的入口、机制与产物都不同,见下节。
 
-## 两类回填(勿混)
+## 三类回填与修正(勿混)
 
-本 runbook 涉及**两种不同**的"回填",二者**都不重放 `/ingest`**(遵 [[ingest-write-once-needs-backfill]]:`/ingest`/`upsertRaw` 是 first-write-wins、且会把 title/price 覆写为重放观测、触发后台解析),但机制与产物不同:
+1. **打标签 backfill(`runBackfill` / `POST /admin/backfill`)= 重读列再打标签**。它**不写 `product_raw`**:只**读**既有 `product_raw`(title + store + `native_category_id`)经打标签管线**重新计算**品类归属,写 `product_tag` / `pending_category_tag_id` / `rankable` / `category_closure`。幂等、可重复驱动(本文「驱动」节)。native-id 接通后,`native_category_id` 非空的行经此入口由 store-map 重分类。**不重放 `/ingest`**——理由是 `/ingest` / `upsertRaw` **会把 title/price/`captured_at` 覆写为重放观测并触发后台 tier2 解析**;**不是**「写不进去」:去重命中时 `unit_price` 的派生值现在会随重报刷新,旧的 first-write-wins 理由链已不成立。
 
-1. **打标签 backfill(`runBackfill` / `POST /admin/backfill`)= 重读列再打标签**。它**不写 `product_raw`**:只**读**既有 `product_raw`(title + store + `native_category_id`)经打标签管线**重新计算**品类归属,写 `product_tag` / `pending_category_tag_id` / `rankable` / `category_closure`。幂等、可重复驱动(本文「驱动」节)。native-id 接通后,`native_category_id` 非空的行经此入口由 store-map 重分类。
+2. **native-id 回填 = 单独的 native-id-only `UPDATE` 步骤**(不经 admin 端点)。存量 ~376 行当初仅采标题/价格、`native_category_id` 为 null;经山姆 HAR 提取器抽每条 `(store, storeSku, categoryIdList 叶 id)`,产出幂等 SQL,用 `wrangler d1 execute` 对既有行做 **`UPDATE product_raw SET native_category_id = COALESCE(...)`**——**只补 `native_category_id` 一列、不碰 title/price、不触发解析、不新增 admin 路由、不重放 `/ingest`**(理由同 ①;见下「native-id-only UPDATE 回填」节)。
 
-2. **native-id 回填 = 单独的 native-id-only `UPDATE` 步骤**(不经 admin 端点)。存量 ~376 行当初仅采标题/价格、`native_category_id` 为 null;经山姆 HAR 提取器抽每条 `(store, storeSku, categoryIdList 叶 id)`,产出幂等 SQL,用 `wrangler d1 execute` 对既有行做 **`UPDATE product_raw SET native_category_id = COALESCE(...)`**——**只补 `native_category_id` 一列、不碰 title/price、不触发解析、不新增 admin 路由**(见下「native-id-only UPDATE 回填」节)。
+3. **单价偏差修正 = 重灌 + 检测器**(见「单价偏差修正」节)。它**不是一个端点,是一个循环**:重抽 HAR 重灌 → 跑检测 SQL → 对**可修**的偏差行点名经同步 `/contribute` 重报 → 再检测,直到可修集为空。与 ① ② 相反,它**正是靠重报观测推进的**:`upsertRaw` 推进 `product_raw` 的 title/price/`captured_at`,同一次调用的 `saveParsed` 把 `unit_price` 的派生五列刷到本次解析结果。
 
-**先后顺序**:先做 ② native-id 回填(把 native 列灌进存量),再做 ① 打标签 backfill(让 store-map 在已落 native-id 的行上点火重分类)。
+**先后顺序**:先做 ② native-id 回填(把 native 列灌进存量),再做 ① 打标签 backfill(让 store-map 在已落 native-id 的行上点火重分类)。③ 的每一轮循环内同样是先重灌、再跑 ① 打标签 backfill(重灌中标题漂移产生的新 `product` 行默认 `rankable=0`,这一步把它们拉进榜)、最后跑检测。
 
 ## 前置
 
@@ -96,7 +96,7 @@ done
 
 ## native-id-only UPDATE 回填 + 重跑 backfill + 精度抽样
 
-存量行的 native-id 接通流程(上面「两类回填」的 ②→① 串联 + 验收),全程**不重放 `/ingest`**:
+存量行的 native-id 接通流程(上面「三类回填与修正」的 ②→① 串联 + 验收),全程**不重放 `/ingest`**:
 
 ### ① 先验 join-rate(必做,非默认成立)
 
@@ -125,6 +125,83 @@ native-id 已落后,按本文「驱动」节重跑 `POST /admin/backfill`(幂等
 ### ④ store-map 精度抽样(必做)
 
 仲裁反转后(native 叶 ≻ tier1 叶),一行错 map 会压过本来分对的 tier1 叶,blast radius 增大,故精度抽样是回填验收**必做项**、非可选。**离线判定**(`product_tag.source` 只存终态、反推不出 tier1 本会判什么):离线重放 `tagTier1Leaf(title)` + `lookupStoreCategory(store, nativeId)`,筛 `tier1.leaf != storeMap.leafSlug ∧ 两者皆非空`(= 被 store-map 改写的 tier1 叶)的样本 → **人工**核对其标题语义 / 山姆自身展示分类与 store-map 落叶是否一致。出现 tier1-对→store-map-错 = **blocker**:回滚该 `SAM_CATEGORY_MAP` 行后再宣告成功。(eval-harness 当前无 native 叶真值字段[corpus 只有 `samPkgNum`、无 `samCategoryLeafId`],本期门用人工抽样、不依赖尚不存在的自动评测。)
+
+## 单价偏差修正(重灌 + 检测器)
+
+去重命中时 `unit_price` 的派生五列(`per100ml` / `per100g` / `formula` / `confidence` / `warnings`)会被本次解析结果刷新,但**只对重报到的行生效**:在此之前落下的偏差行(`product_raw.price` 已前进、`unit_price` 仍按首报价算)要靠**重灌**追平。这不是一个端点,是一个**循环**。
+
+### 存量口径(2026-07-27 普查快照)
+
+| 项 | 实测 |
+|---|---|
+| `product` / `product_raw` / `rankable=1` | **1197 / 1297 / 507** |
+| 偏差行(`unit_price` 派生值 ≠ `product_raw.price`) | **69**,其中**在榜 44** |
+| 幽灵行(同一 `raw_id` 挂多条 `product`) | **4 组 8 条**(零偏差、零在榜) |
+| `price ≤ 0` 的 raw | **26** |
+| `formula IS NULL` 且 `price > 0` | **227** |
+
+这些是**某次普查的快照、不是常量**:每轮修正**前**先跑一次检测取当轮基线,否则末尾的「变化」无从归因。(上文「三类回填」② 里的「存量 ~376 行」记的是 native-id 回填当时的口径,不随此表更新。)
+
+### 窗口边界(必须先立)
+
+**「检测干净」只有在没有在飞异步写的窗口内才是持久结论。** `/ingest` 与 `/ingest/batch` 是 `202` + 后台解析,系统**没有 drain 信号**:检测跑出零偏差的那一刻,可能还有在飞的后台单元随后把更旧的观测刷进 `unit_price`,而它**没有后继写者**来收拾。
+
+**重灌本身走 `/ingest/batch`**,所以顺序是**先灌满、再关闸**,不能反过来:
+
+1. **重灌与打标签 backfill 在入口开放时完成**——它们就是那批异步写;
+2. 灌完后**暂停 `/ingest` 与 `/ingest/batch` 入口**,此后唯一写者是运维自己;
+3. **排空只有经验判据,没有证明**:关闸后连跑两轮 census ②b,**逐行输出相同**即视为在飞单元已落定。这是**经验证据**——它只说明观察间隔内没有新写落地,**不**排除更长的延迟单元。判据不成立就等更久再连跑两轮,或按下条降级;
+4. 点名重报**一律走同步 `/contribute`**(`upsertRaw → orchestrate → saveParsed` 全在请求内完成,写完即终态),**禁止**走 `/ingest`——那会重新引入在飞单元;
+5. 最终检测在窗口内跑完,**之后**才开放入口。
+
+第 3 步的经验判据不成立(或不愿等)时,完成判据**降级为「查询瞬间干净」**,并须明示本轮**不给**持久保证。
+
+### 检测
+
+唯一可跑形态是 `scripts/census-drift.sql`(只读、不写任何行):
+
+```sh
+wrangler d1 execute unit-price-prod --config apps/api/wrangler.toml --env production --remote --file scripts/census-drift.sql
+```
+
+census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `product_raw.price`」,并把结果分成 `drifted_fixable_by_reingest`(可修)与 `drifted_ghost`(幽灵行,重报只会写新键、修不到旧行)。**核对按分相等、禁用浮点容差**——`|首项 − price/100| ≤ 0.01` 会把真正过期一分钱的行判绿。census **②b** 用同一谓词输出**可修偏差行的 `(store, store_sku)` 明细**,那是下面循环第 3 步要和 HAR 求交的清单。该谓词共三份(census ②、②b、`design.md` D3 摘录),**三处必须同改**。
+
+**覆盖面必须记牢,否则判据会撒谎**:
+
+- 谓词只覆盖 **`formula` 非空**的行;`formula IS NULL` 的行求值为 NULL、被 `WHERE` 丢弃,它们**不在覆盖内**、**不等于**「干净」,由 census ④b 单独计数。
+- 检测器从 `unit_price` 起 join,故「有 product 无 `unit_price`」与「有 raw 无 product」(后台首插失败的中间态)**整类不可见**——这正是 census ④ 与「重灌 SKU − 落到 `product`」差集要作**并列门**的理由。
+- 谓词依赖 `formula` 的 canonical 形态,当前其唯一写者是 `saveParsed`(值恒来自 `calculate`);**若将来出现第二个写者,该谓词必须同步加严**。
+
+### 循环与完成判据
+
+1. **重抽 HAR 重灌**(经 `/ingest/batch`,入口仍开放)——命中行的派生值随该次解析落地而刷新。
+2. **跑打标签 backfill**(从**空 cursor** 起跑,见「驱动」节):ingest 三条路径都不打标签,重灌中标题漂移产生的新 `product` 行是 `rankable=0`、不入榜,而被弃的旧行仍带 tag 在榜——这一步把新行拉进榜。
+3. **关闸并确认排空**:暂停 `/ingest` 与 `/ingest/batch`,按上节第 3 步连跑两轮 census ②b 确认逐行相同。
+4. **跑 `scripts/census-drift.sql`**:取 census **②b** 输出的 `(store, store_sku)` 明细,与本轮 HAR 的 `(store, storeSku)` **求交**;交集外的行本轮无数据源可重报,直接登记残留。
+5. **对交集里的 SKU 经同步 `/contribute` 逐个重报**,回第 4 步。
+
+**完成判据 = 两个并列门,均须满足**:
+
+- `drifted_fixable_by_reingest = 0`;
+- census ④(`products_without_unit_price`)为 0,**且**「本轮重灌 SKU 集合 − 落到 `product` 的集合」差集为空。
+
+判据**不是「检测结果为空集」**:`drifted_ghost` 修不到(幽灵行的 `dedupe_key` 永不再命中,重报只会写新行),它**逐轮记数、作已披露残留登记,不进终止条件**。
+
+**census ④b(`formula IS NULL AND price > 0`)是人工复核清单、不是失败门**:它无法机械区分「过期的 NULL」(曾 ≤0 价落 NULL、重报正价后解析失败)与「合法不可计算」(正价但无轴 / 规格不一致),区分要按已存 spec 重算,系统不提供该能力。实测 **227 行**——**行数不构成任何一侧的证据**,要判断成分只能人工抽样看 spec;逐轮记数即可,不阻塞收尾。
+
+### 会跟着变的东西(收尾时须逐项归因)
+
+- **榜单行数会变**,两个成因:①实测 **26 条** `price ≤ 0` 的 raw 一被重报就因不可计算退出榜单(`per100ml` 写 NULL,而榜单数据门是 `per100ml IS NOT NULL`;其中至少 1 条在重报前还挂在榜上);②解析漂移产生的 `rankable=0` 新行,查 `SELECT COUNT(*) FROM product WHERE rankable = 0 AND raw_id IN (SELECT raw_id FROM product GROUP BY raw_id HAVING COUNT(*) > 1)`。
+- **榜单顺序会变**:排序键就是 `per100ml`,把偏差改对即改序。
+- **幽灵行普查必须在重灌之后重跑**:重灌会改变该集合(标题漂移会新增幽灵组),基线清单不能复用;census ③ 的明细清单在任何重算跑过之后无法重建,取到就存档。
+
+**已披露残留**(当前口径):幽灵行 **4 组 8 条**,全为重量轴 / 零价商品、`per100ml` 均为 NULL、均不在榜;逐行明细以当轮 census ③ 输出为准。
+
+### 这是运维侧核对,不是系统自动校验
+
+`formula` 内嵌的元价与 `price` 列的整数分是**两套金额**,系统**各自独立留痕、不做跨表交叉校验**(见 `openspec/specs/persistence/spec.md` 的 `unit_price` 需求)——那条约束约束的是**系统**:写路径不读回、不比对、不因两者不一致而拒写。本节的检测是**人跑的只读普查**,与该约束不冲突,也**不**是可以指望系统自己发现偏差的理由。
+
+**收尾**:先按下节刷新 CDN + 预热,**再**开放 ingest 入口。
 
 ## 数据更新后:刷新 CDN(长 TTL 的配套,必做)
 

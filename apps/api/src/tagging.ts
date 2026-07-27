@@ -182,19 +182,18 @@ export interface BackfillResult {
 }
 
 /**
- * admin backfill 单块 limit 的服务端上界,从 Cloudflare Worker FREE-plan 子请求
- * 上限(50/请求;见 routes.ts MAX_BATCH=40 注释纪律)派生。每商品 tagProduct 约
- * 5–9 次 D1 子请求:resolveComparableUnit 沿 is-a 树逐级上行找最近非空
- * comparable_unit(每级一读) + reconcileCategory 的 product 存在性读 +
- * loadCategoryLeafTagIds + 每 leaf/pending/属性 slug 的 loadTagBySlug + 末尾 batch。
- * **native-id 接通后(本期)**:多数行 native_category_id 非空,tagProduct 每条会
- * 多一次 lookupStoreCategory D1 子请求(上面 5–9 的估算是按 LAZY/无 lookup 路径
- * 写的,接通后每商品须 +1)。原 "limit × 9 ≤ 50 ⇒ limit ≤ 5" 的预算未把这一次
- * lookup 计入——故 5 现在更应视作待实测复核值,而非已留好 lookup 余量的定数。
- * 预算:1(列表读) + limit ×(≈9 旧估 + 1 lookup)≤ 50 ⇒ limit 须按「每商品 +1
- * lookup」重核。**临时值、待实测定稿**;实测每商品最坏超预算则下调;升高须先确认
- * 生产 Worker 为 PAID(1000 子请求),对齐 MAX_BATCH 纪律。不得在实测前把 5 当
- * load-bearing。
+ * admin backfill 单块 limit 的服务端上界。**是保守临时值,不是从一条成立的预算
+ * 不等式推出来的**:D1 绑定调用计入 Cloudflare 的 **subrequests to internal
+ * services**(Free 档 1000/请求),而 routes.ts 的 MAX_BATCH=40 所限的是**外部
+ * fetch**(Free 档 50/请求)——两个不同的桶。把每商品的 D1 次数记进 50 那个桶、
+ * 得出「1(列表读) + limit × ≈9 ≤ 50 ⇒ limit ≤ 5」的算法**前提不成立**。
+ * 每商品 tagProduct 的 D1 次数本身仍约 6–10:resolveComparableUnit 沿 is-a 树
+ * 逐级上行找最近非空 comparable_unit(每级一读) + reconcileCategory 的 product
+ * 存在性读 + loadCategoryLeafTagIds + 每 leaf/pending/属性 slug 的 loadTagBySlug
+ * + 末尾 batch,且 native_category_id 非空的行再 +1 次 lookupStoreCategory
+ * (多数行如此)——它们花的是 internal 那 1000 的预算。
+ * 是否上调 5 须单独定夺(先实测每商品实际调用数、并确认生产 Worker 档位),在此
+ * 之前不得把 5 当 load-bearing。
  */
 export const ADMIN_BACKFILL_DEFAULT_LIMIT = 5;
 export const ADMIN_BACKFILL_MAX_LIMIT = 5;
@@ -249,9 +248,11 @@ export async function listProductsForBackfill(
 }
 
 /**
- * Backfill the existing stock (~376 products in production): run the tagging
- * pipeline over EVERY landed product. Does NOT replay /ingest (first-write-wins
- * — see [[ingest-write-once-needs-backfill]]); it composes the repo's category-
+ * Backfill the existing stock (1197 products in production): run the tagging
+ * pipeline over EVERY landed product. Does NOT replay /ingest — a replay
+ * overwrites title/price/captured_at with the replayed observation and kicks off
+ * a background tier2 parse (LLM + subrequest budget, and a spec that drifts from
+ * the original lands an extra product row). This composes the repo's category-
  * attribution atoms only. store-map fires off product_raw.native_category_id (read
  * by listProductsForBackfill): native-bearing rows can classify via the store-map
  * leaf (filling tier1 misses + correcting cross-cohort tier1 mistakes), while rows
