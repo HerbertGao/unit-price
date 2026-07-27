@@ -27,6 +27,18 @@ SELECT
   (SELECT COUNT(*) FROM drift WHERE rid IN (SELECT raw_id FROM dup))           AS drifted_ghost,
   (SELECT COUNT(*) FROM drift WHERE rid NOT IN (SELECT raw_id FROM dup))       AS drifted_fixable_by_reingest;
 
+-- ②b 可修偏差行明细:运维循环要拿来与本轮 HAR 求交、逐个重报的就是这份 (store, store_sku)。
+--     谓词与 ② 逐字相同,只是把聚合换成明细——两处必须同改。
+WITH dup AS (SELECT raw_id FROM product GROUP BY raw_id HAVING COUNT(*) > 1)
+SELECT r.store, r.store_sku, p.id AS product_id, p.rankable, r.price, up.formula
+FROM unit_price up
+JOIN product     p ON p.id = up.product_id
+JOIN product_raw r ON r.id = p.raw_id
+WHERE up.formula IS NOT NULL
+  AND CAST(ROUND(CAST(up.formula AS REAL) * 100) AS INTEGER) <> r.price
+  AND p.raw_id NOT IN (SELECT raw_id FROM dup)
+ORDER BY r.store, r.store_sku;
+
 -- ③ 幽灵行明细(若 ① 的 ghost_raws 非零才有意义;这份清单在任何重算跑过之后就无法重建)
 SELECT p.raw_id, p.id AS product_id, p.rankable, up.per100ml, up.formula, r.price, r.title
 FROM product p

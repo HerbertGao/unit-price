@@ -20,4 +20,4 @@
 
 - [x] 3.1 `pnpm -r build` + `pnpm -r test` 全绿(1.5 的必红断言已改);typecheck 无新增告警。**注**:本仓 `lint` 是 placeholder、无 eslint,D4 的两条执行禁令(事务回调零 `await`、builder 必须执行)**没有 runnable check**,靠 review 守
 - [x] 3.2 **归档试跑**:把 `openspec/` 复制到临时目录跑 `openspec-cn archive update-unit-price-on-reingest -y --no-validate --json`,确认通过。`validate --strict` 抓不到「MODIFIED 块改了场景标题」与「已存在需求放在 `## 新增需求`」这两类,只有 archive 抓得到
-- [ ] 3.3 prod 按 design 的 Migration Plan **九步**执行。要点:全程在**暂停异步 ingest 入口**的窗口内(否则「检测干净」只是查询瞬间快照);部署前取基线;重灌后驱动打标签 backfill(从空 cursor);检测集与本轮 HAR SKU 求交;点名重报**一律走同步 `/contribute`**(**禁止** `/ingest`);终止条件 = `drifted_fixable_by_reingest = 0` **且** census ④ 与「重灌 SKU − 落到 product」差集为空;末步刷 CDN 后才开放入口。记录偏差归零前后对比、榜单行数变化及其两个成因、重灌**之后**重跑的幽灵行普查
+- [ ] 3.3 prod 按 design 的 Migration Plan **九步**执行。要点:**重灌与打标签 backfill 在入口开放时做**(重灌本身走 `/ingest/batch`),灌完**再关闸**并连跑两轮 census ②b 确认逐行相同(经验排空判据,不成立则完成判据降级为快照);部署前取基线;打标签 backfill 从空 cursor 起跑;census ②b 的 `(store, store_sku)` 明细与本轮 HAR SKU 求交;点名重报**一律走同步 `/contribute`**(**禁止** `/ingest`);终止条件 = `drifted_fixable_by_reingest = 0` **且** census ④ 与「重灌 SKU − 落到 product」差集为空;末步刷 CDN 后才开放入口。记录偏差归零前后对比、榜单行数变化及其两个成因、重灌**之后**重跑的幽灵行普查

@@ -18,7 +18,7 @@
 - 覆盖 sqlite 与 D1 **两条驱动路径的全部命中分支**(sqlite 事务内 `changes=0`、D1 SELECT-first 命中、D1 并发抢插失败后回退命中),三处共用同一**语句构造**函数(执行形态按驱动分叉),**禁止**只补一处造成驱动间行为漂移。
 - **刷新是无条件写**,不加任何条件谓词(理由见 `design.md` D2)。写入值就是 `orchestrate` 已产出的 `calc`,与首插分支逐字同源——因此**没有** warnings 集合运算、没有影响行数判定、没有新的计算路径。
 - **存量修正靠重灌,不靠新端点**:实测 69 条偏差行**全部不属幽灵类**(`drifted_ghost = 0`),关闸后预期由重灌覆盖;而 4 组幽灵行(同一 raw 挂多条 product)**一条都不偏差、且全不在 per100ml 榜上**。故本变更**不新增** admin 重算端点(理由与实测数见 `design.md` D3 与非目标)。
-- **运维侧给一条逐行检测 SQL**(`yuanToCents(parseFloat(formula 首项)) === price`)写进 runbook:它是关于**存储状态**的判定器,命中即偏差、不命中即干净,与后台是否还在跑无关。循环 = 跑检测 → 对其中**可修**的那部分(排除幽灵 raw、且仍在本轮 HAR 里的)**经同步 `/contribute`** 重报 → 再跑,直到可修集为空;幽灵行作已披露残留登记。**「检测干净」只在迁移窗口(暂停异步 ingest)内才是持久结论**——完成判据、覆盖面与该边界见 `design.md` D3。
+- **运维侧给一条逐行检测 SQL**(`yuanToCents(parseFloat(formula 首项)) === price`)写进 runbook:它是关于**存储状态**的判定器,命中即偏差;**不命中只在检测器覆盖集合内代表干净**(`formula IS NULL`、有 product 无 `unit_price`、有 raw 无 product 三类整类不可见,覆盖面见 `design.md` D3),与后台是否还在跑无关。循环 = 跑检测 → 对其中**可修**的那部分(排除幽灵 raw、且仍在本轮 HAR 里的)**经同步 `/contribute`** 重报 → 再跑,直到可修集为空;幽灵行作已披露残留登记。**「检测干净」只在关闸(暂停异步 ingest)之后才是持久结论,而关闸在重灌之后**——完成判据、覆盖面与该边界见 `design.md` D3。
 
 ## 功能 (Capabilities)
 
@@ -51,4 +51,5 @@
 - **文档**:`docs/backfill-runbook.md`(加检测器与循环、修正「不重放 ingest」的理由链)、`docs/miniapp-product-form.md:56-61`、`apps/api/src/tagging.ts:253` 注释。
 - **API**:公共端点的**请求与响应形状均不变**(`/rankings` 的 `per100ml` 值会变正确、排序随之变动)。**新增一个失败面**:去重命中过去是纯读、现在含一条写——`/contribute` 因此可能返回 `500`(附 `rawId`),`/ingest` 后台只记日志。
 - **数据/合规**:只在既有 ingest 写路径上多写一条 UPDATE,不抓取、不新增出站、不触 LLM。
-- **运维**:部署 → 取基线 → **暂停异步 ingest 入口** → 重抽 HAR 重灌 → 等后台单元结束 → 驱动打标签 backfill → 检测 → 经 `/contribute` 重报 → 循环至可修集为空 → 刷 CDN → 开放入口。详见 `design.md` Migration Plan。
+- **schema**:**零迁移**——五列与 `dedupe_key` 唯一索引均已在库。`persistence` 需求里那段 `dedupe_key` 迁移文字是**既有已部署前提的全文重述**(OpenSpec MODIFIED 要求带需求全文),不是本次的施工项。
+- **运维**:部署 → 取基线 → 重抽 HAR 重灌 → 驱动打标签 backfill → **暂停异步 ingest 入口** → 连跑两轮行级检测确认排空 → 检测 → 经 `/contribute` 重报 → 循环至可修集为空 → 刷 CDN → 开放入口。详见 `design.md` Migration Plan。
