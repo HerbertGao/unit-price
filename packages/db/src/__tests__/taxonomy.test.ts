@@ -467,7 +467,7 @@ describe('dedupe_key unchanged by the two new product columns', () => {
     expect(computeDedupeKey('raw-x', spec)).toBe(computeDedupeKey('raw-x', spec));
   });
 
-  it('re-saving an equivalent product still converges (first-write-wins)', async () => {
+  it('re-saving an equivalent product still converges (same row, same id)', async () => {
     const t = await openSeededTestDb();
     const rawId = await t.repo.upsertRaw({
       store: 'sam',

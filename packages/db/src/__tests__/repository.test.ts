@@ -10,7 +10,15 @@ import { ZodError } from 'zod';
 import { centsToYuan, yuanToCents } from '../codec.js';
 import { createDb, type DbConnection } from '../db.js';
 import { createRepository } from '../repository.js';
-import { countRows, openTestDb, type TestDb } from './harness.js';
+import {
+  countRows,
+  expectedUnitPriceRow,
+  failUnitPriceUpdates,
+  installUnitPriceUpdateCounter,
+  openTestDb,
+  readUnitPriceRow,
+  type TestDb,
+} from './harness.js';
 
 /** Full consistent spec: 1L × 6 bottles, explicit 6L total. */
 const fullSpec: ParsedSpec = ParsedSpecSchema.parse({
@@ -724,8 +732,9 @@ describe('saveParsed dedupe (sqlite path)', () => {
       spec: fullSpec,
       calc: fullCalc,
     });
-    // Idempotent: the second call returns the existing (oldest) pair, inserts
-    // nothing — one product, one unit_price (no orphan).
+    // Id-idempotent: the second call returns the existing (oldest) pair and
+    // inserts no row (it refreshes the existing unit_price in place instead) —
+    // one product, one unit_price (no orphan).
     expect(second).toEqual(first);
     expect(countRows(t.handle, 'product')).toBe(1);
     expect(countRows(t.handle, 'unit_price')).toBe(1);
@@ -763,11 +772,13 @@ describe('saveParsed dedupe (sqlite path)', () => {
     expect(second).toEqual(first);
     expect(countRows(t.handle, 'product')).toBe(1);
     expect(countRows(t.handle, 'unit_price')).toBe(1);
-    // The stored unit_price is the FIRST one (oldest wins), not the resubmit.
+    // "Oldest wins" covers the unit_price ROW and its ID only — not the derived
+    // values: the dedupe hit refreshed them from THIS call's calc, so the stored
+    // per100ml is the resubmit's, not the first one's.
     const row = t.handle
       .prepare('SELECT per100ml FROM unit_price WHERE product_id = ?')
       .get(first.productId) as { per100ml: number };
-    expect(row.per100ml).toBe(fullCalc.unitPrice.per100ml);
+    expect(row.per100ml).toBe(cheaper.unitPrice.per100ml);
   });
 
   it('confidence change (same spec) → still one product, returns oldest pair', async () => {
@@ -784,13 +795,130 @@ describe('saveParsed dedupe (sqlite path)', () => {
       calc: calculate(specHigh, 39.9),
     });
     // Parse confidence is excluded from the dedupe key → same product, oldest
-    // row kept (its stored confidence is the first one's).
+    // row kept, and `product.confidence` stays the FIRST call's (the dedupe-hit
+    // refresh touches unit_price only, never a product column). It says nothing
+    // about `unit_price.confidence`: `calculate` ignores ParsedSpec.confidence,
+    // so both calls produce identical calcs here. That fork (product frozen /
+    // unit_price refreshed) is pinned by the differing-price refresh tests.
     expect(second).toEqual(first);
     expect(countRows(t.handle, 'product')).toBe(1);
     const row = t.handle
       .prepare('SELECT confidence FROM product WHERE id = ?')
       .get(first.productId) as { confidence: number };
     expect(row.confidence).toBe(0.3);
+  });
+
+  it('dedupe hit at a new price refreshes all five derived columns in place', async () => {
+    const first = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    const productBefore = t.handle.prepare('SELECT * FROM product').all();
+    const rawBefore = t.handle.prepare('SELECT * FROM product_raw').all();
+
+    // Same spec → same dedupe key; a lower price moves per100ml and formula.
+    const cheaper = calculate(fullSpec, 19.9);
+    expect(cheaper.unitPrice.per100ml).not.toBe(fullCalc.unitPrice.per100ml);
+    expect(cheaper.unitPrice.formula).not.toBe(fullCalc.unitPrice.formula);
+
+    const second = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: cheaper,
+    });
+
+    // Id-idempotent: the oldest pair comes back, still one row on each side.
+    expect(second).toEqual(first);
+    expect(countRows(t.handle, 'product')).toBe(1);
+    expect(countRows(t.handle, 'unit_price')).toBe(1);
+    // Same row id, but every derived column now holds the SECOND call's calc.
+    expect(readUnitPriceRow(t.handle, first.productId)).toEqual(
+      expectedUnitPriceRow(first.unitPriceId, cheaper),
+    );
+    // The refresh is scoped to unit_price: product (parse-time confidence
+    // included) and product_raw stay frozen column for column.
+    expect(t.handle.prepare('SELECT * FROM product').all()).toEqual(
+      productBefore,
+    );
+    expect(t.handle.prepare('SELECT * FROM product_raw').all()).toEqual(
+      rawBefore,
+    );
+  });
+
+  it('a same-price resubmit still performs the refresh write (equal values prove nothing)', async () => {
+    const first = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    const before = readUnitPriceRow(t.handle, first.productId);
+    // The value assertions below would stay green under a "skip when the price
+    // did not change" implementation — the trigger counts the actual UPDATE.
+    const refreshes = installUnitPriceUpdateCounter(t.handle);
+    expect(refreshes()).toBe(0);
+
+    const second = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+
+    expect(refreshes()).toBe(1);
+    expect(second).toEqual(first);
+    expect(countRows(t.handle, 'unit_price')).toBe(1);
+    expect(readUnitPriceRow(t.handle, first.productId)).toEqual(before);
+  });
+
+  it('a dedupe hit whose new calc is uncomputable writes the axis columns back to NULL', async () => {
+    const first = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    // A ≤0 report routes core to the uncomputable terminal state: all three
+    // axis columns null, low band, its own warning. The stale unit price must
+    // NOT survive (the row leaves the per100ml board — the expected outcome).
+    const broken = calculate(fullSpec, 0);
+    expect(broken.unitPrice.formula).toBeNull();
+
+    const second = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: broken,
+    });
+
+    expect(second).toEqual(first);
+    expect(countRows(t.handle, 'unit_price')).toBe(1);
+    expect(readUnitPriceRow(t.handle, first.productId)).toEqual(
+      expectedUnitPriceRow(first.unitPriceId, broken),
+    );
+  });
+
+  it('a failing refresh rejects, rolls the transaction back and leaves the row untouched', async () => {
+    const first = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    const before = readUnitPriceRow(t.handle, first.productId);
+    failUnitPriceUpdates(t.handle);
+
+    await expect(
+      t.repo.saveParsed({
+        rawId,
+        spec: fullSpec,
+        calc: calculate(fullSpec, 19.9),
+      }),
+    ).rejects.toThrow(/injected refresh failure/);
+
+    // The refresh is the hit branch's ONLY write, so "the transaction rolled
+    // back" reads as: the connection is not left inside one, and the existing
+    // row (id + all five columns) is byte-identical to before.
+    expect(t.handle.inTransaction).toBe(false);
+    expect(readUnitPriceRow(t.handle, first.productId)).toEqual(before);
+    expect(countRows(t.handle, 'product')).toBe(1);
+    expect(countRows(t.handle, 'unit_price')).toBe(1);
   });
 
   it('unique index is the source of truth: a second product with the same dedupe_key is rejected at the DB', () => {

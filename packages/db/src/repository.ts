@@ -6,7 +6,10 @@
 //
 // No domain computation happens here: per100ml/per100g/formula are stored
 // verbatim from core's CalcResult (never recomputed from the integer-cents
-// price), and the only transformations are storage codecs (see codec.ts).
+// price), and the only transformations are storage codecs (see codec.ts). That
+// holds on the dedupe-hit path too: hitting an existing `product` refreshes its
+// `unit_price` row from the CalcResult the orchestration just produced — the
+// values still come straight from core, this layer only writes them.
 import {
   ComparableUnitSchema,
   ParsedSpecSchema,
@@ -328,7 +331,17 @@ export interface ProductAttribution {
 export interface Repository {
   /** Upsert a raw report by `(store, store_sku)`; returns the raw row id. */
   upsertRaw(input: UpsertRawInput): Promise<string>;
-  /** Atomically persist product + unit_price for a raw row (single tx). */
+  /**
+   * Atomically persist product + unit_price for a raw row (single tx). On a
+   * dedupe-key hit nothing is inserted: the existing `unit_price` row is
+   * refreshed in place from this call's `calc` (per100ml/per100g/formula/
+   * confidence/warnings) and the existing (oldest) `{productId, unitPriceId}` is
+   * returned — id-idempotent, and the `product` row is left untouched. That
+   * refresh means a dedupe hit is a WRITE and can fail; the error propagates
+   * (/contribute answers 500 with the rawId, the /ingest background path only
+   * logs), leaving raw at the new price with the derived row behind until the
+   * next report.
+   */
   saveParsed(input: SaveParsedInput): Promise<SaveParsedResult>;
   /** Typed read: ParsedSpec + CalcResult-shaped unit price + raw_id. */
   getProduct(productId: string): Promise<ProductRecord | null>;
@@ -664,6 +677,49 @@ async function loadExistingPair(
   return { productId: existingProductId, unitPriceId: existingUnitPriceId };
 }
 
+/**
+ * The two statement pieces for refreshing an existing `unit_price` row on a
+ * dedupe-key hit: the `set` payload (the five derived columns, taken verbatim
+ * from this call's gated `calc`, `warnings` through the storage codec) and the
+ * `where` predicate (`unit_price.id = <existing id>`). Pure — it builds no
+ * query and touches no driver.
+ *
+ * All three hit branches (sqlite in-transaction, D1 SELECT-first, D1
+ * post-conflict fallback) share THIS construction so the five columns can never
+ * drift between drivers. Only the construction is shared: EXECUTION stays
+ * per-driver on purpose. sqlite must run it synchronously inside the tx
+ * callback; D1's `.run()` returns a promise that MUST be awaited, and a shared
+ * executor would hand the D1 side a floating promise — on /contribute (which
+ * does not run saveParsed inside waitUntil) the request can be torn down first
+ * and the write is lost with no error.
+ *
+ * The refresh is UNCONDITIONAL — never gate it on a comparison with
+ * `product_raw.price`. Integer cents cannot identify one observation (two yuan
+ * prices less than a cent apart round to the same value, and A→B→A promo swings
+ * are routine), the first-insert path is outside any such predicate anyway, and
+ * "skip" assumes some newer writer will get it right — but a failed background
+ * parse is only logged, never retried, so that writer may not exist.
+ *
+ * Scope is exactly one row of one table: `product` and `product_raw` columns are
+ * never in the payload (a dedupe-hit `product` row stays frozen column for
+ * column, its parse-time `confidence` included).
+ */
+function buildUnitPriceRefresh(
+  existingUnitPriceId: string,
+  calc: z.infer<typeof CalcResultGate>,
+) {
+  return {
+    set: {
+      per100ml: calc.unitPrice.per100ml,
+      per100g: calc.unitPrice.per100g,
+      formula: calc.unitPrice.formula,
+      confidence: calc.confidence,
+      warnings: encodeJson(calc.warnings),
+    },
+    where: eq(unitPrice.id, existingUnitPriceId),
+  };
+}
+
 const CategoryTagSlugGate = z.string().min(1);
 
 /** Resolve a tag row (id/kind/parent/comparable_unit) by slug, or null. */
@@ -873,8 +929,10 @@ export function createRepository(db: Db | null | undefined): Repository {
             return { productId, unitPriceId };
           }
           // Hit an existing row (changes=0): do NOT insert unit_price (would
-          // orphan onto the un-inserted product). Return the existing (oldest)
-          // pair; an existing product with no unit_price is data corruption.
+          // orphan onto the un-inserted product). Refresh the existing row's
+          // derived columns with this call's calc, then return the existing
+          // (oldest) pair; an existing product with no unit_price is data
+          // corruption.
           const existingProductRows = tx
             .select({ id: product.id })
             .from(product)
@@ -899,6 +957,15 @@ export function createRepository(db: Db | null | undefined): Repository {
               `unit_price row missing for product ${existingProductId} (saveParsed writes both atomically)`,
             );
           }
+          // ONE statement, and NO `await` anywhere in this callback (before it
+          // or after it): better-sqlite3 transactions are native and
+          // synchronous, so a single `await` ahead of this UPDATE would let it
+          // execute AFTER COMMIT — outside the transaction, silently, with no
+          // error. The drizzle builder is lazy: `.run()` is what executes it,
+          // and dropping that call is a silent no-op. A failure here throws,
+          // rolling the transaction back and propagating to the caller.
+          const refresh = buildUnitPriceRefresh(existingUnitPriceId, calc);
+          tx.update(unitPrice).set(refresh.set).where(refresh.where).run();
           return {
             productId: existingProductId,
             unitPriceId: existingUnitPriceId,
@@ -911,6 +978,14 @@ export function createRepository(db: Db | null | undefined): Repository {
       const orm = queryOrm(db);
       const existing = await loadExistingPair(orm, dedupeKey);
       if (existing) {
+        // Dedupe hit: refresh the existing row's derived columns, then return
+        // the existing (oldest) pair. The `await` is load-bearing — /contribute
+        // calls saveParsed OUTSIDE waitUntil, so an unawaited builder would be
+        // torn down with the request and lose the write without an error. Kept
+        // OUTSIDE the try below so a refresh failure propagates as itself
+        // instead of being mistaken for a lost insert race.
+        const refresh = buildUnitPriceRefresh(existing.unitPriceId, calc);
+        await orm.update(unitPrice).set(refresh.set).where(refresh.where);
         return existing;
       }
       try {
@@ -935,6 +1010,12 @@ export function createRepository(db: Db | null | undefined): Repository {
             { cause: err },
           );
         }
+        // Same refresh as the SELECT-first hit (shared construction, awaited
+        // execution): the winner's row holds ITS calc, this call's is the later
+        // parse, so it lands. A failure here propagates — it is not swallowed
+        // into the race-fallback path.
+        const refresh = buildUnitPriceRefresh(winner.unitPriceId, calc);
+        await orm.update(unitPrice).set(refresh.set).where(refresh.where);
         return winner;
       }
     },

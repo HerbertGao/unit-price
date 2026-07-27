@@ -21,7 +21,13 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDb, type D1BindingLike } from '../db.js';
 import { createRepository, type Repository } from '../repository.js';
-import { migrationsFolder } from './harness.js';
+import {
+  expectedUnitPriceRow,
+  failUnitPriceUpdates,
+  installUnitPriceUpdateCounter,
+  migrationsFolder,
+  readUnitPriceRow,
+} from './harness.js';
 
 /** Full consistent spec: 1L × 6 bottles, explicit 6L total. */
 const fullSpec: ParsedSpec = ParsedSpecSchema.parse({
@@ -138,6 +144,21 @@ function createSqliteBackedD1(handle: Database.Database): {
   };
 }
 
+/**
+ * Reject reason including `cause`: drizzle's D1 driver rewraps a driver error as
+ * `DrizzleQueryError` ("Failed query: …") and keeps the original underneath, so
+ * matching the top-level message alone would miss the injected failure.
+ */
+async function rejectionText(promise: Promise<unknown>): Promise<string> {
+  const err = await promise.then(
+    () => {
+      throw new Error('expected the promise to reject');
+    },
+    (e: unknown) => e,
+  );
+  return `${String(err)} ${String((err as { cause?: unknown }).cause ?? '')}`;
+}
+
 interface Fixture {
   handle: Database.Database;
   repo: Repository;
@@ -185,7 +206,7 @@ describe('saveParsed dedupe (D1 path, stateful fake binding)', () => {
     f = openD1Fixture();
   });
 
-  it('SELECT-first hit: same rawId + spec twice → second does not enter batch, returns existing pair', async () => {
+  it('SELECT-first hit: same rawId + spec twice → second returns the existing pair plus one refresh UPDATE, never entering batch', async () => {
     const first = await f.repo.saveParsed({
       rawId: f.rawId,
       spec: fullSpec,
@@ -193,20 +214,90 @@ describe('saveParsed dedupe (D1 path, stateful fake binding)', () => {
     });
     expect(f.d1.batchCount).toBe(1); // first call inserted via batch
     f.d1.reset();
+    // Same calc twice, so the stored values cannot show whether the refresh ran
+    // — the trigger counts the UPDATE itself.
+    const refreshes = installUnitPriceUpdateCounter(f.handle);
 
     const second = await f.repo.saveParsed({
       rawId: f.rawId,
       spec: fullSpec,
       calc: fullCalc,
     });
-    // SELECT-first found the existing product → returned without writing.
+    // SELECT-first found the existing product → returned the existing pair and
+    // wrote exactly one refresh UPDATE on unit_price. That UPDATE runs on its
+    // own statement, not through batch(), so batchCount stays 0.
+    expect(refreshes()).toBe(1);
     expect(second).toEqual(first);
     expect(f.d1.batchCount).toBe(0); // second call must NOT enter batch
     expect(f.countProduct()).toBe(1);
     expect(f.countUnitPrice()).toBe(1); // no orphan
   });
 
-  it('late bare-insert conflict rolls the whole batch back (no unit_price orphan) and falls back to the oldest pair', async () => {
+  it('SELECT-first hit at a new price refreshes all five derived columns in place', async () => {
+    const first = await f.repo.saveParsed({
+      rawId: f.rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    const productBefore = f.handle.prepare('SELECT * FROM product').all();
+    const rawBefore = f.handle.prepare('SELECT * FROM product_raw').all();
+    f.d1.reset();
+
+    // Same spec → same dedupe key; a lower price moves per100ml and formula.
+    const cheaper = calculate(fullSpec, 19.9);
+    const second = await f.repo.saveParsed({
+      rawId: f.rawId,
+      spec: fullSpec,
+      calc: cheaper,
+    });
+
+    expect(second).toEqual(first);
+    expect(f.d1.batchCount).toBe(0);
+    expect(f.countProduct()).toBe(1);
+    expect(f.countUnitPrice()).toBe(1);
+    // Same row id, now carrying the SECOND call's calc — the awaited UPDATE
+    // really landed (an unawaited builder would lose it silently).
+    expect(readUnitPriceRow(f.handle, first.productId)).toEqual(
+      expectedUnitPriceRow(first.unitPriceId, cheaper),
+    );
+    // Scoped to unit_price: product and product_raw stay frozen column for column.
+    expect(f.handle.prepare('SELECT * FROM product').all()).toEqual(
+      productBefore,
+    );
+    expect(f.handle.prepare('SELECT * FROM product_raw').all()).toEqual(
+      rawBefore,
+    );
+  });
+
+  it('a failing refresh on the SELECT-first hit rejects and leaves the row untouched', async () => {
+    const first = await f.repo.saveParsed({
+      rawId: f.rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    const before = readUnitPriceRow(f.handle, first.productId);
+    failUnitPriceUpdates(f.handle);
+    f.d1.reset();
+
+    expect(
+      await rejectionText(
+        f.repo.saveParsed({
+          rawId: f.rawId,
+          spec: fullSpec,
+          calc: calculate(fullSpec, 19.9),
+        }),
+      ),
+    ).toMatch(/injected refresh failure/);
+
+    // The refresh sits OUTSIDE the try, so its failure propagates as itself
+    // instead of being mistaken for a lost insert race and retried via batch.
+    expect(f.d1.batchCount).toBe(0);
+    expect(readUnitPriceRow(f.handle, first.productId)).toEqual(before);
+    expect(f.countProduct()).toBe(1);
+    expect(f.countUnitPrice()).toBe(1);
+  });
+
+  it('late bare-insert conflict rolls the whole batch back (no unit_price orphan), falls back to the oldest pair and refreshes it with the racer calc', async () => {
     // The winner commits first.
     const winner = await f.repo.saveParsed({
       rawId: f.rawId,
@@ -217,6 +308,12 @@ describe('saveParsed dedupe (D1 path, stateful fake binding)', () => {
     expect(f.countUnitPrice()).toBe(1);
     f.d1.reset();
 
+    // The racer must carry a DIFFERENT calc, or the five-column assertion below
+    // would stay green even with the fallback refresh missing entirely. The
+    // uncomputable terminal state (a ≤0 report) moves four of the five columns;
+    // per100g is the one an identical-spec refresh can never move — the axis
+    // follows the spec, which the dedupe key pins.
+    const racerCalc = calculate(fullSpec, 0);
     // Drive the racer deterministically: blindfold its SELECT-first so it
     // misses the already-committed row and proceeds to batch([insert product
     // (bare), insert unit_price]). The bare product insert hits the dedupe_key
@@ -226,13 +323,47 @@ describe('saveParsed dedupe (D1 path, stateful fake binding)', () => {
     const loser = await f.repo.saveParsed({
       rawId: f.rawId,
       spec: fullSpec,
-      calc: fullCalc,
+      calc: racerCalc,
     });
     // Fell back to the committed (oldest) pair.
     expect(loser).toEqual(winner);
     // The racer entered batch (and it threw → rolled back), so still exactly
     // one product + one unit_price, no orphan.
     expect(f.d1.batchCount).toBe(1);
+    expect(f.countProduct()).toBe(1);
+    expect(f.countUnitPrice()).toBe(1);
+    // Same unit_price id, refreshed to the racer's (later) parse result.
+    expect(readUnitPriceRow(f.handle, winner.productId)).toEqual(
+      expectedUnitPriceRow(winner.unitPriceId, racerCalc),
+    );
+  });
+
+  it('a failing refresh on the post-conflict fallback rejects and leaves the row untouched', async () => {
+    const winner = await f.repo.saveParsed({
+      rawId: f.rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    const before = readUnitPriceRow(f.handle, winner.productId);
+    failUnitPriceUpdates(f.handle);
+    f.d1.reset();
+
+    f.d1.blindfoldNextProductSelect();
+    expect(
+      await rejectionText(
+        f.repo.saveParsed({
+          rawId: f.rawId,
+          spec: fullSpec,
+          calc: calculate(fullSpec, 19.9),
+        }),
+      ),
+    ).toMatch(/injected refresh failure/);
+
+    // It did take the batch (which rolled back on the unique conflict) and then
+    // failed in the fallback refresh — that error is not swallowed by the race
+    // handling, and the winner's row is intact with no orphan left behind.
+    expect(f.d1.batchCount).toBe(1);
+    expect(readUnitPriceRow(f.handle, winner.productId)).toEqual(before);
     expect(f.countProduct()).toBe(1);
     expect(f.countUnitPrice()).toBe(1);
   });
