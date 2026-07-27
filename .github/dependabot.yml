@@ -8,12 +8,27 @@ updates:
       day: monday
     open-pull-requests-limit: 10
     groups:
+      # `ai` and `@ai-sdk/*` ship as a matched set: the provider's
+      # LanguageModelV<n> must match what `ai` accepts, so a split bump breaks
+      # either at compile time (provider ahead) or silently at runtime (`ai`
+      # ahead — llm.test.ts mocks the provider, so CI stays green). Group them
+      # across ALL update types so majors travel together too.
+      ai-sdk:
+        patterns:
+          - "ai"
+          - "@ai-sdk/*"
       production-dependencies:
         dependency-type: production
         update-types: [minor, patch]
       development-dependencies:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # babel-preset-taro / babel-loader still require Babel ^7; loading 8.x
+      # hard-fails `taro build --type weapp`. Re-evaluate when Taro ships a
+      # babel-8-compatible preset, then drop this block.
+      - dependency-name: "@babel/*"
+        update-types: [version-update:semver-major]
 
   # Actions used by .github/workflows/*.
   - package-ecosystem: github-actions
