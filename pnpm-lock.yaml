@@ -39,8 +39,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/db
       ai:
-        specifier: ^6.0.208
-        version: 6.0.208(zod@4.4.3)
+        specifier: ^7.0.37
+        version: 7.0.37(zod@4.4.3)
       hono:
         specifier: ^4.12.31
         version: 4.12.31
@@ -71,13 +71,13 @@ importers:
         version: 7.29.7
       '@tarojs/components':
         specifier: 4.2.1
-        version: 4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+        version: 4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       '@tarojs/helper':
         specifier: 4.2.1
         version: 4.2.1
       '@tarojs/plugin-framework-react':
         specifier: 4.2.1
-        version: 4.2.1(@tarojs/helper@4.2.1)(@tarojs/runtime@4.2.1)(@tarojs/shared@4.2.1)(react@19.2.7)(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+        version: 4.2.1(@tarojs/helper@4.2.1)(@tarojs/runtime@4.2.1)(@tarojs/shared@4.2.1)(react@19.2.7)(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       '@tarojs/plugin-platform-weapp':
         specifier: 4.2.1
         version: 4.2.1(@tarojs/service@4.2.1)(@tarojs/shared@4.2.1)
@@ -92,7 +92,7 @@ importers:
         version: 4.2.1
       '@tarojs/taro':
         specifier: 4.2.1
-        version: 4.2.1(@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(@tarojs/helper@4.2.1)(@tarojs/shared@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+        version: 4.2.1(@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(@tarojs/helper@4.2.1)(@tarojs/shared@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       '@unit-price/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
@@ -114,7 +114,7 @@ importers:
         version: 4.2.1(@types/node@26.1.1)
       '@tarojs/webpack5-runner':
         specifier: 4.2.1
-        version: 4.2.1(@babel/core@7.29.7)(@swc/core@1.3.96)(@tarojs/runtime@4.2.1)(less@3.13.1)(postcss@8.5.20)(sass@1.101.0)(stylus@0.64.0)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+        version: 4.2.1(@babel/core@7.29.7)(@swc/core@1.3.96)(@tarojs/runtime@4.2.1)(less@3.13.1)(postcss@8.5.23)(sass@1.101.0)(stylus@0.64.0)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -207,9 +207,9 @@ packages:
   '@adobe/css-tools@4.3.3':
     resolution: {integrity: sha512-rE0Pygv0sEZ4vBWHlAgJLGDU7Pm8xoO6p3wsEceb7GYAjScrOHpEo8KK/eVkAcnSM+slAEtXjA2JpdjLp4fJQQ==}
 
-  '@ai-sdk/gateway@3.0.133':
-    resolution: {integrity: sha512-Ebs+7iS9zUgJu5B0RlxM2JmDWzq79Cpd6YdiqcCzB5qFdpfQJPUDiXutqlQP89F2XGjOdDeidulBTXUdXWzOxw==}
-    engines: {node: '>=18'}
+  '@ai-sdk/gateway@4.0.28':
+    resolution: {integrity: sha512-ee9TsNO3mkgHDWmTmJ8Fvltr6PFh52zhrV2+FaKJY3F3iu7kWZi5tCRJCR1HVhhlpj6lHniUb28nLQdPHkA/1Q==}
+    engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
@@ -225,9 +225,19 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.12':
+    resolution: {integrity: sha512-bbhlOgHeYwrIGheLkM6fhS8hVger8uFPmcOLg+kxc9EFh7y30XYorWhthlYAgpadO3SJhFZrIcEknN7qEqEVvA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@3.0.10':
     resolution: {integrity: sha512-Q3BZ27qfpYqnCYGvE3vt+Qi6LGOF9R5Nmzn+9JoM1lCRsD9mYaIhfJLkSunN48nfGXJ6n+XNV0J/XVpqGQl7Dw==}
     engines: {node: '>=18'}
+
+  '@ai-sdk/provider@4.0.3':
+    resolution: {integrity: sha512-e0CpNWJUY7OxAFAnCZkw+ri9QOHWwTs1tXP42782KFGCU07qt8NiXCrCVowyCB5dP2r5/Uls+g2oPd8kOJn9dw==}
+    engines: {node: '>=22'}
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
@@ -2028,141 +2038,141 @@ packages:
   '@rnx-kit/console@1.1.0':
     resolution: {integrity: sha512-N+zFhTSXroiK4eL26vs61Pmtl7wzTPAKLd4JKw9/fk5cNAHUscCXF/uclzuYN61Ye5AwygIvcwbm9wv4Jfa92A==}
 
-  '@rollup/rollup-android-arm-eabi@4.62.2':
-    resolution: {integrity: sha512-6o7ZLZK+BeenkZCFNDXqpbjw9bD6nuWonvS/lwQJp7NoVVxm6p3qE7qQ5jGuBjiFsgvqjD8mZAU5oWxTmbOeOg==}
+  '@rollup/rollup-android-arm-eabi@4.62.3':
+    resolution: {integrity: sha512-c0wdcekXtQvvn5Tsrk/+op/gUArrbWaFduBnTLP2l1cKLSQs4diMWjJw3m6A0DdzT8dAAX95KpkJ3qynCePbmw==}
     cpu: [arm]
     os: [android]
 
-  '@rollup/rollup-android-arm64@4.62.2':
-    resolution: {integrity: sha512-BaH7BllCACHoH1LguOU56UItGfUWjujlO65kS9LAodViaN4bwIKd7oeW/ZHJ/4ljr/7MIiENnNy3HJ0zXv8Zkw==}
+  '@rollup/rollup-android-arm64@4.62.3':
+    resolution: {integrity: sha512-3YjElDdWN+qXAFbJ/CzPV+0wspLqh54k/I6GfdYtEJRqg7buSgc1yPM3B+93j1M4neobtkATHZTmxK2AMVGfnA==}
     cpu: [arm64]
     os: [android]
 
-  '@rollup/rollup-darwin-arm64@4.62.2':
-    resolution: {integrity: sha512-v39RCCvj4He82I9sFmk+M1VZ0PLM9sfsLVikjfx2hYBNALhrrOR2D3JjQA6AhlaSOgcR+RzrKY7e1+bT6SUO/A==}
+  '@rollup/rollup-darwin-arm64@4.62.3':
+    resolution: {integrity: sha512-Pch2pFNOxxz1hTjypIdPyRTR6riiwRl84+VcN9djS680fw+Co1nAJINrdpqp7KV0NvyuU8ilZXZCjd7ykJl1GQ==}
     cpu: [arm64]
     os: [darwin]
 
-  '@rollup/rollup-darwin-x64@4.62.2':
-    resolution: {integrity: sha512-yl0y2vq3S3lHeuXhEdss6TWfKW8vkujImO12tn4ZkG/4oghr09LvdYm2RElVjokTQiUvDUGXLGsYeLqUMCKpGA==}
+  '@rollup/rollup-darwin-x64@4.62.3':
+    resolution: {integrity: sha512-LEuncFUHFiF8t4yZVZvvZA1wk0pjAscRnsrn1EfTEmN4HXotBi2YtcnLRyaK6UbuczW7xZS5ES+81Rdz8Z0T6g==}
     cpu: [x64]
     os: [darwin]
 
-  '@rollup/rollup-freebsd-arm64@4.62.2':
-    resolution: {integrity: sha512-tT4pvt4qXD+vEoezupCWi+a1F0vvDiksiHc+PxRlYTOH1I6/X4id9jPxTP+Fg+545euaFT1jJVs4CEdHZAU1vw==}
+  '@rollup/rollup-freebsd-arm64@4.62.3':
+    resolution: {integrity: sha512-zvBUvsQUpOWALdDsk6qbS8bXf2VxmPisuudNDrY7x0p0jBdsoZl8HsHczIOgkQiZldmcacMKtBzpoGVNeIe2bQ==}
     cpu: [arm64]
     os: [freebsd]
 
-  '@rollup/rollup-freebsd-x64@4.62.2':
-    resolution: {integrity: sha512-6nU5F2wCW+qvCBhTn1pdIU3bzsIoF7EUwsCDRxilWGprQR6yd508YnH9+OKFCwpfS8pjZqDUmnCAr7exax0XCg==}
+  '@rollup/rollup-freebsd-x64@4.62.3':
+    resolution: {integrity: sha512-C2KmNrcSem/AMg984H/dev+si0lieQGdXdR/lYGJnuumXnFb9Y7QdiI62obFdLlxRYLBv4P0eUVIDbD4c1vVvw==}
     cpu: [x64]
     os: [freebsd]
 
-  '@rollup/rollup-linux-arm-gnueabihf@4.62.2':
-    resolution: {integrity: sha512-n1GJHPOvpIfhi3TmrCeh6S6URt9BFCt0KQE3qvexyGCTAKpR4Lg+eWvNZEqu7epxwus/8ElT3hacYEucm49SZg==}
+  '@rollup/rollup-linux-arm-gnueabihf@4.62.3':
+    resolution: {integrity: sha512-ggXnsTAEzNQx74XpunRsiZ9aBZDsI7XIa0hm2nzR9f4WzH5/f/d73ZSDaC5ejJ8YLY4NW+V3wr0tjOaeCq8hqA==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
-  '@rollup/rollup-linux-arm-musleabihf@4.62.2':
-    resolution: {integrity: sha512-JqgflS8wEB+UXV/vS1RpRbifGBeN4D5lz8D8oOFbFZw4vedvdOgCFAjfBmIMdW3yL10XpQQ0Ambepw6MXrhOnA==}
+  '@rollup/rollup-linux-arm-musleabihf@4.62.3':
+    resolution: {integrity: sha512-2vng+FlzNUhKZxtej3IUqJgbZoQk2M/dwQM20+ULV0R/E/8tr9/P6uEf2iiGIk4HL0zMKh5Jry7mUHdUOvyGgA==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-linux-arm64-gnu@4.62.2':
-    resolution: {integrity: sha512-wnFJkogWvN4jm/hQRF2UBaeUmk20j5+DmHvoyWii2b8HJDyvz1MF2OU/6ynXt2KR63rbZLWkFpoytpdc/yBuSA==}
+  '@rollup/rollup-linux-arm64-gnu@4.62.3':
+    resolution: {integrity: sha512-LLLFZKt4/Nraf9rxDkhiU8QVgLF4WmCkfr0L4fj0fPfIZFBib0DeiFk1hhaYKd03LFAFJcxHslhDFlNJLylf5Q==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@rollup/rollup-linux-arm64-musl@4.62.2':
-    resolution: {integrity: sha512-HVu2bp0zhvJ8xHEV9+UUs7S90VadmBSY3LcIMvozbPo4AuMGDWlz3ymHLHZPX4hR67TKTt8Qp5PJ5RBg/i+RMQ==}
+  '@rollup/rollup-linux-arm64-musl@4.62.3':
+    resolution: {integrity: sha512-WJkdQCvS9sWNOUBJZfQRKpZGFBztRzcowI+nndmflKgU4XY+3a420FgTOSKTsVqJbnzSxeT4vaJalpOaPo2YCQ==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-linux-loong64-gnu@4.62.2':
-    resolution: {integrity: sha512-mQqqAV8QaoSgr9I2fKDLY2BAVvmKjWoGiu/cSYQonsLvtqwEn1E4QYfnCOcp5zoEqNhsDYin1s6jx/VJmrxlZg==}
+  '@rollup/rollup-linux-loong64-gnu@4.62.3':
+    resolution: {integrity: sha512-PwHXCCS2n64/1Ot6rP1YEYA02MGYBcQlr8CSZZyrUG2O7NH6NklYmvr9v3Jy+5e/eDeNchc/ukmKJi9LuflMIQ==}
     cpu: [loong64]
     os: [linux]
     libc: [glibc]
 
-  '@rollup/rollup-linux-loong64-musl@4.62.2':
-    resolution: {integrity: sha512-IxKLoxCQ2IWi6bT2akyDUBGsOImDKB+sPp4EsTmwFQ/fMwpCKm8uLSSgP/Kx/QYUgKis6SEZ5/Nlhup0DIA0PQ==}
+  '@rollup/rollup-linux-loong64-musl@4.62.3':
+    resolution: {integrity: sha512-vUjxINQu3RC8NZS3ykk1gN65gIz8pAopOq2HXuZhiIxHdx7TFvDG+jgrdSgInu1Eza4/Rfi2VzZgyIgEH4WOaw==}
     cpu: [loong64]
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-linux-ppc64-gnu@4.62.2':
-    resolution: {integrity: sha512-Mk5ha2RQSgyFfmYYLkBpPnUk8D8FriBxesO1u9O75X0mHgXL1UQcH5Itl2lurWL2tj0RxV9b9tJgipac0hRY9A==}
+  '@rollup/rollup-linux-ppc64-gnu@4.62.3':
+    resolution: {integrity: sha512-wzko4aJ13+0G3kGnviCg5gnXFKd40izKsrf2uOw12US4XqprkDrmwOpeW14aSNa37V8bfPcz5Fkob6LZ3BAPmA==}
     cpu: [ppc64]
     os: [linux]
     libc: [glibc]
 
-  '@rollup/rollup-linux-ppc64-musl@4.62.2':
-    resolution: {integrity: sha512-CjvEnqJL/0/TQ3TXX3OPIJ/kmBellrWd4heXUmHeJlTnmwjKpSJzoehLaL6Xk0ZnMHBu9dZuFADNOrtjF4v+2w==}
+  '@rollup/rollup-linux-ppc64-musl@4.62.3':
+    resolution: {integrity: sha512-8120ue0JUMSwy11stlwnfdX3pPd+WZYGCDBwEHWtIHi6pOpZmsEF5QKB7a/UN+XFdqvobxz98kv8RTqikyCEBw==}
     cpu: [ppc64]
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-linux-riscv64-gnu@4.62.2':
-    resolution: {integrity: sha512-1SiZbzwdkaDURsew/tSOrooKiYy7EQGT6m8ufavAi9NEyQb/6VuIxFXAL1fqa4iZe3g4NbNk4P7J32z2tw5Mgg==}
+  '@rollup/rollup-linux-riscv64-gnu@4.62.3':
+    resolution: {integrity: sha512-XLFHnR3tXMjbOCh2vtVJHmxt+995uJsTERQyseFDRA0xxMxyTZPLa3OIUlyFaO4mF/Lu0FjmWHCuPXJT1n/IOg==}
     cpu: [riscv64]
     os: [linux]
     libc: [glibc]
 
-  '@rollup/rollup-linux-riscv64-musl@4.62.2':
-    resolution: {integrity: sha512-nQts12zJ3NQRoE6uYljOH89v7szzLDvG2JD/vsX+vGXU8w/At1GowTZ5/7qeFQ8m7L55rpR8Okugnuo5bgjy2Q==}
+  '@rollup/rollup-linux-riscv64-musl@4.62.3':
+    resolution: {integrity: sha512-se6yXvNGMIl0f+RQzyh7XAmia8/9kplQx424wnG2w0C1oi6XgO6Y8otKhdXFHbHs88Ihavzmvh1NWjuovE76BQ==}
     cpu: [riscv64]
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-linux-s390x-gnu@4.62.2':
-    resolution: {integrity: sha512-E9/ll019jhPIJgpzfZoIkBGhcz+kKNgVWYRY0zr9srBdPPFVpvOKW8VaJKUbeK+eZXyQF9ltME+Kk6affeaPgg==}
+  '@rollup/rollup-linux-s390x-gnu@4.62.3':
+    resolution: {integrity: sha512-gNoxRefktVIiGflpONuxWWXZAzIQG++z9qHO3xKwk4WdDMuQja3JHGfE1u0i3PfPDyvhypdk+WrgIJqLhGG7sg==}
     cpu: [s390x]
     os: [linux]
     libc: [glibc]
 
-  '@rollup/rollup-linux-x64-gnu@4.62.2':
-    resolution: {integrity: sha512-5BqxR/pshjey51iliyzTD5Xi3EN0aLmQ2lZ3lvefVV9c82BvrLo2/6OT55iifpWBufs6kdwWbuOKS841DrmK9A==}
+  '@rollup/rollup-linux-x64-gnu@4.62.3':
+    resolution: {integrity: sha512-V4KtWtQfAFMU7+9/A/VDps/VI8CHd3cYz0L8sgJzz8qK7eY7wI4ruFD82UYIYvW9Z4DtlTfhQcsl4XyPHW5uSg==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@rollup/rollup-linux-x64-musl@4.62.2':
-    resolution: {integrity: sha512-uNN83XxQrRAh/w0/pmAfibcwyb6YWt4gP+dpnQKPVJshAloQ785ii8CT8ZCIxkGg9opVsvAlGhFitSm6D1Jjpg==}
+  '@rollup/rollup-linux-x64-musl@4.62.3':
+    resolution: {integrity: sha512-LBx9LYXvj2CBkMkjLdNAWLwH0MLMin7do2VcVo9kVPibGLkY0BQQut2fv7NVqkXqZ/CrAu9LqDHVV1xHCMpCPw==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@rollup/rollup-openbsd-x64@4.62.2':
-    resolution: {integrity: sha512-srjEIxSH3LRnJN6THczDHWQplqEMFiAJrTab0msUryh9kwNpkICf3Ea6q6MN/2cZwRFUNx5w+h6Hpi4QuHS6Zg==}
+  '@rollup/rollup-openbsd-x64@4.62.3':
+    resolution: {integrity: sha512-ABVf3Q0RCu7NcyCCOZQI0pJ3GuSdfSl8EXcy88QtdceIMIoCUdfhsJChZ64L9zVM2aJHjde1Bhn5uqSRcX9ySA==}
     cpu: [x64]
     os: [openbsd]
 
-  '@rollup/rollup-openharmony-arm64@4.62.2':
-    resolution: {integrity: sha512-8hOJnxgbyObnCm5AlRA3A931xX19xq80RjVTKgJOvEKWqJruP/Uf12IbAOaDjjEXYRewwHLfmF0YRIdK3OwKWA==}
+  '@rollup/rollup-openharmony-arm64@4.62.3':
+    resolution: {integrity: sha512-+2Cy/ldweGBLlPIKsQLF8U5N44a0KDdbrk1rAjHOM9M2K+kGdIVjHLmmrZIcx+9Ny3ke/1JomCsDI1ocb11+sg==}
     cpu: [arm64]
     os: [openharmony]
 
-  '@rollup/rollup-win32-arm64-msvc@4.62.2':
-    resolution: {integrity: sha512-mmF4AY1i0hG/bLWUctUq59gtmgaSIRa3cu/A3JFRp/sCNEme2bgDEiDS22P9FbnJB8NJNF4jPJiSP5RHQpUTDg==}
+  '@rollup/rollup-win32-arm64-msvc@4.62.3':
+    resolution: {integrity: sha512-dtZvzc8BedpSaFNy75x6uiWwAGTH+aZHDtdrqP6qk+WcLJrfti6sGje1ZJ9UxyzDLF23d/mV+PaMwuC0hL7UVA==}
     cpu: [arm64]
     os: [win32]
 
-  '@rollup/rollup-win32-ia32-msvc@4.62.2':
-    resolution: {integrity: sha512-DZgkknc6jhHrk46V25vbAM0zZkyP0nSDkJB8/dRkLTxv470dOmWDqGoEJl/9A0dFfS7yE3REOwNDxpHwSLSt0Q==}
+  '@rollup/rollup-win32-ia32-msvc@4.62.3':
+    resolution: {integrity: sha512-Rj8Ra4noo+aYy7sKBggCx0407mws34kAb1ySyWuq5DAtFBQdkSwnsjCgPrhPe9cvgBKZIukpE+CVHvORCS93kQ==}
     cpu: [ia32]
     os: [win32]
 
-  '@rollup/rollup-win32-x64-gnu@4.62.2':
-    resolution: {integrity: sha512-T6xr6ucWSFto+VGajA8YH26LdpHRuP4YLHEKAtCWvJDOlnmWcDZVCI2Jmjr+IFHDlt2zRaTAKE4tfjTaWLgJBg==}
+  '@rollup/rollup-win32-x64-gnu@4.62.3':
+    resolution: {integrity: sha512-vp7N084ew/odXn2gi/mzm9mUkQu9l6AiN6dt4IeUM2Uvm9o+cVmP+YkqbMOteLbiGgqBBlJZjIMYVCfOOIVbVQ==}
     cpu: [x64]
     os: [win32]
 
-  '@rollup/rollup-win32-x64-msvc@4.62.2':
-    resolution: {integrity: sha512-BfzEnDJOt9T8M989/lA37EcJgat01wLRnoi5dQf3QzOH7jzpqTAzdDbVfRljVr5r+jzKqpbHeyOfAaXxAd0PAA==}
+  '@rollup/rollup-win32-x64-msvc@4.62.3':
+    resolution: {integrity: sha512-MOG/3gTOn4Fwf574RVOaY61I5o6P90legkFADiTyn1hyjNydT+cerU2rLUwPdZkKKyJ+iT+K9p7WXK4LM1Ka6g==}
     cpu: [x64]
     os: [win32]
 
@@ -2779,6 +2789,9 @@ packages:
   '@webassemblyjs/wast-printer@1.14.1':
     resolution: {integrity: sha512-kPSSXE6De1XOR820C90RIo2ogvZG+c3KiHzqUoO/F34Y2shGzesfqv7o57xrxovZJH/MetF5UjroJ/R/3isoiw==}
 
+  '@workflow/serde@4.1.0':
+    resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
+
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
 
@@ -2829,9 +2842,9 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  ai@6.0.208:
-    resolution: {integrity: sha512-STz+AaZqJ4ZjH7UkpXkbHx+bjgIDOsE8fIUoZjkZ2whoZcfVmG9K/TqEKouJZ03SuZuD7lagntlU3zBhAEkRpQ==}
-    engines: {node: '>=18'}
+  ai@7.0.37:
+    resolution: {integrity: sha512-stF+SEQJgKY3Qfe3FwNzqUrehHviOp2l7LemoI8YMOa0Zk5PxKsRNgUk3cHXz0RAue9RRyCAis2fz6LSCP6EKw==}
+    engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
@@ -5528,6 +5541,10 @@ packages:
     resolution: {integrity: sha512-lW616l85ucIQL+FocMmL7pQFPqBmwejrCMg+iPxyImlrANNJG9NHq/RkyCZopDhd8C3LA03PHRJDjkbGu8vvug==}
     engines: {node: ^10 || ^12 || >=14}
 
+  postcss@8.5.23:
+    resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
+    engines: {node: ^10 || ^12 || >=14}
+
   prebuild-install@7.1.3:
     resolution: {integrity: sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug==}
     engines: {node: '>=10'}
@@ -5751,8 +5768,8 @@ packages:
     engines: {node: '>=14.18.0', npm: '>=8.0.0'}
     hasBin: true
 
-  rollup@4.62.2:
-    resolution: {integrity: sha512-RFnrW4lhXA3s3eqHDZvN654g8OTjzRfqpIRJYczCGB6HzphckVAi/Qh4tbPUbRuDi7s1Llv8g/NspLkttY3gTA==}
+  rollup@4.62.3:
+    resolution: {integrity: sha512-Gu0c0iH9FzgX1L1t7ByIbbS3Vmdz+6KHm/EsqmmC71gUQ82yvZRkTK6XzrFObSka91WUVdynqp6nsfilzr5k6Q==}
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
@@ -6692,10 +6709,10 @@ snapshots:
 
   '@adobe/css-tools@4.3.3': {}
 
-  '@ai-sdk/gateway@3.0.133(zod@4.4.3)':
+  '@ai-sdk/gateway@4.0.28(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.30(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.3
+      '@ai-sdk/provider-utils': 5.0.12(zod@4.4.3)
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
@@ -6712,7 +6729,19 @@ snapshots:
       eventsource-parser: 3.1.0
       zod: 4.4.3
 
+  '@ai-sdk/provider-utils@5.0.12(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.3
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.4.3
+
   '@ai-sdk/provider@3.0.10':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.3':
     dependencies:
       json-schema: 0.4.0
 
@@ -8152,7 +8181,8 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@opentelemetry/api@1.9.1': {}
+  '@opentelemetry/api@1.9.1':
+    optional: true
 
   '@parcel/watcher-android-arm64@2.5.6':
     optional: true
@@ -8243,79 +8273,79 @@ snapshots:
 
   '@rnx-kit/console@1.1.0': {}
 
-  '@rollup/rollup-android-arm-eabi@4.62.2':
+  '@rollup/rollup-android-arm-eabi@4.62.3':
     optional: true
 
-  '@rollup/rollup-android-arm64@4.62.2':
+  '@rollup/rollup-android-arm64@4.62.3':
     optional: true
 
-  '@rollup/rollup-darwin-arm64@4.62.2':
+  '@rollup/rollup-darwin-arm64@4.62.3':
     optional: true
 
-  '@rollup/rollup-darwin-x64@4.62.2':
+  '@rollup/rollup-darwin-x64@4.62.3':
     optional: true
 
-  '@rollup/rollup-freebsd-arm64@4.62.2':
+  '@rollup/rollup-freebsd-arm64@4.62.3':
     optional: true
 
-  '@rollup/rollup-freebsd-x64@4.62.2':
+  '@rollup/rollup-freebsd-x64@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-arm-gnueabihf@4.62.2':
+  '@rollup/rollup-linux-arm-gnueabihf@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-arm-musleabihf@4.62.2':
+  '@rollup/rollup-linux-arm-musleabihf@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-arm64-gnu@4.62.2':
+  '@rollup/rollup-linux-arm64-gnu@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-arm64-musl@4.62.2':
+  '@rollup/rollup-linux-arm64-musl@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-loong64-gnu@4.62.2':
+  '@rollup/rollup-linux-loong64-gnu@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-loong64-musl@4.62.2':
+  '@rollup/rollup-linux-loong64-musl@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-ppc64-gnu@4.62.2':
+  '@rollup/rollup-linux-ppc64-gnu@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-ppc64-musl@4.62.2':
+  '@rollup/rollup-linux-ppc64-musl@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-riscv64-gnu@4.62.2':
+  '@rollup/rollup-linux-riscv64-gnu@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-riscv64-musl@4.62.2':
+  '@rollup/rollup-linux-riscv64-musl@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-s390x-gnu@4.62.2':
+  '@rollup/rollup-linux-s390x-gnu@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-x64-gnu@4.62.2':
+  '@rollup/rollup-linux-x64-gnu@4.62.3':
     optional: true
 
-  '@rollup/rollup-linux-x64-musl@4.62.2':
+  '@rollup/rollup-linux-x64-musl@4.62.3':
     optional: true
 
-  '@rollup/rollup-openbsd-x64@4.62.2':
+  '@rollup/rollup-openbsd-x64@4.62.3':
     optional: true
 
-  '@rollup/rollup-openharmony-arm64@4.62.2':
+  '@rollup/rollup-openharmony-arm64@4.62.3':
     optional: true
 
-  '@rollup/rollup-win32-arm64-msvc@4.62.2':
+  '@rollup/rollup-win32-arm64-msvc@4.62.3':
     optional: true
 
-  '@rollup/rollup-win32-ia32-msvc@4.62.2':
+  '@rollup/rollup-win32-ia32-msvc@4.62.3':
     optional: true
 
-  '@rollup/rollup-win32-x64-gnu@4.62.2':
+  '@rollup/rollup-win32-x64-gnu@4.62.3':
     optional: true
 
-  '@rollup/rollup-win32-x64-msvc@4.62.2':
+  '@rollup/rollup-win32-x64-msvc@4.62.3':
     optional: true
 
   '@sideway/address@4.1.5':
@@ -8459,12 +8489,12 @@ snapshots:
       - debug
       - supports-color
 
-  '@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))':
+  '@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))':
     dependencies:
       '@stencil/core': 2.22.3
       '@tarojs/runtime': 4.2.1
       '@tarojs/shared': 4.2.1
-      '@tarojs/taro': 4.2.1(@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(@tarojs/helper@4.2.1)(@tarojs/shared@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      '@tarojs/taro': 4.2.1(@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(@tarojs/helper@4.2.1)(@tarojs/shared@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       classnames: 2.5.1
       hammerjs: 2.0.8
       hls.js: 1.6.16
@@ -8557,7 +8587,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tarojs/plugin-framework-react@4.2.1(@tarojs/helper@4.2.1)(@tarojs/runtime@4.2.1)(@tarojs/shared@4.2.1)(react@19.2.7)(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))':
+  '@tarojs/plugin-framework-react@4.2.1(@tarojs/helper@4.2.1)(@tarojs/runtime@4.2.1)(@tarojs/shared@4.2.1)(react@19.2.7)(vite@7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))':
     dependencies:
       '@tarojs/helper': 4.2.1
       '@tarojs/runtime': 4.2.1
@@ -8569,7 +8599,7 @@ snapshots:
     optionalDependencies:
       react: 19.2.7
       vite: 7.3.5(@types/node@26.1.1)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.101.0)(stylus@0.64.0)(terser@5.49.0)(tsx@4.23.1)
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   '@tarojs/plugin-platform-weapp@4.2.1(@tarojs/service@4.2.1)(@tarojs/shared@4.2.1)':
     dependencies:
@@ -8614,97 +8644,97 @@ snapshots:
 
   '@tarojs/shared@4.2.1': {}
 
-  '@tarojs/taro-loader@4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))':
+  '@tarojs/taro-loader@4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))':
     dependencies:
       '@tarojs/helper': 4.2.1
       '@tarojs/shared': 4.2.1
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
     transitivePeerDependencies:
       - '@swc/helpers'
       - supports-color
 
-  '@tarojs/taro@4.2.1(@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(@tarojs/helper@4.2.1)(@tarojs/shared@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))':
+  '@tarojs/taro@4.2.1(@tarojs/components@4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(@tarojs/helper@4.2.1)(@tarojs/shared@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))':
     dependencies:
       '@tarojs/api': 4.2.1(@tarojs/runtime@4.2.1)(@tarojs/shared@4.2.1)
-      '@tarojs/components': 4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(postcss@8.5.20)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      '@tarojs/components': 4.2.1(@tarojs/helper@4.2.1)(@types/react@19.2.17)(html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(postcss@8.5.23)(rollup@3.30.0)(webpack-chain@6.5.1)(webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)))(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       '@tarojs/helper': 4.2.1
       '@tarojs/runtime': 4.2.1
       '@tarojs/shared': 4.2.1
       '@types/postcss-url': 10.0.4
-      postcss: 8.5.20
+      postcss: 8.5.23
     optionalDependencies:
       '@types/react': 19.2.17
-      html-webpack-plugin: 5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      html-webpack-plugin: 5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       rollup: 3.30.0
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
       webpack-chain: 6.5.1
-      webpack-dev-server: 4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      webpack-dev-server: 4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
 
-  '@tarojs/webpack5-prebundle@4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))':
+  '@tarojs/webpack5-prebundle@4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))':
     dependencies:
       '@tarojs/helper': 4.2.1
       '@tarojs/shared': 4.2.1
       enhanced-resolve: 5.24.2
       es-module-lexer: 0.10.5
       lodash: 4.18.1
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
       webpack-virtual-modules: 0.6.2
     transitivePeerDependencies:
       - '@swc/helpers'
       - supports-color
 
-  '@tarojs/webpack5-runner@4.2.1(@babel/core@7.29.7)(@swc/core@1.3.96)(@tarojs/runtime@4.2.1)(less@3.13.1)(postcss@8.5.20)(sass@1.101.0)(stylus@0.64.0)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))':
+  '@tarojs/webpack5-runner@4.2.1(@babel/core@7.29.7)(@swc/core@1.3.96)(@tarojs/runtime@4.2.1)(less@3.13.1)(postcss@8.5.23)(sass@1.101.0)(stylus@0.64.0)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))':
     dependencies:
       '@babel/core': 7.29.7
       '@tarojs/helper': 4.2.1
       '@tarojs/runner-utils': 4.2.1
       '@tarojs/runtime': 4.2.1
       '@tarojs/shared': 4.2.1
-      '@tarojs/taro-loader': 4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
-      '@tarojs/webpack5-prebundle': 4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      '@tarojs/taro-loader': 4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
+      '@tarojs/webpack5-prebundle': 4.2.1(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       acorn: 8.17.0
       acorn-walk: 8.3.5
-      autoprefixer: 10.5.4(postcss@8.5.20)
-      babel-loader: 8.2.1(@babel/core@7.29.7)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
-      copy-webpack-plugin: 12.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
-      css-loader: 7.1.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
-      css-minimizer-webpack-plugin: 6.0.0(esbuild@0.21.5)(lightningcss@1.32.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      autoprefixer: 10.5.4(postcss@8.5.23)
+      babel-loader: 8.2.1(@babel/core@7.29.7)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
+      copy-webpack-plugin: 12.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
+      css-loader: 7.1.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
+      css-minimizer-webpack-plugin: 6.0.0(esbuild@0.21.5)(lightningcss@1.32.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       detect-port: 1.6.1
       esbuild: 0.21.5
-      esbuild-loader: 4.5.0(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      esbuild-loader: 4.5.0(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       html-minifier: 4.0.0
-      html-webpack-plugin: 5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      html-webpack-plugin: 5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       jsdom: 24.1.3
-      less-loader: 12.3.3(less@3.13.1)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      less-loader: 12.3.3(less@3.13.1)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       lightningcss: 1.32.0
       loader-utils: 3.3.1
       lodash: 4.18.1
       md5: 2.3.0
-      mini-css-extract-plugin: 2.10.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      mini-css-extract-plugin: 2.10.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       miniprogram-simulate: 1.6.2
       ora: 5.4.1
       picomatch: 4.0.5
-      postcss: 8.5.20
-      postcss-html-transform: 4.2.1(postcss@8.5.20)
-      postcss-import: 16.1.1(postcss@8.5.20)
-      postcss-loader: 8.2.1(postcss@8.5.20)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
-      postcss-plugin-constparse: 4.2.1(postcss@8.5.20)
-      postcss-pxtransform: 4.2.1(postcss@8.5.20)
-      postcss-url: 10.1.4(postcss@8.5.20)
+      postcss: 8.5.23
+      postcss-html-transform: 4.2.1(postcss@8.5.23)
+      postcss-import: 16.1.1(postcss@8.5.23)
+      postcss-loader: 8.2.1(postcss@8.5.23)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
+      postcss-plugin-constparse: 4.2.1(postcss@8.5.23)
+      postcss-pxtransform: 4.2.1(postcss@8.5.23)
+      postcss-url: 10.1.4(postcss@8.5.23)
       regenerator-runtime: 0.11.1
       resolve-url-loader: 5.0.0
-      sass-loader: 14.2.1(sass@1.101.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      sass-loader: 14.2.1(sass@1.101.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       sax: 1.2.4
-      style-loader: 3.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
-      stylus-loader: 8.1.3(stylus@0.64.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
-      terser-webpack-plugin: 5.6.1(@swc/core@1.3.96)(esbuild@0.21.5)(lightningcss@1.32.0)(postcss@8.5.20)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      style-loader: 3.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
+      stylus-loader: 8.1.3(stylus@0.64.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
+      terser-webpack-plugin: 5.6.1(@swc/core@1.3.96)(esbuild@0.21.5)(lightningcss@1.32.0)(postcss@8.5.23)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       vm2: 3.11.5
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
       webpack-chain: 6.5.1
-      webpack-dev-server: 4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      webpack-dev-server: 4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       webpack-format-messages: 3.0.1
       webpack-virtual-modules: 0.6.2
-      webpackbar: 5.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      webpackbar: 5.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
     optionalDependencies:
       less: 3.13.1
       sass: 1.101.0
@@ -9049,6 +9079,8 @@ snapshots:
       '@webassemblyjs/ast': 1.14.1
       '@xtuc/long': 4.2.2
 
+  '@workflow/serde@4.1.0': {}
+
   '@xtuc/ieee754@1.2.0': {}
 
   '@xtuc/long@4.2.2': {}
@@ -9089,12 +9121,11 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ai@6.0.208(zod@4.4.3):
+  ai@7.0.37(zod@4.4.3):
     dependencies:
-      '@ai-sdk/gateway': 3.0.133(zod@4.4.3)
-      '@ai-sdk/provider': 3.0.10
-      '@ai-sdk/provider-utils': 4.0.30(zod@4.4.3)
-      '@opentelemetry/api': 1.9.1
+      '@ai-sdk/gateway': 4.0.28(zod@4.4.3)
+      '@ai-sdk/provider': 4.0.3
+      '@ai-sdk/provider-utils': 5.0.12(zod@4.4.3)
       zod: 4.4.3
 
   ajv-formats@2.1.1(ajv@8.20.0):
@@ -9161,13 +9192,13 @@ snapshots:
 
   asynckit@0.4.0: {}
 
-  autoprefixer@10.5.4(postcss@8.5.20):
+  autoprefixer@10.5.4(postcss@8.5.23):
     dependencies:
       browserslist: 4.28.6
       caniuse-lite: 1.0.30001806
       fraction.js: 5.3.4
       picocolors: 1.1.1
-      postcss: 8.5.20
+      postcss: 8.5.23
       postcss-value-parser: 4.2.0
 
   available-typed-arrays@1.0.7:
@@ -9184,7 +9215,7 @@ snapshots:
       - debug
       - supports-color
 
-  babel-loader@8.2.1(@babel/core@7.29.7)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  babel-loader@8.2.1(@babel/core@7.29.7)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       '@babel/core': 7.29.7
       find-cache-dir: 2.1.0
@@ -9192,7 +9223,7 @@ snapshots:
       make-dir: 2.1.0
       pify: 4.0.1
       schema-utils: 2.7.1
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   babel-plugin-const-enum@1.2.0(@babel/core@7.29.7):
     dependencies:
@@ -9617,7 +9648,7 @@ snapshots:
     dependencies:
       is-what: 3.14.1
 
-  copy-webpack-plugin@12.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  copy-webpack-plugin@12.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       fast-glob: 3.3.3
       glob-parent: 6.0.2
@@ -9625,7 +9656,7 @@ snapshots:
       normalize-path: 3.0.0
       schema-utils: 4.3.3
       serialize-javascript: 6.0.2
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   core-js-compat@3.49.0:
     dependencies:
@@ -9658,7 +9689,7 @@ snapshots:
     dependencies:
       postcss: 8.5.20
 
-  css-loader@7.1.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  css-loader@7.1.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       icss-utils: 5.1.0(postcss@8.5.20)
       postcss: 8.5.20
@@ -9669,9 +9700,9 @@ snapshots:
       postcss-value-parser: 4.2.0
       semver: 7.8.5
     optionalDependencies:
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
-  css-minimizer-webpack-plugin@6.0.0(esbuild@0.21.5)(lightningcss@1.32.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  css-minimizer-webpack-plugin@6.0.0(esbuild@0.21.5)(lightningcss@1.32.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       cssnano: 6.1.2(postcss@8.5.20)
@@ -9679,7 +9710,7 @@ snapshots:
       postcss: 8.5.20
       schema-utils: 4.3.3
       serialize-javascript: 6.0.2
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
     optionalDependencies:
       esbuild: 0.21.5
       lightningcss: 1.32.0
@@ -10064,12 +10095,12 @@ snapshots:
       has-tostringtag: 1.0.2
       hasown: 2.0.4
 
-  esbuild-loader@4.5.0(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  esbuild-loader@4.5.0(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       esbuild: 0.28.1
       get-tsconfig: 4.14.0
       loader-utils: 2.0.4
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
       webpack-sources: 3.5.1
 
   esbuild@0.18.20:
@@ -10744,7 +10775,7 @@ snapshots:
       relateurl: 0.2.7
       uglify-js: 3.19.3
 
-  html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  html-webpack-plugin@5.6.7(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       '@types/html-minifier-terser': 6.1.0
       html-minifier-terser: 6.1.0
@@ -10752,7 +10783,7 @@ snapshots:
       pretty-error: 4.0.0
       tapable: 2.3.3
     optionalDependencies:
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   htmlparser2@6.1.0:
     dependencies:
@@ -11120,11 +11151,11 @@ snapshots:
       picocolors: 1.1.1
       shell-quote: 1.10.0
 
-  less-loader@12.3.3(less@3.13.1)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  less-loader@12.3.3(less@3.13.1)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       less: 3.13.1
     optionalDependencies:
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   less@3.13.1:
     dependencies:
@@ -11333,11 +11364,11 @@ snapshots:
 
   mimic-response@3.1.0: {}
 
-  mini-css-extract-plugin@2.10.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  mini-css-extract-plugin@2.10.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       schema-utils: 4.3.3
       tapable: 2.3.3
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   miniflare@4.20260714.0:
     dependencies:
@@ -11706,25 +11737,25 @@ snapshots:
     dependencies:
       postcss: 8.5.20
 
-  postcss-html-transform@4.2.1(postcss@8.5.20):
+  postcss-html-transform@4.2.1(postcss@8.5.23):
     dependencies:
-      postcss: 8.5.20
+      postcss: 8.5.23
 
-  postcss-import@16.1.1(postcss@8.5.20):
+  postcss-import@16.1.1(postcss@8.5.23):
     dependencies:
-      postcss: 8.5.20
+      postcss: 8.5.23
       postcss-value-parser: 4.2.0
       read-cache: 1.0.0
       resolve: 1.22.12
 
-  postcss-loader@8.2.1(postcss@8.5.20)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  postcss-loader@8.2.1(postcss@8.5.23)(typescript@6.0.3)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       cosmiconfig: 9.0.2(typescript@6.0.3)
       jiti: 2.7.0
-      postcss: 8.5.20
+      postcss: 8.5.23
       semver: 7.8.5
     optionalDependencies:
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
     transitivePeerDependencies:
       - typescript
 
@@ -11838,13 +11869,13 @@ snapshots:
       postcss: 8.5.20
       postcss-value-parser: 4.2.0
 
-  postcss-plugin-constparse@4.2.1(postcss@8.5.20):
+  postcss-plugin-constparse@4.2.1(postcss@8.5.23):
     dependencies:
-      postcss: 8.5.20
+      postcss: 8.5.23
 
-  postcss-pxtransform@4.2.1(postcss@8.5.20):
+  postcss-pxtransform@4.2.1(postcss@8.5.23):
     dependencies:
-      postcss: 8.5.20
+      postcss: 8.5.23
 
   postcss-reduce-initial@6.1.0(postcss@8.5.20):
     dependencies:
@@ -11878,12 +11909,12 @@ snapshots:
       postcss: 8.5.20
       postcss-selector-parser: 6.1.4
 
-  postcss-url@10.1.4(postcss@8.5.20):
+  postcss-url@10.1.4(postcss@8.5.23):
     dependencies:
       make-dir: 3.1.0
       mime: 2.5.2
       minimatch: 3.1.5
-      postcss: 8.5.20
+      postcss: 8.5.23
       xxhashjs: 0.2.2
 
   postcss-value-parser@4.2.0: {}
@@ -11894,6 +11925,12 @@ snapshots:
       source-map: 0.6.1
 
   postcss@8.5.20:
+    dependencies:
+      nanoid: 3.3.16
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+
+  postcss@8.5.23:
     dependencies:
       nanoid: 3.3.16
       picocolors: 1.1.1
@@ -12130,35 +12167,35 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  rollup@4.62.2:
+  rollup@4.62.3:
     dependencies:
       '@types/estree': 1.0.9
     optionalDependencies:
-      '@rollup/rollup-android-arm-eabi': 4.62.2
-      '@rollup/rollup-android-arm64': 4.62.2
-      '@rollup/rollup-darwin-arm64': 4.62.2
-      '@rollup/rollup-darwin-x64': 4.62.2
-      '@rollup/rollup-freebsd-arm64': 4.62.2
-      '@rollup/rollup-freebsd-x64': 4.62.2
-      '@rollup/rollup-linux-arm-gnueabihf': 4.62.2
-      '@rollup/rollup-linux-arm-musleabihf': 4.62.2
-      '@rollup/rollup-linux-arm64-gnu': 4.62.2
-      '@rollup/rollup-linux-arm64-musl': 4.62.2
-      '@rollup/rollup-linux-loong64-gnu': 4.62.2
-      '@rollup/rollup-linux-loong64-musl': 4.62.2
-      '@rollup/rollup-linux-ppc64-gnu': 4.62.2
-      '@rollup/rollup-linux-ppc64-musl': 4.62.2
-      '@rollup/rollup-linux-riscv64-gnu': 4.62.2
-      '@rollup/rollup-linux-riscv64-musl': 4.62.2
-      '@rollup/rollup-linux-s390x-gnu': 4.62.2
-      '@rollup/rollup-linux-x64-gnu': 4.62.2
-      '@rollup/rollup-linux-x64-musl': 4.62.2
-      '@rollup/rollup-openbsd-x64': 4.62.2
-      '@rollup/rollup-openharmony-arm64': 4.62.2
-      '@rollup/rollup-win32-arm64-msvc': 4.62.2
-      '@rollup/rollup-win32-ia32-msvc': 4.62.2
-      '@rollup/rollup-win32-x64-gnu': 4.62.2
-      '@rollup/rollup-win32-x64-msvc': 4.62.2
+      '@rollup/rollup-android-arm-eabi': 4.62.3
+      '@rollup/rollup-android-arm64': 4.62.3
+      '@rollup/rollup-darwin-arm64': 4.62.3
+      '@rollup/rollup-darwin-x64': 4.62.3
+      '@rollup/rollup-freebsd-arm64': 4.62.3
+      '@rollup/rollup-freebsd-x64': 4.62.3
+      '@rollup/rollup-linux-arm-gnueabihf': 4.62.3
+      '@rollup/rollup-linux-arm-musleabihf': 4.62.3
+      '@rollup/rollup-linux-arm64-gnu': 4.62.3
+      '@rollup/rollup-linux-arm64-musl': 4.62.3
+      '@rollup/rollup-linux-loong64-gnu': 4.62.3
+      '@rollup/rollup-linux-loong64-musl': 4.62.3
+      '@rollup/rollup-linux-ppc64-gnu': 4.62.3
+      '@rollup/rollup-linux-ppc64-musl': 4.62.3
+      '@rollup/rollup-linux-riscv64-gnu': 4.62.3
+      '@rollup/rollup-linux-riscv64-musl': 4.62.3
+      '@rollup/rollup-linux-s390x-gnu': 4.62.3
+      '@rollup/rollup-linux-x64-gnu': 4.62.3
+      '@rollup/rollup-linux-x64-musl': 4.62.3
+      '@rollup/rollup-openbsd-x64': 4.62.3
+      '@rollup/rollup-openharmony-arm64': 4.62.3
+      '@rollup/rollup-win32-arm64-msvc': 4.62.3
+      '@rollup/rollup-win32-ia32-msvc': 4.62.3
+      '@rollup/rollup-win32-x64-gnu': 4.62.3
+      '@rollup/rollup-win32-x64-msvc': 4.62.3
       fsevents: 2.3.3
 
   rrweb-cssom@0.7.1: {}
@@ -12181,12 +12218,12 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
-  sass-loader@14.2.1(sass@1.101.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  sass-loader@14.2.1(sass@1.101.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       neo-async: 2.6.2
     optionalDependencies:
       sass: 1.101.0
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   sass@1.101.0:
     dependencies:
@@ -12518,9 +12555,9 @@ snapshots:
     dependencies:
       escape-string-regexp: 1.0.5
 
-  style-loader@3.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  style-loader@3.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   stylehacks@6.1.1(postcss@8.5.20):
     dependencies:
@@ -12528,13 +12565,13 @@ snapshots:
       postcss: 8.5.20
       postcss-selector-parser: 6.1.4
 
-  stylus-loader@8.1.3(stylus@0.64.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  stylus-loader@8.1.3(stylus@0.64.0)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       fast-glob: 3.3.3
       normalize-path: 3.0.0
       stylus: 0.64.0
     optionalDependencies:
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   stylus@0.64.0:
     dependencies:
@@ -12604,31 +12641,31 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
 
-  terser-webpack-plugin@5.6.1(@swc/core@1.3.96)(esbuild@0.21.5)(lightningcss@1.32.0)(postcss@8.5.20)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  terser-webpack-plugin@5.6.1(@swc/core@1.3.96)(esbuild@0.21.5)(lightningcss@1.32.0)(postcss@8.5.23)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.49.0
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
     optionalDependencies:
       '@swc/core': 1.3.96
       esbuild: 0.21.5
       lightningcss: 1.32.0
-      postcss: 8.5.20
+      postcss: 8.5.23
 
-  terser-webpack-plugin@5.6.1(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  terser-webpack-plugin@5.6.1(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       jest-worker: 27.5.1
       schema-utils: 4.3.3
       terser: 5.49.0
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
     optionalDependencies:
       '@swc/core': 1.3.96
       esbuild: 0.28.1
       lightningcss: 1.32.0
-      postcss: 8.5.20
+      postcss: 8.5.23
 
   terser@5.49.0:
     dependencies:
@@ -12819,8 +12856,8 @@ snapshots:
       esbuild: 0.27.7
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
-      postcss: 8.5.20
-      rollup: 4.62.2
+      postcss: 8.5.23
+      rollup: 4.62.3
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 25.9.2
@@ -12837,8 +12874,8 @@ snapshots:
       esbuild: 0.27.7
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
-      postcss: 8.5.20
-      rollup: 4.62.2
+      postcss: 8.5.23
+      rollup: 4.62.3
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 26.1.1
@@ -12936,16 +12973,16 @@ snapshots:
       deepmerge: 1.5.2
       javascript-stringify: 2.1.0
 
-  webpack-dev-middleware@5.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  webpack-dev-middleware@5.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       colorette: 2.0.20
       memfs: 3.5.3
       mime-types: 2.1.35
       range-parser: 1.3.0
       schema-utils: 4.3.3
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
-  webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  webpack-dev-server@4.15.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       '@types/bonjour': 3.5.13
       '@types/connect-history-api-fallback': 1.5.4
@@ -12975,10 +13012,10 @@ snapshots:
       serve-index: 1.9.2
       sockjs: 0.3.24
       spdy: 4.0.2
-      webpack-dev-middleware: 5.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      webpack-dev-middleware: 5.3.4(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       ws: 8.21.1
     optionalDependencies:
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -12999,7 +13036,7 @@ snapshots:
 
   webpack-virtual-modules@0.6.2: {}
 
-  webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20):
+  webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23):
     dependencies:
       '@types/eslint-scope': 3.7.7
       '@types/estree': 1.0.9
@@ -13022,7 +13059,7 @@ snapshots:
       neo-async: 2.6.2
       schema-utils: 3.3.0
       tapable: 2.3.3
-      terser-webpack-plugin: 5.6.1(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20))
+      terser-webpack-plugin: 5.6.1(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23))
       watchpack: 2.5.2
       webpack-sources: 3.5.1
     transitivePeerDependencies:
@@ -13039,13 +13076,13 @@ snapshots:
       - postcss
       - uglify-js
 
-  webpackbar@5.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)):
+  webpackbar@5.0.2(webpack@5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)):
     dependencies:
       chalk: 4.1.2
       consola: 2.15.3
       pretty-time: 1.1.0
       std-env: 3.10.0
-      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.20)
+      webpack: 5.91.0(@swc/core@1.3.96)(esbuild@0.28.1)(lightningcss@1.32.0)(postcss@8.5.23)
 
   websocket-driver@0.7.5:
     dependencies:
