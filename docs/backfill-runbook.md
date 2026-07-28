@@ -130,7 +130,12 @@ native-id 已落后,按本文「驱动」节重跑 `POST /admin/backfill`(幂等
 
 去重命中时 `unit_price` 的派生五列(`per100ml` / `per100g` / `formula` / `confidence` / `warnings`)会被本次解析结果刷新,但**只对重报到的行生效**:在此之前落下的偏差行(`product_raw.price` 已前进、`unit_price` 仍按首报价算)要靠**重灌**追平。这不是一个端点,是一个**循环**。
 
-### 存量口径(2026-07-27 普查快照)
+### 存量口径(2026-07-27 普查快照 → 2026-07-28 修正后)
+
+**2026-07-28 已完成一轮修正**:69 条可修偏差行全部经**自重报**(上文「先分清」节)清零。结果 `drifted_fixable = 0`、`products_without_unit_price = 0`;`product` / `product_raw` / `rankable` 三个总数**零变化**(1197 / 1297 / 507)⇒ **零解析漂移**,69 条全是原地刷新。榜单 `per100ml` 非空 441 → **440**:`price ≤ 0` 的 27 行现在 `formula` 全为 NULL、**0 行**还在榜上挂单价(此前有 15 条挂着按旧价算的值),其余 14 条本就是重量轴、`per100ml` 原本即 NULL。`formula IS NULL AND price > 0` 仍是 227(未触碰)。幽灵行 4 组 8 条零偏差、不在榜,作已披露残留。
+
+下表是**修正前**的基线,保留作对照:
+
 
 | 项 | 实测 |
 |---|---|
@@ -175,6 +180,14 @@ census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `pro
 - 检测器从 `unit_price` 起 join,故「有 product 无 `unit_price`」与「有 raw 无 product」(后台首插失败的中间态)**整类不可见**——这正是 census ④ 与「重灌 SKU − 落到 `product`」差集要作**并列门**的理由。
 - 谓词依赖 `formula` 的 canonical 形态,当前其唯一写者是 `saveParsed`(值恒来自 `calculate`);**若将来出现第二个写者,该谓词必须同步加严**。
 
+### 先分清:偏差在派生侧还是在 raw 侧
+
+看偏差行的 `product_raw.captured_at`。**raw 已是新价、只有派生值冻着**时(检测器命中的典型形态),**不需要 HAR**:把库内既有的 `(title, price, capturedAt)` 原样经同步 `/contribute` 回报一次即可——`upsertRaw` 的 provenance 列是 `COALESCE`、`capturedAt` 是可选入参,原值回写则 `product_raw` **逐字不变**(不谎报新鲜度),而同一次调用的 `saveParsed` 命中去重、把派生五列刷成按当前价算的值。载荷直接由 census ②b 的输出拼(`price` 请求侧是**元**,库里存的是分,除 100)。
+
+只有当 **`product_raw` 自己也过期**(价格本身要更新)时才需要重抽 HAR 走下面的重灌。
+
+**自重报的两个已知风险,跑完必须用普查证伪**:①靠 tier2(LLM)解析的标题可能解析漂移 → 落新行而非刷新旧行,故 **`product` 总数不得增长**;②`price ≤ 0` 的行刷新后 `per100ml` 写 NULL、**退出榜单**(预期内,收尾时归因)。服务端公共限频是 **60 req/60s**,驱动须限速串行。
+
 ### 循环与完成判据
 
 1. **重抽 HAR 重灌**(经 `/ingest/batch`,入口仍开放)——命中行的派生值随该次解析落地而刷新。
@@ -212,8 +225,8 @@ census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `pro
 
 数据变更后**主动刷新阿里云 CDN**让其立即生效(否则只能等 TTL 自然过期)。**两个端点 ObjectType 不同**(`/rankings` 有 `?limit/offset/category` 等 query 变体、`/categories` 无 query):
 
-- `/rankings` 用**目录(Directory)**刷新,一刀覆盖全部 query 变体:
-  `aliyun cdn RefreshObjectCaches --ObjectPath 'https://unit-price.herbert-dev.cn/rankings' --ObjectType Directory`
+- `/rankings` 用**目录(Directory)**刷新。**`ObjectPath` 必须以 `/` 结尾**,否则阿里云直接 `InvalidObjectPath.Malformed` 拒绝。而 `/rankings?...` 这类带 query 的键**不在** `/rankings/` 目录下,所以要覆盖全部 query 变体,刷的是**站点根目录**:
+  `aliyun cdn RefreshObjectCaches --ObjectPath 'https://unit-price.herbert-dev.cn/' --ObjectType Directory`
 - `/categories` 用 **URL(File)**刷新该精确地址(它无 query,目录型反而刷不到这个精确文件):
   `aliyun cdn RefreshObjectCaches --ObjectPath 'https://unit-price.herbert-dev.cn/categories' --ObjectType File`
 - 控制台等价:`/rankings` 选"目录"、`/categories` 选"URL"。
@@ -221,7 +234,7 @@ census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `pro
 **刷新后预热(建议,且必须预热客户端真实请求的精确 URL)**:单次回源跨境要 ~3–7s(实测 TTFB,POP→海外 CF/D1),purge 后**第一个真实用户会吃满这一跳**。CDN **按完整 query 串分键**,所以**必须预热小程序逐字节实际发的 URL**——榜单落地 Tab 调 `useRankings()` **不带 category**、发的是 `/rankings?limit=20&offset=0`(**不是** `?category=soft-drink`),预热错键等于没热。用 `PushObjectCache`(或直接 `curl`)逐条预热:
 
 - 落地榜:`https://unit-price.herbert-dev.cn/rankings?limit=20&offset=0`
-- 各 category-scoped 榜(用户从品类树下钻会发的):`…/rankings?limit=20&offset=0&category=<slug>`(soft-drink/乳品/酒种各叶)。**发参顺序必须与 `buildRankingsUrl` 一致(`limit→offset→category`)**——CDN 按原始 query 串分键,顺序错即键错、等于没热
+- 各 category-scoped 榜(用户从品类树下钻会发的):`…/rankings?limit=20&offset=0&category=<slug>`。**发参顺序必须与 `buildRankingsUrl` 一致(`limit→offset→category`)**——CDN 按原始 query 串分键,顺序错即键错、等于没热。slug 全集直接从 `/categories` 取:`curl -sS <域>/categories | jq -r '[.. | objects | select(.slug) | .slug] | unique | join(" ")'`。其中 **`beverage`(root)与 `alcohol` 返回 `400`**——它们跨 cohort、无静态可比单位,是既有设计而非故障,预热时跳过即可
 - 品类树:`https://unit-price.herbert-dev.cn/categories`
 
 (`limit`/`offset` 必须与端上 `PAGE_SIZE=20`、首页 `offset=0` 一致;改了 `PAGE_SIZE` 这里同步改。)命中后 total 降到 ~50ms。
