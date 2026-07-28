@@ -176,7 +176,7 @@
 
 ### 需求:现有库存必须 backfill 打标签(不重放 ingest、单归属收敛、幂等)
 
-**必须**对已落库的 `product` 跑 backfill:经打标签管线产出品类归属(叶 `product_tag` / `pending_category_tag_id`)、重算 `rankable`、补 `category_closure` 命中。backfill **必须**经一个受控入口落地(迁移 / 脚本 / 鉴权运维端点之一),**禁止**重放 `/ingest`(first-write-wins、不覆写)。
+**必须**对已落库的 `product` 跑 backfill:经打标签管线产出品类归属(叶 `product_tag` / `pending_category_tag_id`)、重算 `rankable`、补 `category_closure` 命中。backfill **必须**经一个受控入口落地(迁移 / 脚本 / 鉴权运维端点之一),**禁止**重放 `/ingest`——理由是它**会覆写** `title`/`price`/`captured_at` 为重放观测并触发后台 tier2(而非「不覆写」:`unit_price` 的派生值现在也随重报刷新,见 `persistence`「product 必须按去重键收敛」,故旧的 first-write-wins 理由已不成立)。
 
 - **写路径三态 reconcile(单归属收敛 + 落叶清 pending)**:每次写品类归属,**必须**把三态字段(`kind=category` 叶 `product_tag` 与 `pending_category_tag_id`)**整体收敛到本次裁决**,使任一时刻商品恰落三态之一、**绝不**出现「有叶 ∧ pending 非空」的越界态:
   - 裁决 = **叶**:先删该 `product` 既有 `kind=category` 叶 `product_tag`、插新叶,**并置 `pending_category_tag_id=NULL`**(落叶必清 pending,对齐 taxonomy §二「转为正式叶标签、清 pending」)——规则升级改判 A→B 后只剩叶 B、不残留 A;
@@ -186,7 +186,7 @@
 - **幂等**:同一数据快照重跑结果一致——`product_tag` `(product_id, tag_id)` 唯一防重复;仲裁为纯函数(同输入同输出);`rankable` / `pending` 为覆写、收敛到同值。
 
 #### 场景:现有商品获得品类归属与属性标签
-- **当** 对现有库存(生产现状约 **445** 个 `product` 全量,含 per100ml 不可算行)跑 backfill
+- **当** 对现有库存(全量 `product`,含 per100ml 不可算行;规模以运维当次普查为准)跑 backfill
 - **那么** 可判定项获叶 category + 适用 attribute 标签且 `category_closure` 填充(含到 root);`rankable` 按规则重算
 
 #### 场景:不可判定项落待人工、不强归
@@ -211,7 +211,7 @@
 
 #### 场景:本期 backfill 对 store-map 惰性、tier1 为活跃路径
 - **当** 本期对现有库存跑 backfill
-- **那么** 因现状无 ingest 字段承载 store 原生品类 id(`category_hint` 是 `product.category` 透传源、恒 `beverage`,**非**原生 `categoryIdList` 叶 id),backfill **不喂 store-map**(tier1 关键词规则为本期活跃分类路径);`store_category_map` seed + 仲裁 store-map 分支为后续阶段轨道、由单测覆盖,待 ingest 新增**专用** native-id 字段后接通;**禁止**复用 `category_hint` 承载原生 id(污染 `product.category`)
+- **那么** 该场景描述的是本能力落地当期的状态。**其前提此后已被 `add-store-map-native-id` 变更取代**:ingest 现已采集并持久化 `product_raw.native_category_id`,backfill 会读取它并把 store-map 作为**活跃**分类路径(tier1 关键词规则不再是唯一路径)。本变更**不改动**该管线,此处仅订正这条已失真的陈述,以免归档时把它重新祝福为现状
 
 ### 需求:存量 backfill 必须有可在生产驱动的受控入口(确定性全序游标分块 + 完整覆盖)
 

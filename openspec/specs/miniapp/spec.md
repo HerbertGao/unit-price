@@ -328,7 +328,7 @@
 - **历史低价标注**:仅当 `priceCents > lowestPriceCents`(现价高于历史低点)时,该行**必须**呈现「历史低 ¥X.XX」标注(`lowestPriceCents/100` 两位小数);`priceCents <= lowestPriceCents`(现价即历史低点)时**禁止**呈现该标注(无「错过抄底」信号,免噪)。
 - **缺字段降级(跨版本 / 旧缓存)**:`capturedAt`/`lowestPriceCents` 契约为 `.optional()`,故旧服务端或 CDN 24h 旧缓存响应可能缺其一。缺 `capturedAt` 时**禁止**置灰(`now - undefined` 判定为非失效),缺 `lowestPriceCents` 时**禁止**呈现历史低价标注——即退化为无标注的既有行为,**禁止**崩溃或整屏错。
 - 置灰与历史低价标注**相互正交**:一行可同时失效且现价高于历史低点,两标注可并存。
-- **三价并存是可接受的呈现结果**:一行可同时展示 `per100ml`(冻结于首报的排序大字)、`priceCents`(最新整件价)、`lowestPriceCents`(历史低)三个口径不同的价。徽标只对比 `priceCents` vs `lowestPriceCents`(同为整件分)、**不与 `per100ml` 混算**;UI 是否把「历史低」徽标与排序大字在视觉上分离由本需求交实现斟酌,但须知这是既有 per100ml 冻结 quirk 的自然延伸、非计算错误。
+- **三价并存是可接受的呈现结果**:一行可同时展示 `per100ml`(排序大字)、`priceCents`(最新整件价)、`lowestPriceCents`(历史低)三个口径不同的价。徽标只对比 `priceCents` vs `lowestPriceCents`(同为整件分)、**不与 `per100ml` 混算**。`per100ml` 与 `priceCents` **同源于最近一次成功解析**(重报命中去重时派生值随之刷新,见 `persistence`/`rankings-api`),但仍有四类窗口可不同源、且并非都会自动自愈(见 `rankings-api`「口径漂移」;其中解析失败要靠再重报一次收敛,解析漂移遗留的旧行**不可修**、属已披露残留);UI 是否把「历史低」徽标与排序大字在视觉上分离由本需求交实现斟酌。**客户端禁止**据此做任何一致性校验或把不一致呈现为错误——三口径本就分母不同。
 - **标注随 `RankingRow` 组件生效于其所有渲染面**:`RankingRow` 除榜单列表外,还被即时比价页复用渲染 `neighbors`(邻居行)。邻居行是真实榜单行、带真实 `capturedAt`/`lowestPriceCents`(经 `projectNeighbor` 填充),故**同样**按上述规则置灰 / 标历史低——这是正确且期望的。但用户**自填的比价行**(非 `RankingsItem`、无 `capturedAt`/`lowestPriceCents`)**禁止**置灰或标注(走缺字段降级路径)。
 - 本需求约束逐行标注的呈现逻辑,**不**引入榜单顶部「全局新鲜度横幅 / 更新于 X月X日」——该全局横幅仍属 P8、非本期(与逐行置灰不同)。呈现所用颜色**必须**沿用 `app.css` 设计 tokens、**禁止**在页面/组件散写颜色字面量(遵既有「设计 tokens 集中」约束)。
 
