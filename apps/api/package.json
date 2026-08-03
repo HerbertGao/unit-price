@@ -17,7 +17,7 @@
     "@unit-price/api-client": "workspace:*",
     "@unit-price/core": "workspace:*",
     "@unit-price/db": "workspace:*",
-    "ai": "^7.0.31",
+    "ai": "^7.0.46",
     "hono": "^4.12.32",
     "zod": "^4.4.3"
   },
