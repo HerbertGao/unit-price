@@ -39,8 +39,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/db
       ai:
-        specifier: ^7.0.58
-        version: 7.0.58(zod@4.4.3)
+        specifier: ^7.0.66
+        version: 7.0.66(zod@4.4.3)
       hono:
         specifier: ^4.13.1
         version: 4.13.1
@@ -207,8 +207,8 @@ packages:
   '@adobe/css-tools@4.3.3':
     resolution: {integrity: sha512-rE0Pygv0sEZ4vBWHlAgJLGDU7Pm8xoO6p3wsEceb7GYAjScrOHpEo8KK/eVkAcnSM+slAEtXjA2JpdjLp4fJQQ==}
 
-  '@ai-sdk/gateway@4.0.46':
-    resolution: {integrity: sha512-LIAO6kAG8fpXQb9L0iwPk1FIbXftvqnyC56v5NEAzeWTeL8fUsy/Hx86VPBTWEDFdwbVprjWifJOAqS6AOj3mA==}
+  '@ai-sdk/gateway@4.0.52':
+    resolution: {integrity: sha512-SXUM8jzzuTUJRq+EOgPd5to6DSx0EKslVn+IVZHbUEX6k/3vCPNrvjckbK26HnNxHU/STxm+zTSJteqrO+7Z0w==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -221,6 +221,12 @@ packages:
 
   '@ai-sdk/provider-utils@5.0.25':
     resolution: {integrity: sha512-xscPPHCSjCHWrdhai25sbHCJeKNLW/3D1uSpUZa4cEtTKXA8OnPQ3+Rfu1SmM5Ea/Mf8Dfn3cllw9zeMzo/zFA==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/provider-utils@5.0.27':
+    resolution: {integrity: sha512-EzAn4pdgG5g0xXtH6lE2zyNmfjDQIDjATkfqzuidEI35g++hh4+07vnjzkT/RmGmIClPZiRj/Q2GMPV2V7mkHw==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -3156,8 +3162,8 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  ai@7.0.58:
-    resolution: {integrity: sha512-GfgO90CQQ0yYuoxJAUOeQ6tviyYw1BUIDygSZ1q3Ce6kSc93tYmB5eltKY/NxC0YOouAax7JvDqVnYxvIAr04Q==}
+  ai@7.0.66:
+    resolution: {integrity: sha512-wBUyoCYF3GVr+62nelBgR8YbpTSsMZrzFyOOjiwijylNSM2TFCW35C+Pml2vc59/WLMpyhS/LWZ55M+B9DAcSg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -6994,10 +7000,10 @@ snapshots:
 
   '@adobe/css-tools@4.3.3': {}
 
-  '@ai-sdk/gateway@4.0.46(zod@4.4.3)':
+  '@ai-sdk/gateway@4.0.52(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.7
-      '@ai-sdk/provider-utils': 5.0.25(zod@4.4.3)
+      '@ai-sdk/provider-utils': 5.0.27(zod@4.4.3)
       '@vercel/oidc': 3.2.0
       zod: 4.4.3
 
@@ -7008,6 +7014,15 @@ snapshots:
       zod: 4.4.3
 
   '@ai-sdk/provider-utils@5.0.25(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.7
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.29.0
+      zod: 4.4.3
+
+  '@ai-sdk/provider-utils@5.0.27(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.7
       '@standard-schema/spec': 1.1.0
@@ -9551,11 +9566,11 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ai@7.0.58(zod@4.4.3):
+  ai@7.0.66(zod@4.4.3):
     dependencies:
-      '@ai-sdk/gateway': 4.0.46(zod@4.4.3)
+      '@ai-sdk/gateway': 4.0.52(zod@4.4.3)
       '@ai-sdk/provider': 4.0.7
-      '@ai-sdk/provider-utils': 5.0.25(zod@4.4.3)
+      '@ai-sdk/provider-utils': 5.0.27(zod@4.4.3)
       zod: 4.4.3
 
   ajv-formats@2.1.1(ajv@8.20.0):
