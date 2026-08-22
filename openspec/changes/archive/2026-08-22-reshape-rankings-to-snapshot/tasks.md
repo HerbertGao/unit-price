@@ -56,17 +56,17 @@
 - [x] 5.1 proposal、design 与 7 份 delta specs 已同步:移除服务端节点计数、明确 compute 空总体/rank、开放 wire reason 与首版迁移边界
 - [x] 5.2 `.github/workflows/cdn-warm.yml` 的预热目标收敛为 `/rankings` 与 `/categories` 两条,不再枚举 cohort URL
 - [x] 5.3 已同步 `docs/architecture.md`、`docs/taxonomy-and-tagging.md`、`docs/backfill-runbook.md` 的全量快照、无计数节点与 CDN 顺序说明
-- [ ] 5.4 实际归档时再更新 api-client、rankings-api、miniapp 主 spec Purpose;活跃变更期间主 spec 保持 pre-archive 基线,避免 Purpose 与尚未合并的需求正文冲突
+- [x] 5.4 归档同步后已更新 api-client、rankings-api、miniapp 主 spec Purpose,均与快照契约一致
 - [x] 5.5 运行 `openspec-cn validate reshape-rankings-to-snapshot --strict` 与 `git diff --check`,两者均为零错误
 - [x] 5.6 临时副本 archive 试跑成功;7 个 touched specs 严格校验通过且旧计数/分页正向契约未残留
 - [x] 5.7 workspace build、778 个测试、两套测试源码 typecheck、miniapp typecheck 与 weapp bundle 构建全部通过
 
 ## 6. 首版发布与生产验活
 
-- [ ] 6.1 将含代码变更放入 feature branch 经 PR/CI 合并 main,确认自动源站部署成功后再继续 CDN 操作
-- [ ] 6.2 用人工发布凭据 purge `/rankings*` 全部历史对象与 `/categories`;若 Directory 不覆盖带参对象,按 deployment spec 的 16 条历史路径逐条 File purge
-- [ ] 6.3 purge 完成后启用 `/rankings` query-string 归一化,从国内视角确认裸 URL 与带参 URL 命中同一边缘对象
-- [ ] 6.4 用 `PushObjectCache` 预热 `/rankings` 与 `/categories`,逐条记录 task id,全部失败时停止发布
-- [ ] 6.5 从国内视角验形:`/rankings` 为快照对象、`GET /categories` 的 `nodes` 不含 `rankableCount`、两端点均命中 CDN;任一不符则停止提交小程序
-- [ ] 6.6 核对生产两门候选数满足 `rows.length = candidateCount - Σexcluded`,按 reason 排查非零排除但不把其本身判为发布失败
-- [ ] 6.7 完成小程序 test/typecheck/build 与真机关键流验证后提交首版审核;服务端自此不得单独回滚为旧数组形状
+- [x] 6.1 PR #84 已合并 main,CI 与自动生产部署成功
+- [x] 6.2 已确认完成 `/rankings*` 历史对象与 `/categories` CDN purge
+- [x] 6.3 已确认 `/rankings` query-string 归一化生效,裸 URL 与带参 URL 命中同一边缘对象
+- [x] 6.4 已确认 `PushObjectCache` 预热 `/rankings` 与 `/categories` 成功
+- [x] 6.5 已确认国内视角 `/rankings` 为快照对象、`GET /categories` 节点无 `rankableCount`,且两端点命中 CDN
+- [x] 6.6 已确认生产候选数、rows 与 excluded 关系完成验活,非零 reason 已按约定处理
+- [x] 6.7 小程序 test/typecheck/build 与真机关键流验证通过,已提交首版审核;服务端不得单独回滚为旧数组形状

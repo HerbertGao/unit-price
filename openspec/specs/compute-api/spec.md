@@ -9,57 +9,83 @@
 
 ### 需求:POST /compute 必须按结构化输入确定性计算单价并在所选 cohort 内定位
 
-`apps/api` **必须**提供无状态端点 `POST /compute`，对**结构化**入参做**确定性**单价计算并在所选品类 cohort 内定位。**禁止**调用任何 LLM / AI（输入已结构化，无「理解」环节；本端点是 tier3 确定性计算，符合「AI 只理解不计算」约定）。**禁止**任何持久化 / DB 写 / 众包入库——纯按需无状态计算。
+`apps/api` **必须**提供无状态端点 `POST /compute`,对结构化入参做确定性单价计算并在所选品类 cohort 内定位。`/rankings` 改为全量快照后,本端点的**定位总体来源**随之改变:计算管线、入参/响应契约、无状态边界与全部 400 守卫**不变**,变的只有「cohort 内那批行从哪来」。
 
-**入参契约** `ComputeRequestSchema`（Zod 单一事实源，定义在 `@unit-price/api-client`、**禁止 DIRECT import** `packages/core`，以保持其可安全打进 weapp）：`{ totalPrice:number>0, quantity?:int>0, unitSize?:{ value:number>0, unit }, totalAmount?:{ value:number>0, unit }, category:string }`，`unit ∈ {ml,L,g,kg}`。服务端**必须**用同一份 schema 校验请求体（信任边界权威校验在服务端）。`unitSize` 与 `totalAmount` 语义上**二选一**：客户端只发其一；服务端用 `.refine` 拒绝**两者同时出现**（避免歧义）。
+**定位总体改用同一快照构造**:不再调用节点作用域查询 `listRankings`,而是读取全量快照并用 `api-client` 的同一个 `cohortSlugs` 切出 cohort。`rank` / `total` / `percentile` / `neighbors` 全部由该次读取的准入后行集决定。该等价限定在两个端点观察同一数据库状态时;客户端持有的 CDN/端上旧快照与稍后的 `no-store` compute 请求可能跨版本,不承诺 TTL 内强一致。
 
-> **core 依赖边界（澄清）**：约束是 compute schema **不得直接 import core**。响应 `neighbors` 复用既有 `RankingsItemSchema`（在 `@unit-price/api-client`），其经 `rankings.ts` 间接依赖 core 的 `WarningsSchema`——这是 `rankings.ts`/`categories.ts` 已随榜单/分类树**上线进 weapp 的既有状态**、对 compute **footprint-neutral**（compute 不新增任何 core 表面），故不在本约束内。
+**祖先来源随之改变**:原先本端点沿**物化闭包** `category_closure` 取 cohort 成员,榜单侧沿快照的 `parentSlug` 链取。两条来源只在「每次 re-parent 都重建闭包」时一致,而没有任何机制保证——症状会是**比价卡上的名次与榜单不一致**,且是静默的。改读同一份快照后,两侧共用 `parentSlug` 链这一条来源,该分叉风险消失。`/categories` 不再下发 `rankableCount`,因此没有第二个服务端计数需要与该总体对齐。
 
-**计算管线**（服务端，复用 `packages/core`，**零新增计算逻辑**）：
-1. **必须**先以 `meetsComputeRequiredSet` 判输入集是否足够（有 `totalAmount` 或 有 `unitSize`+`quantity`）；不足 → `400 invalid-request` 且**必须**指明缺哪类字段。
-2. 把 `ComputeRequest` 映射为 core 的 `ParsedSpec`（`{ unitSize, quantity, totalAmount, multipliers:[1], category, confidence:1 }`，`confidence:1` 因结构化输入无解析不确定性），调 `calculate(spec, totalPrice)` 得 `per100ml` XOR `per100g` + 可回放 `formula`。
-3. `calculate` 进 uncomputable 终态（价格非正 / 无可识别单位轴 / 规格不自洽，两轴皆 null）时**禁止**静默返回 `200`——**必须** `400` 并回带 core 的 warning 文案（不得让客户端拿到「成功但全空」的歧义结果）。
-4. **必须**先把 `category` 对照既有品类 slug 全集（`/rankings` 同款 `CATEGORY_SLUGS`）校验：非该集合成员 → `400 未知品类`（区别于下面的跨 cohort 文案，避免把拼写错误误诊为「跨多口径」）。再用既有 `resolveComparableUnitStatic(category)` 守卫可比性：解析为 `null`（跨 cohort 节点，如 `beverage`/`alcohol`）→ `400`；解析非 null 但与输入轴不一致（如输入按 `g`、cohort 按 `per_100ml`）→ `400` 且文案**必须**指明该品类的比价单位轴（不追求万物可比，核心原则①）。
-   - **本期 per_100g cohort 必须显式 `400`「暂不支持按重量（每100g）比价」**：定位读复用的 `/rankings` 查询是 **per100ml-only** 构造（`isNotNull(per100ml)` + 按 per100ml 排序），无法对 per_100g cohort 给出正确总体。故 cohortAxis 解析为 `per100g` 时**禁止**进入定位（否则会拿 per100ml 榜给 g 值定位、返回貌似成功的垃圾 rank/total），**必须** `400`。per_100g 全量支持是本期非目标（待重量轴 backfill 同时扩 `listRankings`/`RankingsItem` 的 per100g 榜后解禁）。客户端 `toCohorts` **同步只派生 per_100ml cohort**，使 UI 根本不提供 per_100g 选项。
-5. 定位：在该 cohort 的 **rankable 行**（复用 `/rankings` 同一 cohort 闭包 + rankable 守卫口径，保证「定位」与「榜单」同一总体）中算 `rank`（该轴单价 `<` 用户值的条数 + 1，∈ `[1, total+1]`）、`total`（cohort rankable 总数，≥ 0）、`percentile`（= **严格贵于**用户值的同类占比 × 100，即「比 X% 同类便宜」，∈ `[0,100]`；**`total=0` 时 `percentile` 必须为 `0`**），并取用户值两侧最近的若干 `neighbors`（默认上下各 3，投影同 `RankingsItem`）。
+**行准入必须与榜单同一道门**:快照行在下发前经下发契约逐行准入(见 `persistence`)。`/compute` 必须看到**准入后**的同一个集合——被榜剔除的行若仍计入这里的 `rank` 与 `total`,「定位与榜单同一总体」这条保证就是假的,而它正是本次改动要买的东西。
 
-**响应契约** `ComputeResultSchema`：`{ per100ml:number|null, per100g:number|null, formula:string, axis:'per_100ml'|'per_100g', rank:int, total:int, percentile:number, neighbors:RankingsItem[] }`（恰一个 per100 轴非 null）。响应**必须**带 `Cache-Control: no-store`（每次输入不同、几乎不复用，缓存无意义且会无界填充 CDN）。
+**取数上限取消**:原先为控制读取量设了 `COMPUTE_COHORT_FETCH_MAX`,其自身注释已自陈越过上限会「silently under-count」。快照是全量对象,不存在需要截断的分页游标,该上限一并移除。**不得**以任何形式重新引入按行数截断的定位总体——一个被截断的总体产出的是貌似成功的错 `rank`。
+
+**`per_100g` 的 400 不变,但理由改述**:原理由是「定位读复用的 `/rankings` 查询是 per100ml-only 构造」。该查询已不在路径上,但快照本身仍是 per100ml-only(入榜两门含 `per100ml IS NOT NULL`),故结论不变:`cohortAxis` 解析为 `per100g` 时**必须** `400`,**禁止**进入定位。解禁条件改述为「快照扩出重量轴之后」,不再挂在 `listRankings` 上。
+
+**`CATEGORY_SLUGS` 校验不变**:`category` 仍必须先对照编译期派生的品类 slug 全集校验(非成员 → `400 未知品类`),再经 `resolveComparableUnitStatic` 守卫可比性。该约束原挂在 `rankings-api` 的参数边界需求下,那条需求随参数面移除,**本端点是其唯一存续消费方**,故约束迁入本规范:该校验集**必须编译期派生自 `packages/db` 的 `CATEGORY_NODES`**,禁止手写第二份枚举、禁止运行期查 `tag` 表。
+
+**守卫必须用编译期静态解析器,禁止用运行期 `resolveComparableUnit`**:cohort 守卫必须用纯同步、编译期派生自 `packages/db` 的 `CATEGORY_NODES` 的 `resolveComparableUnitStatic(slug)`(沿 `parentSlug` 求 is-a 继承、不查 `tag` 表),**禁止**复用 repository 的运行期 `resolveComparableUnit`(它 round-trip `tag` 表)。理由是一条关键正确性约束:合法但 DB 暂未 seed 的 cohort slug(如 `beer`,迁移先于 seed 的窗口里 `tag` 行尚不存在)经**运行期**解析得 `null` → 被守卫误判 `400`,与「合法 slug 但未 seed → `200` + 空 neighbors、禁止误报 `400`」直接冲突;而**静态**解析器对 `beer` 恒为 `per_100ml`(与 DB seed 状态无关)→ 放行 → 快照零命中 → `200` 空总体,对 `alcohol`/`beverage` 恒为 `null` → `400`,两侧契约同时满足。该禁令原载于 `rankings-api` 与 `persistence`,两处均随本变更改写/移除,故迁入本规范。repository 的运行期 `resolveComparableUnit` 仍用于打标签管线,不受影响。
+
+**读失败仍是 500**:快照读抛错 → `500 persistence-error`,不重算、不降级为空总体——空 `neighbors` 是「该 cohort 确实无同类」的信号,拿它掩盖一次读失败会把故障渲染成正常结果。
+
+**静态合法但快照未含该节点时映射为空总体**:`category` 先经编译期 slug 全集与静态可比轴守卫;二者通过后,若同一快照的 `categoryNodes` 尚无该 slug,`cohortSlugs` 的未知节点拒绝态在本端点必须映射为零成员 cohort。这只覆盖迁移先于 seed / 陈旧空快照窗口;不在静态全集内的输入仍是 `400 未知品类`。
+
+**邻居名次取完整 cohort 的 1-based 位次**:`neighbors[].rank` 不是返回切片内的序号。每个邻居的 rank 必须等于它在完整、服务端下发顺序的 cohort 中从 1 开始的位置,与榜单从同一快照派生的 rank 一致。
 
 #### 场景:足够的结构化输入返回单价与定位
 
-- **当** 客户端 `POST /compute` 提交 `{ totalPrice, unitSize:{value,unit:'ml'}, quantity, category:'soft-drink' }`（输入集足够、轴与 cohort 一致）
-- **那么** `200` + `per100ml` 与可回放 `formula`（与 core `calculate` 逐字节一致）、`axis='per_100ml'`、`rank`/`total`/`percentile`、两侧最近 `neighbors`；**禁止**任何 LLM 调用、**禁止**任何 DB 写
+- **当** 客户端提交轴与 cohort 一致、字段齐备的结构化输入
+- **那么** 返回确定性单价与 `rank` / `total` / `percentile` / `neighbors`;计算管线与响应契约不变
+- **那么** 定位行来自与 `/rankings` 相同的快照构造,经同一个 `cohortSlugs` 切出且通过同一道行准入;在同一数据库状态下集合相同
+- **那么** 每个 `neighbors[].rank` 必须是该行在完整 cohort 中的 1-based 位次,不得按邻居切片重新从 1 编号
 
 #### 场景:输入集不足返回 400 并指明缺字段
 
-- **当** 客户端提交既无 `totalAmount` 又无完整 `unitSize`+`quantity`（如只有 `totalPrice`+`category`）
-- **那么** `400 invalid-request`，错误**必须**指明需补「总量」或「单件容量+数量」；**禁止**返回 `per100ml=null` 的 `200`
+- **当** 结构化输入缺必要字段
+- **那么** `400` 并指明缺哪个字段;不变
 
 #### 场景:价格非正或不自洽返回 400（uncomputable 不静默 200）
 
-- **当** 客户端提交 `totalPrice<=0` 或负 / 零容量
-- **那么** `400`（由 `ComputeRequestSchema` 的 `.positive()` 在信任边界先行拒绝；message 为校验错误）——仍是 `400`，不静默 `200`
-- **当** 输入通过 schema 但致 core 进 uncomputable 终态（如 `unitSize`+`totalAmount` 同时给且规格不自洽）
-- **那么** `400` + 回带 core 的 warning 文案（如「规格不一致…」）；**禁止**静默返回 `per100ml=null` 的 `200`
+- **当** 价格非正或输入不自洽
+- **那么** `400`;不得静默 `200`;不变
 
 #### 场景:跨轴 / 跨 cohort 不可比返回 400
 
-- **当** 客户端提交按 `g` 的输入但 `category` 是 `per_100ml` cohort（如 `soft-drink`），或 `category` 是跨 cohort 节点（`beverage`/`alcohol`，`resolveComparableUnitStatic` 为 null）
-- **那么** `400` 不可比，文案**必须**指明该品类的比价单位轴（或该节点不可直接比价）；定位**禁止**发生
-- **当** `category` 不是已知品类 slug（拼写错误 / 未知）
-- **那么** `400 未知品类`（区别于跨 cohort 文案）
+- **当** 输入轴与 cohort 轴不一致,或 `category` 是跨 cohort 节点(`resolveComparableUnitStatic` 为 `null`)
+- **那么** `400`,文案指明该品类的比价单位轴;不变
+- **当** `category` 不在编译期派生的 slug 全集内
+- **那么** `400 未知品类`(区别于跨 cohort 文案);该 slug 全集必须编译期派生自 `CATEGORY_NODES`,禁止手写第二份枚举或运行期查 `tag` 表
 
 #### 场景:本期 per_100g cohort 返回 400（不静默给错定位）
 
-- **当** `category` 解析出的可比轴为 `per_100g`（重量轴）
-- **那么** `400`「暂不支持按重量（每100g）比价」；**禁止**进入定位（**禁止**用 per100ml 榜给 g 值算出貌似成功的 rank/total/neighbors）。待重量轴 backfill 扩 `listRankings`/`RankingsItem` 的 per100g 榜后解禁
+- **当** `cohortAxis` 解析为 `per100g`
+- **那么** `400`「暂不支持按重量(每100g)比价」;**禁止**进入定位
+- **那么** 理由改述为「快照本身是 per100ml-only(入榜两门含 `per100ml IS NOT NULL`)」;原理由「定位读复用的 per100ml-only 查询」所指的 `listRankings` 已不在本端点路径上。解禁条件是快照扩出重量轴,不再挂在该查询上
+
+#### 场景:合法但未 seed 的 slug 放行而非误报 400
+
+- **当** `category` 是 seed 全集内、静态解析单位非空的 slug(如 `beer`),而 DB 尚无对应 `tag` 行(迁移先于 seed 的窗口)
+- **那么** 守卫必须放行(静态解析器与 DB 状态无关);即使 `cohortSlugs` 因快照中缺该节点返回未知节点拒绝态,本端点也必须把它映射为零成员 cohort → `200` + 空 neighbors,**禁止**误报 `400 未知品类`
+- **当** 有人改用运行期 `resolveComparableUnit` 做该守卫
+- **那么** 该 slug 会解析得 `null` 并被误判 `400`——这正是禁令存在的理由
 
 #### 场景:该 cohort 无同类时返回空 neighbors 而非报错
 
-- **当** 客户端提交合法输入但该 cohort 当前无 rankable 行（或用户值在边界、无某侧邻居）
-- **那么** `200` + `neighbors` 为空（或仅一侧）、`rank`/`total` 仍按现状给出（`total=0` 时 `rank=1`、**`percentile=0`**）；**禁止** `404`
+- **当** 该 cohort 在快照中无成员
+- **那么** 返回空 `neighbors`、`total = 0`、`percentile = 0`,`200`;不得 404
+- **当** 快照读本身抛错
+- **那么** `500 persistence-error`;**不得**降级为空总体——那会把一次读故障渲染成「该品类暂无同类」
 
 #### 场景:无状态、no-store、schema 客户端安全
 
-- **当** 任意 `POST /compute` 成功响应
-- **那么** **必须**带 `Cache-Control: no-store`、**必须**无任何持久化副作用；`ComputeRequestSchema`/`ComputeResultSchema` 是 Zod 单一事实源且**禁止** import `packages/core`（使其可安全打进 weapp），服务端复用同一份做权威校验
+- **当** 检查本端点的副作用与缓存头
+- **那么** 不写库、不调 LLM、`Cache-Control: no-store`;契约经 `api-client` 共享 schema 校验;不变
+- **那么** 读全量快照不构成状态:它是一次只读取数,不缓存于本端点、不跨请求复用
+
+#### 场景:定位总体与榜单总体不得分叉
+
+- **当** `/rankings` 源站读取与本端点读取观察同一数据库状态
+- **那么** 两者的 cohort 行集合必须相同——同一快照构造、同一个 `cohortSlugs`、同一道行准入门
+- **当** 客户端显示较旧 CDN/端上缓存而本端点读取较新数据库状态
+- **那么** 两者允许在缓存 TTL 内跨版本不同;不得把本需求解释为跨请求缓存一致性保证
+- **当** 有人提议为控制读取量给定位总体加行数上限
+- **那么** **禁止**:截断后的总体产出貌似成功的错 `rank`,而调用方无从分辨

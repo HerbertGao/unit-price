@@ -1,181 +1,135 @@
 # rankings-api 规范
 
 ## 目的
-待定 - 由变更 add-rankings-endpoint 创建。归档后请更新目的。
 
-`GET /rankings` 只读榜单接口：从既有持久化层读取已落库的单价计算结果，按真实单价（容量轴 per100ml）升序分页返回一张可比榜单。只读、不重算、治理豁免。
+`GET /rankings` 是只读、治理豁免的全量榜单快照接口，一次返回已落库的可比单价行、同版本品类树和排除健康信号。服务端按真实单价确定全序且不重算；客户端从该快照本地派生单一 cohort 榜、搜索和分页。
+
 ## 需求
+
 ### 需求:GET /rankings 只读榜单接口
 
-`apps/api` 必须提供 `GET /rankings`，从既有持久化层读取已落库的单价计算结果，按真实单价升序分页返回一张**品类节点作用域**的榜单。基础读取为 `unit_price ⋈ product ⋈ product_raw`，追加 `product_tag`(叶 category 边) JOIN `category_closure`(祖先 = 目标节点) 的闭包命中，并读取 `product.rankable` 派生列作入榜门。该接口**只读**：禁止写入、禁止调用 LLM、禁止触发任何后台任务、禁止任何出站 fetch。
+`apps/api` 必须提供 `GET /rankings`,一次返回全部可比行与判定其归属所需的品类树,作为单一可缓存对象。只读:不写库、不调 LLM、不触发后台任务、不出站 fetch。
 
-**Cohort 守卫（P3.5 核心修正）**：榜**只对「自身解析出非空 `comparable_unit`」的节点开放**——即目标节点经 is-a 继承解析出非空可比单位（软饮 / 软饮叶 / 乳品 / 乳品叶 / 各酒种叶）。**跨多个可比 cohort 的节点（root `饮料`、`酒类` 父节点，解析单位为 `null`）必须拒绝开榜**（返回 `400`，见「分页与查询参数边界」），以杜绝「矿泉水 + 葡萄酒」「啤酒 + 威士忌」这类 per100ml 不可比的混榜。守卫判据机械：节点的解析单位非空 ⟺ 该节点是单一 cohort（其整棵子树共享同一 `comparable_unit` 绑定点）⟺ 可开榜；为 `null` ⟺ 跨绑定点的祖先 ⟺ 拒榜。
+**不接受参数**:`category` / `q` / `limit` / `offset` 移除。带上任一参数时必须被忽略,响应与无参请求逐字相同——否则响应随参数分叉成多个缓存对象,而单一缓存键是本接口存在的理由。
 
-**守卫的解析必须基于编译期 seed 定义（`CATEGORY_NODES`）、不得用运行期 DB 查询**：cohort 守卫**必须**用一个**纯同步、编译期派生自 `packages/db` 的 `CATEGORY_NODES` 常量**的静态解析器 `resolveComparableUnitStatic(slug)`（沿 `parentSlug` 求 is-a 继承、不查 `tag` 表，与 `CATEGORY_SLUGS` 同一派生范式），**禁止**复用 repository 的运行期 `resolveComparableUnit(nodeSlug)`（它 round-trip `tag` 表）。理由是单一来源的关键正确性约束：合法但 DB 暂未 seed 的 cohort slug（如 `beer`，迁移先于 seed 窗口、`tag` 行尚不存在）经**运行期** `resolveComparableUnit` 会解析得 `null` → 被守卫误判 `400`，与下文「合法 slug 但 DB 未 seed → `200` + 空数组、禁止误报 `400`」**直接冲突**；而**静态**解析器对 `beer` 恒为 `per_100ml`（与 DB seed 状态无关）→ 守卫放行 → 闭包零命中 → `200 []`，对 `酒类`/`beverage` 恒为 `null` → `400`，两侧契约同时满足。守卫遂与 `category` slug 校验一样是**纯同步 parse、无 DB 往返**（亦消除每请求一次 D1 子查询的开销）。repository 的运行期 `resolveComparableUnit` 仍用于打标签管线（`apps/api/src/tagging.ts` 算 `rankable`），不受影响。
+**响应形状**:对象 `{ rows, categoryNodes, excluded }`。
 
-**数据源与计算留痕**：响应中每个榜单项的 `per100ml`、`formula`、`confidence`、`warnings` 必须**直接取自 `unit_price` 已存储的列，禁止在读路径重算**。`packages/core` 不得进入读路径。闭包 / `rankable` / cohort 守卫仅作**过滤/准入**，不参与任何重算。
+- `categoryNodes` 是全部 `kind=category` 节点(`slug`/`name`/`parentSlug`/`comparableUnit`/`rankable`),继承解析在内存完成。该节点数组与 `GET /categories` 响应的 `nodes` 逐字同形,两者均不带 `rankableCount`;客户端需要数量时从快照派生。
+- `excluded` 是被排除行或节点的 `{ reason, count }`,数据健康观测项,不作为失败判据。wire 侧 `reason` 只要求非空字符串,不得用封闭枚举让新增健康信号否决整份载荷。
+- **落地 cohort 不由服务端下发**:多发一个 slug 只会多一处要保持同步的地方。它也**不可从 `categoryNodes` 推导**——「最浅的单一可比轴节点」无唯一解(`soft-drink` 与 `dairy` 同深同轴),由消费端以具名常量承载,见 `miniapp` spec。
 
-**入榜判据（合取门）**：一行入榜当且仅当**四者皆真**：⓪ 目标节点解析单位非空（cohort 守卫，否则整请求 `400`）；① 它是目标品类节点的闭包成员（`product_tag` 叶 JOIN `category_closure.ancestor_tag_id = 目标节点`）；② `product.rankable = true`（资格门：已分类叶 ∧ 该叶解析出非空 `comparable_unit`）；③ `unit_price.per100ml IS NOT NULL`（数据门）。`rankable` 的派生口径**不变**（已分类叶 ∧ 解析单位非空），但本期把 `comparable_unit=per_100ml` **扩绑到乳品叶与各酒种叶**，故乳品/酒类商品现也 `rankable=true`、各自在其 cohort 节点入榜。**数据门列由可排名成员所在轴决定**——v1 唯一可比轴是 `per_100ml`（软饮/乳品/酒类叶全绑 per_100ml），故对任一**可开榜节点**数据门一律 = `per100ml IS NOT NULL`；v2 引入 `per_100g` 等多轴时按成员轴取列（非目标）。分类为可排名但规格不可算者（rankable=true ∧ per100ml=null）**不入榜**。**此口径在 P3「rankable+闭包」基础上加 cohort 守卫**：取代 P3「酒类叶 comparable_unit=null 故 rankable=false、酒类节点自然空榜」——本期酒类各叶**可排名**、各有 cohort 榜，而酒类**父**节点因解析单位 null 被守卫拒榜（非空榜）。
+**入榜两门**:`product.rankable = true` ∧ `unit_price.per100ml IS NOT NULL`。
 
-**闭包 JOIN 的去重与单 category 轴保证**：`category_closure` 仅含 category is-a 边、attribute/brand/product_line 无闭包行，故 `category_closure.tag_id = product_tag.tag_id` 的 JOIN **天然只匹配 category 叶边**，无需另按 kind 过滤。由单归属不变量（每商品至多一条 category 叶边）+ `category_closure (tag_id, ancestor_tag_id)` 唯一，对给定目标节点每商品至多命中一行。**但该「至多一行」依赖写时（`attachTag`/`reconcileCategory`）应用层强制的单归属不变量、而非 DB 约束**。故节点榜查询**必须**对 `unit_price.id`、`rankableCount` 查询**必须**对 `product.id` 加 `DISTINCT`/`GROUP BY` 作**防御性兜底**（对齐 `listProductIdsInCategoryNode` 的 `selectDistinct`）。
+**没有叶性门。** `attachTag` 已在写入侧强制叶粒度(非叶挂载直接抛),故唯一能产生非叶挂载的是 **taxonomy 演化**——一个叶后来长出子节点。那些商品仍在售,把它们剔除等于在一次 taxonomy 编辑里静默丢掉在售行。归属由 `categorySlugs` 承载,判据是「任一 slug 是目标节点或其后代」,对叶与非叶一致成立。
 
-**排序**：必须按 `per100ml` **升序**（最便宜真实单价 `rank=1`）。相同 `per100ml` 必须以 **`unit_price` 同表确定列 `unit_price.id` 升序**作次级排序键，保证分页稳定、不重叠不遗漏；**禁用跨表 `product.id`**。`unit_price.id` 是 app 生成 **TEXT** 主键、`ASC` 字典序、构成确定全序。
+**行字段**:`title` / `priceCents` / `per100ml` / `formula` / `confidence` / `warnings` / `store` / `storeSku` / `sourceUrl` / `capturedAt` / `lowestPriceCents`,并新增:
 
-**节点路径查询计划口径**：沿用 P3——节点查询带闭包+rankable 两等值过滤；EXPLAIN 计划测试先 `ANALYZE`、断言 `category_closure` 与 `unit_price` 均 `SEARCH ... USING INDEX`（经各自唯一键），允许 `USE TEMP B-TREE`（ORDER BY + DISTINCT）与驱动表（`product`/`product_tag`）全扫；不断言「从 closure/product_tag 驱动」或「不出现 SCAN unit_price」（详见既有 P3 口径，本期不变）。
+- `categorySlugs: string[]`(非空,升序)—— 该行挂的**全部** category slug。数组而非单值:单归属由应用层写时维护、非 DB 约束,双叶行可达;单值会导致重复入榜或丢失另一榜的归属。
+- `id: string` —— 承载 `unit_price.id`,作**稳定行身份**供客户端做列表 key(`rank` 每次换 cohort/搜索都变,用它入 key 会让整列表 remount)。**不是排序键**:客户端不排序,派生视图继承服务端下发的序,故不存在跨引擎比较口径要对齐。
 
-**响应 schema（Zod 单一事实源）**：响应体必须由 `RankingsResponseSchema`（居 `@unit-price/api-client`）定义、**本变更为该 schema 增加 `capturedAt`/`lowestPriceCents` 两个投影字段**。每项含 `rank`(1-based、`offset+序号`、读时投影)、`title`(`product_raw.title`)、`priceCents`(整数分、禁服务端换算)、`per100ml`(存储值)、`formula`(存储值、`CalcResultGate` 保证非空)、`confidence`(`unit_price.confidence` 权威 band、非 `product.confidence`)、`warnings`(`string[]`、经 `decodeJson`+`WarningsSchema` 还原、禁透原始 JSON)、`store`/`storeSku`/`sourceUrl`(`product_raw`，`sourceUrl` 可空)、`capturedAt`(整数 epoch ms、= `product_raw.captured_at`)、`lowestPriceCents`(整数分、= `COALESCE(product_raw.lowest_price, product_raw.price)`)。**`capturedAt`/`lowestPriceCents` 在 schema 中设 `.optional()`**：服务端投影**恒发**二字段（`captured_at` NOT NULL、`lowestPriceCents` 经 `COALESCE` 恒有值），故**在线响应两字段总是存在**；`.optional()` 只为让共依赖同一 `RankingsItemSchema` 的独立发布客户端容忍**跨版本旧服务端**与 **CDN 24h TTL 缓存的旧响应**（缺字段），避免新客户端解旧响应时 ZodError 整屏错——契约字段设必填会在每次改 schema 的部署后制造最长 24h 的整屏错窗口。
+`rank` 移出行契约:它是某个过滤+排序视图下的读时位次,在无参全量集合里无定义,由客户端派生视图时赋值。
 
-**失效标注与历史最低价（读侧透出、不在服务端判定）**：每项在线响应**必须**透出 `capturedAt`（最近一次上报观测时刻）与 `lowestPriceCents`（历次正价观测最低整件价）——二者均为投影自 `product_raw` 的存储事实、**读路径不重算**（契约设 `.optional()` 仅为跨版本/旧缓存容错，不改「在线恒发」）。「失效」（>30 天未重报）**必须由客户端**用 `now - capturedAt > 阈值` 判定，**禁止**服务端返回随时间衰减的 `stale` 布尔——`/rankings` 经边缘 + 端上缓存，时间相对布尔烤进响应体会随缓存龄期变陈旧，而 `capturedAt` 不可变、缓存安全；失效项**仍入榜**（不因失效改入榜门 / 排序 / 分页）。`lowestPriceCents` 仅为透出，是否呈现「历史低」由客户端按 `priceCents > lowestPriceCents` 决定（见 `miniapp`）。
+**每行恰一行**:按 `unit_price.id` 聚合其全部 category slug。发两行会使客户端派生的榜重复入榜、名次重复。
 
-**口径漂移与 warnings 透出**：`priceCents`(整件总价分) 与 `per100ml`(按总容量摊算) 分母不同、前端禁互推、可比量一律用 `per100ml`。**二者现同源于最近一次成功解析**：同款重报命中去重时 `unit_price` 的派生值随之刷新（见 `persistence`「product 必须按去重键收敛」），故「`priceCents` 是最新价、`per100ml` 永远是首报价」的既有**永久**漂移**不再是接受态**。但**仍存在四类窗口**，且**不都会自动自愈**——**禁止**把它们写成瞬时或封闭的集合：① 边缘/端上缓存 TTL 内的旧 JSON（自愈：TTL 到期或 purge）；② `/ingest` 的落地顺序与后台解析完成顺序可逆，迟到的解析会让派生值短暂落后（自愈：最后完成者落地）；③ 一次上报的 `product_raw` 已落地而其解析未完成或**失败**（后台失败只记日志、不重试，**不自愈**）；④ 解析结果漂移产生新 `product` 行后，**旧行不被任何 `saveParsed` 命中**、其派生值停在旧价（**不自愈**，属已知非目标）。③ 的收敛动作是**再重报一次该商品且解析出等价 `ParsedSpec`(仍命中同一 `dedupe_key`)**,不是自动机制——解析漂移的重报会落进 ④;④ **无收敛动作**(旧行的键永不再命中)。检出手段见 `docs/backfill-runbook.md`。读路径**仍禁止**为消除窗口而重算 `per100ml`。**`formula` 内嵌元价与 `priceCents` 的口径差 ≤1 分**（元价允许多于两位小数、`product_raw.price` 存 `Math.round`）：核对**必须**按分比较（`yuanToCents(parseFloat(首项)) === priceCents`），**禁止**把严格相等当作契约、亦**禁止**用浮点容差（会把真正过期一分钱的行判绿）。带 `warnings`（尤其「数量按单件推断为 1」）的项照常入榜、原样透出、禁静默剔除。
+**下发顺序**:按 `(per100ml, unit_price.id)` 升序,使服务端全序有可直接比对的地面真相。
+
+**单个行或节点的字段缺陷不得打掉整份快照**:快照是唯一数据源,一个坏成员不应使榜单、分类树、搜索、比价定位同时不可用。故不满足行必填字段的行计入 `row_shape_invalid`;不满足节点 schema 的节点计入 `node_shape_invalid`;自身形状合法但引用被排除节点的行计入 `row_references_invalid_node`。生产者 reason 使用受类型约束的词表防止拼写错误,但 wire schema 只要求非空字符串,新增 reason 不得使旧客户端拒绝载荷。
+
+**装配一致性**:行、归属边、taxonomy 节点是三次读,其间的并发写会装配出「行引用了 `categoryNodes` 中不存在的节点」的对象并被缓存最长一个 TTL。三者互不依赖,故可一次性发出(D1 用 `batch()`——它拒绝显式 BEGIN/COMMIT;sqlite 用事务)。可恢复的单成员字段缺陷先按上文排除;准入后若仍违反对象级不变量(节点 slug 重复、父链悬空/成环、行引用未知节点),必须按服务端缺陷处理并返回 5xx,同时记录带校验上下文的错误日志。
+
+**未播种 taxonomy**:`categoryNodes` 为空是合法退化态,此时 rows 亦为空,必须返回 `200` 的空快照。
+
+**缓存与治理**:`Cache-Control` 沿用 `PUBLIC_CACHE_CONTROL`;治理豁免不变(不消耗公共限频、不记 usage)。
+
+**`lowestPriceCents` 的取值规则**:必须为 `COALESCE(lowest_price, price)`,**禁止**透出 `NULL`——存量偶有空水位或仅异常价历史时退化为当前价。客户端仅当 `priceCents > lowestPriceCents` 才呈现「历史低」,故退化(二者相等)时不呈现,异常价也不会被当作历史低。该规则原挂在 `persistence` 里对已删的 `listRankings` 投影的描述上;本查询接手后规则本身不变,只是换了承载者。
+
+**口径漂移与 warnings 透出**:`priceCents`(整件总价分)与 `per100ml`(按总容量摊算)分母不同、前端禁互推、可比量一律用 `per100ml`。二者同源于最近一次成功解析,但**仍存在四类窗口**,且**不都会自动自愈**——**禁止**把它们写成瞬时或封闭的集合:① 边缘/端上缓存 TTL 内的旧 JSON(自愈:TTL 到期或 purge);② `/ingest` 落地顺序与后台解析完成顺序可逆,迟到的解析会让派生值短暂落后(自愈);③ `product_raw` 已落地而其解析未完成或**失败**(后台失败只记日志、不重试,**不自愈**;收敛动作是再重报一次且解析出等价 `ParsedSpec`);④ 解析结果漂移产生新 `product` 行后旧行不再被任何 `saveParsed` 命中,派生值停在旧价(**不自愈**,已知非目标、无收敛动作)。读路径**仍禁止**为消除窗口而重算 `per100ml`。
+
+**`formula` 内嵌元价与 `priceCents` 的口径差 ≤1 分**(元价允许多于两位小数、`product_raw.price` 存 `Math.round`):核对**必须**按分比较(`yuanToCents(parseFloat(首项)) === priceCents`),**禁止**把严格相等当作契约、亦**禁止**用浮点容差——浮点容差会把真正过期一分钱的行判绿。
+
+**数据源与留痕**:`per100ml`/`formula`/`confidence`/`warnings` 取 `unit_price` 存储列,读路径不重算;`packages/core` 不进读路径。失效判定与历史低价的呈现条件在客户端,服务端只透出 `capturedAt`/`lowestPriceCents`,不下发随时间衰减的布尔。
 
 #### 场景:无参默认 ≡ category=soft-drink（默认榜节点 root→软饮）
 
-- **当** 客户端 `GET /rankings`（不带参数）
-- **那么** 它**必须**严格等价于 `category=soft-drink`（**取代** P3 的默认 `category=beverage`(root)），解析为 taxonomy `软饮` 节点经闭包过滤，返回软饮 cohort 榜（碳酸/果汁植物饮/咖啡茶饮/饮用水 混排、按 per100ml 升序）；**禁止**改读 `product.category` 列
-- **那么** 每项与 `unit_price` 存储值逐一相等（未重算）；软饮榜**不含**酒类/乳品（它们在各自 cohort 节点的榜，不在软饮闭包内）
+- **当** 客户端 `GET /rankings`
+- **那么** 必须返回全量快照;原「无参 ≡ soft-drink」的语义改由客户端以具名落地常量承载(见 `miniapp` spec),用户所见落地榜与改造前一致。**不得**改由从树上推导——那无唯一解,且实测会落到另一个 cohort
+- **当** 请求带 `category` / `q` / `limit` / `offset`
+- **那么** 该参数必须被忽略,响应与无参请求逐字相同
 
 #### 场景:各酒种叶有自己的 per100ml cohort 榜
 
-- **当** 客户端 `GET /rankings?category=beer`（啤酒叶，本期已绑 `comparable_unit=per_100ml`）
-- **那么** 接口**必须**返回 `200`、仅含啤酒叶闭包下 `rankable=true ∧ per100ml` 非空的成员、按 per100ml 升序；葡萄酒/白酒等其它酒种**禁止**出现（各酒种是独立 cohort、不混）。`葡萄酒`/`白酒`/`洋酒`/`威士忌`/`清酒果酒` 同理各有其 cohort 榜
+- **当** 客户端需要某酒种叶的榜
+- **那么** 由客户端在快照上按该叶过滤得出;各酒种是独立 cohort,不得并入同一个呈现给用户的榜;这些行必须在快照内
 
 #### 场景:乳品有自己的 per100ml cohort 榜
 
-- **当** 客户端 `GET /rankings?category=乳品节点 slug`
-- **那么** 接口**必须**返回乳品 cohort 榜（牛奶/酸奶/乳酸菌饮料 按 per100ml 升序）；**不含**软饮/酒类
+- **当** 客户端需要乳品的榜
+- **那么** 同上,由客户端按乳品节点过滤得出,不含软饮 / 酒类
 
 #### 场景:跨 cohort 节点（酒类父 / root 饮料）拒绝开榜
 
-- **当** 客户端 `GET /rankings?category=alcohol`（酒类父，解析单位 `null`）或 `?category=beverage`（root，解析单位 `null`）
-- **那么** 接口**必须**返回 `400 invalid-request`（cohort 守卫：该节点跨多个可比 cohort、不可直接比、请选子分类）——**取代** P3 的「酒类 → `200 []`」「默认=beverage root 榜」；**禁止**返回混排了不同酒种或软饮+酒类的榜
+- **当** 目标节点 `comparableUnit` 为 `null`(`alcohol` / `beverage`)
+- **那么** 不得为其派生呈现给用户的榜;判定位置由服务端 `400` 改为客户端派生视图时拦下,语义不变
+- **那么** 服务端不得因此把这些行排除出快照——快照是传输单位,拒绝发生在展示层
 
 #### 场景:per100ml 为 null 的项不入榜
 
-- **当** 某 rankable 商品（软饮/乳品/酒类叶）`per100ml = null`（规格不可算）
-- **那么** 该行**禁止**出现（数据门兜住）
+- **当** 某 rankable 商品 `per100ml = null`
+- **那么** 该行不得出现
 
 #### 场景:违反单归属（同商品双叶）时仍至多列一次（DISTINCT 兜底）
 
-- **当** 某商品因数据漂移/缺陷同时挂两条 `kind=category` 叶边（闭包都命中目标节点）
-- **那么** 该商品在节点榜中**必须**至多出现一次（`DISTINCT unit_price.id` 兜底）、`rank` 不重复
+- **当** 某商品挂两条 category 叶边
+- **那么** 快照中必须恰有一行,其 `categorySlugs` 同时含两个 slug
 
 #### 场景:formula/per100ml 取存储值不重算
 
-- **当** 某项落库 `unit_price.formula = "40 / (330 * 24 * 1) * 100"`、`per100ml ≈ 0.505`
-- **那么** 响应中 `per100ml`/`formula` **必须**等于存储值，**禁止**服务端用 `priceCents` 重算覆盖
+- **当** 某项落库 `formula = "40 / (330 * 24 * 1) * 100"`、`per100ml ≈ 0.505`
+- **那么** 响应中二者等于存储值,不得用 `priceCents` 重算覆盖
 
 #### 场景:单件推断项带 warning 入榜而非被剔除
 
-- **当** 某入榜项 `unit_price.warnings` 含「数量按单件推断为 1」
-- **那么** 该项照常入榜、`warnings` 原样含该提示，**禁止**因含单件推断剔除或清空
+- **当** 某入榜项 `warnings` 含「数量按单件推断为 1」
+- **那么** 照常入榜、原样透出
 
 #### 场景:响应每项透出 capturedAt 与 lowestPriceCents
 
-- **当** 某入榜行 `product_raw.captured_at = 1_700_000_000_000`、`price = 1490`、`lowest_price = 990`
-- **那么** 该项**必须**含 `capturedAt = 1_700_000_000_000`（整数 epoch ms、取存储值不重算）与 `lowestPriceCents = 990`（= `COALESCE(lowest_price, price)`）；`priceCents` 仍为 `1490`（最新价）
+- **当** 某行 `captured_at = 1_700_000_000_000`、`price = 1490`、`lowest_price = 990`
+- **那么** 该项含 `capturedAt = 1_700_000_000_000` 与 `lowestPriceCents = 990`;`priceCents` 仍为 `1490`
 
 #### 场景:失效项仍入榜、服务端不判失效
 
-- **当** 某入榜行 `captured_at` 已早于当前 30 天以上
-- **那么** 该行**必须**照常出现在榜内（不因失效被剔除、不改排序 / 分页），响应**禁止**含服务端 `stale` 布尔；失效判定由客户端按 `now - capturedAt > 阈值` 自行完成
+- **当** 某入榜行 `captured_at` 早于当前 30 天以上
+- **那么** 照常出现在快照内;响应不得含服务端 `stale` 布尔;失效判定由客户端按 `now - capturedAt > 阈值` 完成
 
 #### 场景:历史低价仅透出、呈现条件在客户端
 
-- **当** 某行 `priceCents = 990`、`lowestPriceCents = 990`（现价 = 历史低点）
-- **那么** 服务端**必须**照常透出二字段；是否呈现「历史低」由客户端按 `priceCents > lowestPriceCents` 判定（此例相等 → 客户端不呈现），服务端**不**下达呈现与否
+- **当** 某行 `priceCents = 990`、`lowestPriceCents = 990`
+- **那么** 服务端照常透出二字段;是否呈现「历史低」由客户端判定
 
-### 需求:分页与查询参数边界
+#### 场景:全序可复现且不合规行被排除而非致命
 
-`GET /rankings` 必须支持 `limit` / `offset` 分页与 `category` 品类节点过滤，并对非法参数返回**确定**的 HTTP 状态：
+- **当** 两行 `per100ml` 相等
+- **那么** 下发顺序由 `unit_price.id` 升序决定;客户端**不重排**——过滤与切片保序,派生视图继承该序,故不存在跨引擎比较口径要对齐
+- **当** 某行不满足两门或行不变量
+- **那么** 该行被排除、计入可观测的排除计数,响应照常成功
 
-- `limit`：缺省 `50`；present 时**仅接受十进制非负整数串**（`^\d+$`），`> 200` **clamp 到 200**（不报错）、`= 0` 或不匹配者（空串/十六进制/含空白/负号/小数点/`NaN`/`Infinity`）一律 `400` + `invalid-request`；**禁止**宽松强转。
-- `offset`：缺省 `0`；present 时**仅接受 `^\d+$`**，不匹配者 `400` + `invalid-request`（与 `limit` 同口径）；`offset` 超出结果总数返回 `200` + 空数组（**不是** `404`）。
-- `category`（P3.5 升级）：**缺省为 `soft-drink`**（软饮节点，**取代** P3 的缺省 `beverage`）；present 时**必须**精确匹配一个 **seed 的 kind=category 节点 slug**（大小写敏感，含本期新增的乳品节点/叶与各酒种叶）。其值驱动闭包过滤。
-  - **校验集单一来源、编译期派生**：**必须**校验「seed 品类树 kind=category slug 全集」，单一来源、**编译期**派生自 `packages/db` 的 `CATEGORY_NODES`、纯同步 parse；**禁止** `apps/api` 手写第二份 slug 枚举；**禁止**运行期查 `tag` 表校验（无法区分「未 seed 合法 slug」与「拼写错误」）。
-  - **cohort 守卫（新增）**：present 或缺省解析出的节点，经**静态解析器 `resolveComparableUnitStatic`（编译期派生自 `CATEGORY_NODES`、不查 DB，见上文「守卫的解析必须基于编译期 seed 定义」）** 解析得 `null`（root `beverage`、`alcohol` 父）→ 返回 `400 invalid-request`（提示该节点跨 cohort、请选子分类）。**取代** P3 的「酒类 → `200 []`」「`beverage` 默认放行」。**禁止**用运行期 `repo.resolveComparableUnit` 做此守卫（否则未 seed 的合法 cohort slug 被误判 `400`，违反下一条）。
-  - **未知 slug、空串、非 category 的 slug**（attribute/brand，如 `sugar-free`）→ `400 invalid-request`。
-  - **「拼写错误」vs「合法 slug 但 DB 未 seed 该 tag 行」可区分**：属 seed 全集且**静态解析单位非空**的 slug（如 `beer`），即便 DB 暂无对应 `tag`/closure 行（迁移先于 seed 窗口）→ 守卫据**静态** `CATEGORY_NODES` 放行、闭包零命中 → `200` + 空数组，**禁止**误报 `400`。此条与上一条 cohort 守卫的相容性**仅靠静态解析器成立**：静态解析对 `beer` 恒为 `per_100ml`（放行）、对 `alcohol`/`beverage` 恒为 `null`（拒榜），不随 DB seed 状态漂移。
+#### 场景:无效节点按 reason 排除而非打掉整份快照
 
-`invalid-request`（400）与既有码（`auth-*`/`rate-limited`/`config-error`/`persistence-error`/`internal`）一致复用、**不新增**；DB 失败沿用 `persistence-error`（500）。
+- **当** 某 category 节点不满足节点 schema
+- **那么** 该节点计入 `node_shape_invalid`;引用它且自身形状合法的行计入 `row_references_invalid_node`,其余快照照常返回
 
-#### 场景:缺省 category 为 soft-drink
+#### 场景:新增 exclusion reason 不否决载荷
 
-- **当** 客户端 `GET /rankings`（无 `category`）
-- **那么** 等价 `category=soft-drink`、返回软饮 cohort 榜（非 root、非混榜）
+- **当** 服务端生产一个旧客户端未见过的非空 `excluded[].reason`
+- **那么** 快照 wire 校验必须通过,健康信号不得使 `rows` 与 `categoryNodes` 一并不可用
 
-#### 场景:酒种/乳品叶 slug 放行、酒类父/root 拒绝
+#### 场景:对象级断言失败返回 5xx 且记录日志
 
-- **当** 客户端 `?category=beer`/`?category=葡萄酒 slug`/`?category=乳品叶 slug`（解析单位非空）
-- **那么** `200` + 该 cohort 榜
-- **当** 客户端 `?category=alcohol`/`?category=beverage`（解析单位 null）
-- **那么** `400 invalid-request`（cohort 守卫）
+- **当** 单成员准入后仍存在节点 slug 重复、父链悬空/成环或行引用未知节点
+- **那么** 必须返回 5xx 并记录错误日志,不得静默下发错误快照
 
-#### 场景:未知 / 非 category / 大小写不符 / 空串 category 返回 400
+#### 场景:未播种 taxonomy 返回空快照而非失败
 
-- **当** 客户端 `?category=nope`（不存在）/ `?category=sugar-free`（attribute）/ `?category=Beer`（大小写不符）/ `?category=`（空串）
-- **那么** `400 invalid-request`
-
-#### 场景:合法 slug 但 DB 未 seed 该 tag 行时返回空数组而非 400（守卫走静态解析）
-
-- **当** 客户端 `?category=beer`（属 seed 全集、**静态**解析单位 `per_100ml` 非空），但 DB 因迁移先于 seed 窗口尚无对应 `tag`/closure 行
-- **那么** cohort 守卫据**静态 `CATEGORY_NODES`** 放行（**不**因运行期 `tag` 缺失而判 `null`）→ 闭包零命中 → `200` + 空数组，**禁止**误报 `400`
-- **当** 同窗口客户端 `?category=alcohol`（静态解析 `null`）
-- **那么** cohort 守卫 `400`（与 DB 是否 seed 无关）
-
-#### 场景:limit 超上限 clamp / 非法 limit-offset 400 / offset 越界空数组
-
-- **当** `?limit=1000` → `200` 最多 200 条；`?limit=-5`/`?limit=0`/`?offset=abc`/`?limit=`/`?offset=1.5`/`?limit=%20%205` → `400 invalid-request`；`?offset=100000`（越界）→ `200` + 空数组
-- **那么** 严格按上述确定状态返回，**禁止**宽松强转或对越界 offset 报 `404`
-
-### 需求:GET /rankings 支持按商品名子串搜索（q 参数）
-
-`GET /rankings` **必须**支持可选 `q` 查询参数，对结果按 `product_raw.title` 做**确定性子串过滤**，叠加在既有 `category` cohort 闭包过滤、`rankable=1`、`per100ml` 非空之上，排序口径不变（按 `per100ml` 升序）。`q` 是纯增量关注点：**缺省 / 空串 / 纯空白**时行为与查询计划与现状**完全一致**（不构造任何 `LIKE` 子句、不漂移既有 EXPLAIN 查询计划契约）。本需求**只新增 `q`**；`limit`/`offset`/`category` 的边界与 cohort 守卫口径见既有「分页与查询参数边界」需求，不在此重述。
-
-**长度按 Unicode 码点计**：全部长度判定与截断**必须**用码点（`[...s]` / `Array.from(s)`），**禁止**用 UTF-16 `string.length`——否则星空段字符（emoji / 罕用 CJK 如 `𠮷`）误判长度、且按 UTF-16 截断会劈裂代理对、向 `LIKE` 注入孤代理。下限拒绝（`1→400`）与上限截断（`>64→截断`）**刻意不对称**：下限拒绝以教育用户「太宽」，上限宽容截断以不惊扰长查询。
-
-- `q` 缺省或 `trim` 后长度为 `0`（空串 / 纯空白）→ 视作未传、**不**附加任何 title 过滤（等价于现有无 `q` 行为）。
-- `q` `trim` 后长度为 `1`（码点）→ `400 invalid-request`：单字过宽（如「水」「茶」「奶」会一次性多命中、退化成近似全表），与端点既有「非法参数返回确定 400」一致。
-- `q` `trim` 后长度 `≥ 2`（码点）→ **顺序固定 `trim → 按码点截断到 ≤ 64 → 转义`**（长度门与截断作用于**转义前的用户词**；若先转义再截断，`!!` 这类转义对会被截断劈裂、`ESCAPE` 失效）。截断用 `[...s].slice(0, 64).join('')`、不劈裂代理对；再在 SQL 内对 `product_raw.title` 施加 **ASCII 大小写不敏感**子串匹配（SQLite `LIKE` 默认仅 ASCII 折叠——非 ASCII 拉丁带变音 / CJK 全角等**不**归一，见非目标）：
-  - **必须**显式带 `ESCAPE` 子句并先转义 `LIKE` 特殊字符。SQLite `LIKE` **无默认转义符**，仅在输入里插转义符不生效——**必须**生成 `... LIKE ? ESCAPE '<c>'`（如 `ESCAPE '!'`），并在 TS 侧把用户输入的 `<c>` / `%` / `_` 各前置 `<c>` 转义（转义符**必须**先转义自己），使这三类字符按字面匹配、**禁止**被当作通配符（防止 `_` 误配任意单字、`%` 误配全部）。**禁止**依赖 ORM `like()` helper 的转义选项（drizzle `like(col, val)` 仅两参、无 escape，必须落到 `sql` 原生模板）。
-- `q` 与 `limit`/`offset`/`category` **正交叠加**：先按 cohort 闭包定界，再按 title 子串过滤，最后分页；`category` 的 cohort 守卫（跨 cohort 节点 `400`）、`limit`/`offset` 边界（非法 `400`、越界 `200` 空数组）口径**全部不变**。
-- 子串**零命中** → `200` + 空数组（**不是** `404`）。
-- 字面 `+`：`encodeURIComponent` 把 `+` 编为 `%2B`、服务端 `decodeURIComponent` 还原为字面 `+`（**非** form 解码的 `+`→空格），故 `100+200` 按字面匹配；两端都用 encode/decodeURIComponent 是此前提。
-- 重复键 `?q=可乐&q=雪碧` → 取**首值** `可乐`（Hono `c.req.query()` 语义；取首值后再按上述长度门校验——若首值码点 `< 2` 仍 `400`），无歧义。
-- 响应体仍是 `RankingsResponseSchema`（`RankingsItem[]`），**不新增**字段、**不新增**端点。
-- **缓存按校验后的 `q` 判定，搜索响应发显式 `Cache-Control: no-store`**：`q` **校验后非 `undefined`**（trim 后码点 ≥ 2、真正在过滤）的响应**必须**带 `Cache-Control: no-store`——仅「不发 `public`」**不够**（Aliyun CDN 会按默认 TTL 自缓存），**必须**主动 `no-store`。`q` 校验后为 `undefined`（缺省 / `?q=` / `?q=%20%20`，等价无过滤）的响应与无-`q` cohort board 一样**仍走**既有 `public Cache-Control`。**禁止**按原始 URL 是否含 `q` 键判定（否则 `?q=%20%20` 会被误判为搜索而漏缓存）。理由：搜索长尾、各 `q` 几乎不复用，按 URL 分键近乎零命中却无界填充 CDN，且 CDN 按原始未截断 URL 分键、与服务端 64 码点截断口径不一致。
-
-#### 场景:q 缺省时行为与查询计划不变
-
-- **当** 客户端 `GET /rankings`（无 `q`，或 `q=` 空串、`q=%20` 纯空白，trim 后长度 0）
-- **那么** **禁止**构造任何 title `LIKE` 子句，返回与现状完全一致的 cohort 榜；既有 EXPLAIN 查询计划契约**不漂移**
-
-#### 场景:单字 q 过短返回 400
-
-- **当** 客户端 `?q=水`（trim 后长度 1 码点）
-- **那么** `400 invalid-request`（过宽、与 `limit=0` 同属确定性非法参数）；trim 后长度 0 的 `?q=` 则不在此列（视作未传、不过滤）
-
-#### 场景:q 非空时按 title 子串过滤、排序与分页口径不变
-
-- **当** 客户端 `GET /rankings?q=可乐`（默认 cohort `soft-drink`）
-- **那么** `200` + 仅含 `title` 含「可乐」子串的软饮行，仍按 `per100ml` 升序、仍受 `limit`/`offset` 分页约束
-- **当** 客户端 `?q=可乐&category=alcohol`（跨 cohort 父节点）
-- **那么** `400 invalid-request`（cohort 守卫先于 title 过滤，口径不变）
-
-#### 场景:LIKE 通配符与转义符按字面转义、零命中返回空数组
-
-- **当** 客户端 `?q=100%水`（含 `%`，≥2 码点）/ `?q=a_b`（含 `_`）/ `?q=a!b`（含转义符 `!`，`ESCAPE '!'` 下按字面）/ `?q=100+200`（含 `+`）
-- **那么** `%`/`_`/转义符/`+` **必须**按字面匹配（经 `ESCAPE` 子句 + 前置转义 + `encodeURIComponent`），**禁止**作通配符；title 无字面匹配则 `200` + 空数组（非 `404`）
-
-#### 场景:超 64 码点截断、星空段字符按码点计
-
-- **当** 客户端 `?q=<70 码点>` / `?q=<含 emoji 等代理对的串>`
-- **那么** 按**码点**截断到 64（`[...s]`，不劈裂代理对）后再匹配；长度判定全程按码点，**禁止** UTF-16 `length` 误判
-
-#### 场景:有效 q 发 no-store、空 q 仍走 edge cache
-
-- **当** 客户端 `GET /rankings?q=可乐`（校验后非 `undefined`，命中或零命中）
-- **那么** 响应**必须**带 `Cache-Control: no-store`（不只是省略 `public`）
-- **当** 客户端 `GET /rankings?q=`/`?q=%20%20`（校验后 `undefined`）或无 `q`
-- **那么** 响应**必须**与无-`q` cohort board 一样带既有 `public Cache-Control`（**禁止**因 URL 含 `q` 键而误判 `no-store`）
-
+- **当** taxonomy 未播种(`categoryNodes` 为空)
+- **那么** 必须返回 `200` 的空快照(`rows` 亦为空);不得 5xx

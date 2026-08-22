@@ -3,7 +3,9 @@
 ## 目的
 
 定义 API 在 Cloudflare Workers/D1 上的运行时、配置、迁移与持续部署边界，并约束国内 CDN 的长 TTL、刷新和预热流程，使公共读端点在可控陈旧范围内稳定命中国内边缘且可安全发布响应形状变更。
+
 ## 需求
+
 ### 需求:应用必须运行时无关并提供 Workers 入口
 
 `apps/api` 必须把 Hono 应用拆为**运行时无关的 fetch 应用工厂**与**入口适配层**两部分。app 工厂产出标准 `fetch`-兼容应用，**禁止**在模块作用域或请求路径中直接依赖 Node-only API（含全局 `process.env`、`node:*` 内置、`@hono/node-server`）。生产入口必须是导出 `fetch(request, env, ctx)` 的 **Cloudflare Workers 模块**；本地 dev 入口（Node）必须复用**同一个** app 工厂，仅在入口层桥接运行时差异。两个入口产出的 `/health`、`/parse` 行为必须一致。
@@ -108,62 +110,87 @@ LLM 配置（`OPENROUTER_API_KEY` 等）必须**经显式传入的 env 对象**�
 
 ### 需求:公共读端点必须经长 TTL 边缘缓存并在数据变更后刷新
 
-公共只读端点(`GET /rankings` 的**非搜索**成功响应、`GET /categories`)**必须**经长 TTL 边缘缓存,使国内访问命中阿里云 CDN POP、绕开跨境回源那一跳(实测 MISS 总耗时数秒、HIT ~50ms,差约 100×),代价是受控的陈旧;其 TTL、遵循源站前置与刷新契约**必须**满足下列各条:
+公共只读端点(`GET /rankings` 全量快照、`GET /categories`)必须经长 TTL 边缘缓存,使国内访问命中阿里云 CDN POP、绕开跨境回源(实测 MISS 数秒、HIT ~50ms),代价是受控陈旧。各条必须满足:
 
-- 上述非搜索公共读成功响应**必须**带 `public` 且 TTL **≥ 1 天**的 `Cache-Control`(经 `apps/api` 的共享常量 `PUBLIC_CACHE_CONTROL`),理由是商品价格月级稳定、只有偶发临时优惠且都经 `/ingest` 批次进数据,数据极静态。
-- 边缘 CDN **必须**遵循源站 `Cache-Control`、**禁止**以自有默认 TTL 覆盖源站值——此为长 TTL 真正生效的前置(已实测满足:无自定义 TTL 规则、二次请求 `X-Cache: HIT`)。
-- 任何**改变 prod 数据**的运维(`/ingest` 新批次、临时优惠、taxonomy 打标签 backfill、native-id 回填)在完成后**必须**刷新(purge)并**预热**受影响的公共读路径(`/rankings`、`/categories`),使变更即时可见;否则第一个真实用户会吃满跨境回源。
-- 未主动刷新时,边缘陈旧**必须**有界:不超过上述 TTL,过期后自愈。
-- 搜索 `?q=`(`/rankings`)与 `/compute` 的 `no-store` 不受本需求影响,由各自端点 spec 管辖。
+- 成功响应带 `public` 且 TTL ≥ 1 天的 `Cache-Control`(经 `PUBLIC_CACHE_CONTROL`)。`/rankings` 沿用同一常量,不为「现在只有一个键」另设 TTL——第二套 TTL 口径会让本需求与预热需求的间隔约束各自为政。
+- 边缘 CDN 必须遵循源站 `Cache-Control`,不得以自有默认 TTL 覆盖。
+- **缓存键收敛必须由边缘的 query-string 归一化配置保证**,不能靠源站。已实测阿里云 CDN 默认把 query string 计入缓存键,故源站忽略参数只能保证响应体一致,拦不住 `?category=beer` 落成独立对象。本变更必须包含该配置动作,并 wildcard-purge 历史遗留的带参对象。
+- 任何**改变 prod 数据**的运维(`/ingest`、临时优惠、打标签 backfill、native-id 回填)完成后必须 purge 并预热受影响路径。榜单侧受影响路径由「landing + 每个 cohort 的字面 slug 键」收敛为一条 `/rankings`。
+- 未主动刷新时,边缘陈旧不超过 TTL,过期后自愈。
+- `/compute` 的 `no-store` 不受本需求影响。`/rankings` 不再有 `?q=` 搜索响应,原「搜索响应不受本需求影响」一条随之失效。
 
 #### 场景:非搜索公共读响应带长 TTL public 缓存头
 
-- **当** 客户端 `GET /rankings`(无有效 `q`)或 `GET /categories` 返回 `200`
-- **那么** 响应**必须**带 `public` 且 `max-age ≥ 86400`(1 天)的 `Cache-Control`(经共享 `PUBLIC_CACHE_CONTROL`),`400/500` 错误路径**禁止**带缓存头
+- **当** `GET /rankings` 或 `GET /categories` 返回 `200`
+- **那么** 带 `public` 且 `max-age ≥ 86400` 的 `Cache-Control`;`400/500` 路径不得带缓存头
+- **当** 请求带任何被忽略的参数
+- **那么** 源站响应体与缓存头与无参请求逐字相同(源站可执行、可断言的部分)
+- **那么** 「只有一个缓存对象」由边缘归一化配置保证,并必须被验证:从国内视角对 `/rankings` 与 `/rankings?category=beer` 各取一次,二者必须指向同一边缘对象;不得仅以控制台配置项存在为凭
 
 #### 场景:边缘遵循源站、TTL 内二次请求命中
 
-- **当** 同一非搜索公共读 URL 在 TTL 内被二次请求
-- **那么** 边缘 CDN **必须**从缓存命中返回、**不**回源(即遵循源站 `Cache-Control`、未以自有默认 TTL 覆盖)
+- **当** 同一公共读 URL 在 TTL 内被二次请求
+- **那么** 边缘从缓存命中返回、不回源
 
 #### 场景:数据变更后刷新+预热使变更即时可见
 
-- **当** 一次改变 prod 数据的运维(`/ingest` 或 backfill / native-id 回填)完成
-- **那么** 运维**必须**刷新并预热受影响的 `/rankings`、`/categories` 路径,使新数据即时可见;若未刷新,边缘陈旧**必须**不超过 TTL 并在过期后自愈
+- **当** 一次改变 prod 数据的运维完成
+- **那么** 必须刷新并预热 `/rankings` 与 `/categories` 两条路径;榜单侧不再逐 cohort slug 刷键
+- **当** 一次**改变响应形状**的部署完成
+- **那么** 必须立即 purge(`RefreshObjectCaches`)再预热(`PushObjectCache`)所有改形公共读端点;本变更为 `/rankings` 与 `/categories`。必须从国内视角确认两者命中对象均为新形状,之后才发布依赖该形状的客户端;回滚同样必须先 purge——回滚会把旧形状响应重新灌进边缘,再滚回来也不自愈。「数据变更后刷新」不覆盖本情形:代码部署不是数据变更
 
 ### 需求:公共读边缘缓存应由定时预热尽量保持热(best-effort,缩小而非消除冷窗口)
 
-公共读端点(`GET /rankings` 非搜索成功响应、`GET /categories`)的国内边缘缓存**应**由一个周期性主动预热任务尽量保持热,以**缩小**——**而非消除**——TTL 到期 / POP LRU 驱逐后首个真实用户吃一次跨境回源冷 MISS(实测 ~5–7s)的窗口。这是 best-effort 优化,**禁止**写成"永不冷"的保证:边缘对象在 LRU 驱逐或自然到期后、到下一次成功预热前仍可能冷;预热把该冷窗口的上界**在调度成功时**压到约等于预热间隔(cron 被跳过/延迟则更长——估计而非保证)。各条**必须**满足:
+公共读端点的国内边缘缓存应由周期性主动预热任务尽量保持热,以**缩小**而非消除 TTL 到期 / POP 驱逐后首个真实用户吃冷 MISS(实测 ~5–7s)的窗口。这是 best-effort,不得写成「永不冷」的保证:预热把冷窗口上界**在调度成功时**压到约等于预热间隔,cron 被跳过或延迟则更长。
 
-- **灌入机制**:该域名 domestic scope(仅服务国内 POP),预热**必须**用阿里云 `PushObjectCache`(由阿里云发起回源、灌入国内 POP);**禁止**用海外机器 `curl` 充当预热(热不到国内 POP)。
-- **预热目标 = landing + `/categories` + 全部 rankable cohort 的字面 slug 键**:纳入谓词**必须**是 `rankable = comparableUnit !== null`(即分类树可点达节点,**含**非叶 `soft-drink`/`dairy`,**排除**非 rankable 的 `beverage`/`alcohol` 父),**禁止**用"叶性"判据(漏掉可点达的非叶 cohort)。`category` slug **必须**用字面英文(`soft-drink`/`carbonated`/`juice-plant`/`coffee-tea`/`drinking-water`/`dairy`/`milk`/`yogurt`/`lactic-drink`/`baijiu`/`wine`/`spirits`/`whisky`/`beer`/`sake-fruit-wine`),**禁止**中文标签(→服务端 400)。发参顺序**必须**同 `buildRankingsUrl`(`limit→offset→category`)。`category=soft-drink` **必须**单列预热——它与落地无-category 键**同 body 但不同 CDN 键**(下钻软饮发带 `category` 键);**禁止**以"落地已覆盖"为由漏掉它或任一可点达 cohort。
-- **形态与 query 键经实测确认(go/no-go)**:`PushObjectCache` 的 `ObjectPath` 形态(含/不含 scheme)与"query 串是否被当作预热缓存键"在官方文档**未明确**;**必须先实测确认**——预热某带 query 的 URL 后,从国内视角确认**该精确 query 键** `X-Cache: HIT`(且 HIT 非由探测本身的 `curl` 造成)。未确认前**禁止**依赖该机制上线。
-- **频率 ≤ 边缘 TTL,且其充分性经实测**:间隔**必须** ≤ 边缘 TTL(当前 1 天)。"预热是否刷新**仍新鲜**对象的 TTL"官方未文档化,**必须实测判定**:(a) 预热只回源补**已过期/驱逐**对象(则冷窗口 ≈ 预热间隔,频率须按可容忍窗口设、通常 < TTL 有余量)还是 (b) 预热总是回源并重置 TTL(则任一 < TTL 间隔即保持常热);**禁止**在实测前断言 (b)("daily 即永不过期")。
-- **凭据最小权限 + 失败隔离 + 每 URL 独立 + 全失败可见**:**必须**用仅授 `cdn:PushObjectCache` 的 RAM 子账号 AK(附策略 JSON)、密文注入、非主账号、不入库;某 URL 预热失败**必须**不影响线上(仅退化为该 URL 下个用户吃一次自愈回源);**必须逐 URL 独立尝试**(一个失败不漏其余)并记录返回的 task id(注:`PushObjectCache` 异步排队,返回成功=已受理≠已热,真正热度以下次 HIT 为准);但**全部 URL 失败时任务必须以非零退出可见**——**禁止** `||continue` 吞错致 job 静默变绿(AK 过期 / RAM 撤权 / CLI 变更下尤甚)。
-- **存活可核对**:GH `schedule` 在仓库 60 天无活动后会被自动停用、且 cron 漏跑时 GH 不主动告警;**必须**有**命名周期的人工核对**(如每月查 Actions 运行历史)或更强的成功心跳告警,确认预热仍在跑——**禁止**把"仓库活跃"当作存活保证、**禁止**用无周期的"定期"措辞。
+- **灌入机制**:该域名 domestic scope,预热必须用阿里云 `PushObjectCache`;不得用海外 `curl`(热不到国内 POP)。
+- **清除机制**:purge 与预热是**两个不同接口**,不可互相替代——`PushObjectCache` 只把当前源站响应灌进 POP,不会让已有对象失效。purge 必须用阿里云 `RefreshObjectCaches`;wildcard/前缀清除用 `ObjectType=Directory` 并以 `/` 结尾的 `ObjectPath`,单对象用 `ObjectType=File`。**顺序不可颠倒**:先 refresh 再 push,反过来会把刚灌的新对象立刻刷掉。
+- **预热目标 = `/rankings` + `/categories` 两条**。`/rankings` 无参后,原「landing + 每个 rankable cohort 的字面 slug 键」枚举必须删除,连同 `PAGE_SIZE` 与 15 个 slug 清单及其手工同步注释。该清单是持续的漏项面,本变更消灭它而非换一份新的。不得保留任何 `?category=` / `?limit=` / `?offset=` 形态的预热 URL——它们已不构成独立缓存键。
+- **实测确认(go/no-go)**:`PushObjectCache` 的 `ObjectPath` 形态在官方文档未明确,必须先实测确认预热后从国内视角 `X-Cache: HIT`(且非探测 `curl` 自造)。因预热 URL 已不含 query,原「query 串是否被当作预热缓存键」的实测项随之失效。
+- **实测确认(go/no-go)**:`RefreshObjectCaches` 的 `ObjectType=Directory` 对 `/rankings` 这类**非目录路径**是否覆盖其全部带参变体,官方文档同样未明确。必须先实测:构造一个 `?category=beer` 的热对象 → refresh → 确认它变冷。若不覆盖,必须以 `ObjectType=File` 逐条刷新下列 16 个已知历史 rankings 路径,不得依赖已从 workflow 删除的运行时清单:
+  - `/rankings?limit=20&offset=0`
+  - `/rankings?limit=20&offset=0&category=soft-drink`
+  - `/rankings?limit=20&offset=0&category=carbonated`
+  - `/rankings?limit=20&offset=0&category=juice-plant`
+  - `/rankings?limit=20&offset=0&category=coffee-tea`
+  - `/rankings?limit=20&offset=0&category=drinking-water`
+  - `/rankings?limit=20&offset=0&category=dairy`
+  - `/rankings?limit=20&offset=0&category=milk`
+  - `/rankings?limit=20&offset=0&category=yogurt`
+  - `/rankings?limit=20&offset=0&category=lactic-drink`
+  - `/rankings?limit=20&offset=0&category=baijiu`
+  - `/rankings?limit=20&offset=0&category=wine`
+  - `/rankings?limit=20&offset=0&category=spirits`
+  - `/rankings?limit=20&offset=0&category=whisky`
+  - `/rankings?limit=20&offset=0&category=beer`
+  - `/rankings?limit=20&offset=0&category=sake-fruit-wine`。
+- **频率 ≤ 边缘 TTL,且充分性经实测**:间隔必须 ≤ TTL(当前 1 天)。「预热是否刷新仍新鲜对象的 TTL」官方未文档化,必须实测判定是 (a) 只补已过期/驱逐对象,还是 (b) 总是回源并重置 TTL;不得在实测前断言 (b)。
+- **凭据最小权限 + 失败隔离 + 每 URL 独立 + 全失败可见**:周期性预热任务的 RAM 子账号仅授 `cdn:PushObjectCache`。**形状变更部署所需的 purge 是另一件事**:它需要 `cdn:RefreshObjectCaches`,由**人工执行的发布凭据**承担,不得并进那个周期性任务的 AK——把刷新权授给一个每 12 小时自动跑的 job,意味着任何一次该 job 的缺陷都能清空线上缓存。两者都必须密文注入、不入库;单 URL 失败不影响线上、逐 URL 独立尝试并记 task id;**全部 URL 失败时任务必须以非零退出可见**,不得吞错致 job 静默变绿。URL 数由 17 收敛到 2 后该要求不得放松:两条同时失败意味着首屏与分类树一起冷。
+- **存活可核对**:GH `schedule` 在仓库 60 天无活动后会被自动停用且漏跑不告警,必须有**命名周期**的人工核对或成功心跳,不得把「仓库活跃」当存活保证。
 
 #### 场景:定时预热缩小(而非消除)冷窗口
 
 - **当** 周期性预热任务触发并对各热 URL 调 `PushObjectCache`
-- **那么** 国内 POP 在 TTL 到期 / 驱逐后由下次成功预热重新灌入,**调度成功时**冷 MISS 窗口 ≈ ≤ 预热间隔;**禁止**断言"首个用户永不吃冷 MISS"或"窗口必 ≤ 间隔"——GH cron 可被跳过/延迟、LRU 驱逐亦可发生,故窗口可能**超过**一个间隔,是 best-effort 上界估计而非保证
+- **那么** 冷 MISS 窗口在调度成功时 ≈ ≤ 预热间隔;不得断言「首个用户永不吃冷 MISS」——cron 可被跳过、LRU 驱逐亦可发生
 
 #### 场景:domestic scope 下只认 PushObjectCache
 
-- **当** 预热实现选择把内容灌进国内 POP 的机制
-- **那么** **必须**用 `PushObjectCache`;**禁止**用海外 `curl`(domestic-scope 域热不到国内 POP)
+- **当** 选择把内容灌进国内 POP 的机制
+- **那么** 必须用 `PushObjectCache`,不得用海外 `curl`
 
 #### 场景:预热目标覆盖全部 rankable cohort 的字面 slug 键
 
 - **当** 编排预热 URL 清单
-- **那么** **必须**覆盖 landing + `/categories` + **每个** rankable cohort(`comparableUnit !== null`,含非叶 `soft-drink`/`dairy`)的字面英文 slug 键,发参顺序同 `buildRankingsUrl`;**禁止**用中文标签(→服务端 400)、**禁止**漏掉 `category=soft-drink`(下钻键,异于落地无-category 键)或任一可点达 cohort
+- **那么** `?category=<slug>` 形态的键已不存在,清单必须恰为 `/rankings` + `/categories` 两条;不得保留任何 cohort slug 枚举或 `PAGE_SIZE` 常量
+- **那么** 原要求所防的漏项风险由**消灭清单**解决,不得以任何形式重新引入按 cohort 枚举的预热 URL
 
 #### 场景:上线前实测两项未文档化行为(go/no-go)
 
-- **当** 准备依赖"预热精确 query 键"和"频率充分性"
-- **那么** **必须**先实测:① 预热带 query 的 URL 后该精确键 `X-Cache: HIT`(非探测 curl 自造);② 判定预热对仍新鲜对象是 no-op (a) 还是重置 TTL (b),据此定频率;两项未过**禁止**上线依赖
+- **当** 准备依赖预热机制
+- **那么** 必须先实测:① 预热后从国内视角确认 `X-Cache: HIT`;② 判定预热对仍新鲜对象是 no-op 还是重置 TTL,据此定频率;两项未过不得上线依赖
+- **那么** 原第 ① 项中「精确 query 键命中」的部分随 query 一并失效
 
 #### 场景:凭据最小权限、失败隔离、存活可核对
 
-- **当** 预热任务运行(含某 URL 调用失败 / **全部 URL 失败** / 某次整体漏跑 / cron 被 60 天规则停用)
-- **那么** 凭据**必须**仅 `cdn:PushObjectCache`;单 URL 失败**必须**不影响线上(退化为自愈回源)、逐 URL 独立尝试并记 task id;**全部 URL 失败时任务必须以非零退出可见**(禁止 `||continue` 吞错致静默变绿);**必须**有每月人工核对或心跳确认 cron 存活,**禁止**仅依赖 GH 默认通知(它不覆盖"cron 没跑"这一最可能的静默失败)
-
+- **当** 预热任务运行(含单 URL 失败 / 全部失败 / 整体漏跑 / cron 被停用)
+- **那么** 周期任务凭据仅 `cdn:PushObjectCache`,**不含** `cdn:RefreshObjectCaches`(后者属人工发布凭据);单 URL 失败不影响线上、逐 URL 独立尝试并记 task id;全部失败必须非零退出可见;必须有命名周期的人工核对或心跳

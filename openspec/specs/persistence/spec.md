@@ -3,7 +3,9 @@
 ## 目的
 
 定义 `@unit-price/db` 持久层：以 `@unit-price/core` 领域类型为单一事实源、用 SQLite↔Postgres 可移植类型落库原始上报（`product_raw`）、规范商品（`product`）、计算结果（`unit_price`）与人工纠错（`corrections`），并提供类型化 repository 契约、可复现迁移与不依赖外部数据库的本地测试基座。本节为待定占位，详见各需求。
+
 ## 需求
+
 ### 需求:schema 必须以 core 领域类型为单一事实源
 
 `@unit-price/db` 落库的**领域字段必须**与 `@unit-price/core` 的 `RawProduct` / `ParsedSpec` / `CalcResult`(calculator 输出)字段**同名同义、无丢失**;各表可加**显式溯源/外键/时间戳增列**(`store`/`source`/`captured_at`/`raw_id` 等),这些**不属**领域类型、**必须**与领域列区分标注(不得用增列冒充领域字段,也**不得反过来声称表与领域类型「一一对应」**——表是领域字段的超集)。落库前**必须**用 core **已导出**的 Zod schema 校验领域部分:`RawProductSchema` / `ParsedSpecSchema` / 嵌套单价 `UnitPriceSchema` / `WarningsSchema`;`CalcResult` 在 core **无导出 schema**,其 `confidence` 按 `z.number().min(0).max(1)`、`warnings` 按 `WarningsSchema`、嵌套 `unitPrice` 按 `UnitPriceSchema` 校验。校验失败**必须**拒绝写入并抛出带字段路径的错误(禁止静默落脏数据)。Zod 校验始终对**领域对象**(解码后),而非对存储编码后的 JSON 串。`Measurement`(value+unit)**必须**拆成可查询的两列(`unit_size_value` REAL / `unit_size_unit` TEXT)。`multipliers` 与 `warnings` 数组**必须**以 **JSON-text(`TEXT` 列存 JSON 串)** 存储(**禁用**原生数组/jsonb,见可移植类型需求)、内容可无损往返(含空数组);两者**均为 `NOT NULL` 列**——`multipliers` 因 core 侧 `.default([1])`、`warnings` 因 `CalcResult.warnings` 恒非 null 数组且 `WarningsSchema` 拒 null,故都无可空态、**不引入「`[]` vs NULL」区分**(空数组存 JSON 串 `"[]"`)。`ParsedSpec` 的可选+可空字段(`unitSize`/`totalAmount`/`quantity`/`packageUnit`)落库时 `undefined`(字段缺失)与 `null` **均归一为列 NULL**;往返「相等」按此归一判定(读回为 `null`,与写入的 `undefined`-或-`null` 语义等价)。
@@ -145,51 +147,6 @@
 - **当** `getProduct` 返回一行
 - **那么** 返回值是经 Zod 校验的 `ParsedSpec` + 其 `unit_price`(`CalcResult` 形)+ `raw_id`,而非裸数据库行
 
-### 需求:repository 必须提供 listRankings 只读榜单查询契约
-
-`@unit-price/db` 的 repository **必须**为榜单消费（`rankings-api` 的 `GET /rankings`）提供按可比单价升序的分页查询：`category` 入参解析为 taxonomy 节点、驱动闭包过滤，并读取 `product.rankable` 作入榜门。
-
-**只读与不重算**：**必须只读**——禁止写库、禁止解析/计算。投影中的 `per100ml`/`formula`/`confidence`/`warnings` **必须直接取 `unit_price` 已存储列**、**禁止**读路径用整数分 `price` 重算。闭包 / `rankable` / cohort 守卫仅作过滤/准入。
-
-**Cohort 守卫与默认节点（P3.5）**：API 层**必须**仅对「**静态**解析单位非空」的**单一 cohort 节点**调用本查询；对解析单位为 `null` 的跨 cohort 节点（root `beverage`、`酒类` 父）**必须**在调用前返回 `400`（不调本查询）——见 `rankings-api` cohort 守卫。**守卫的解析必须用编译期 `CATEGORY_NODES` 静态解析器（`resolveComparableUnitStatic`），不得用 repository 运行期 `resolveComparableUnit`**（运行期版对未 seed 的合法 cohort slug 解析得 `null`、会与「合法但未 seed → `200 []`」冲突）。本查询（listRankings）自身不承担守卫：调用方守卫后才进入，故本查询对未 seed 节点照常闭包零命中返回 `[]`（→ `200`）。**默认节点为 `soft-drink`**（取代 P3 的 `beverage` root）。本查询自身机制（闭包+rankable+per100ml+DISTINCT）不变，但因调用方守卫，只在单一 cohort 节点上执行、结果天然同质。
-
-**入榜过滤与轴**：一行入榜当且仅当**三者皆真**：① 目标节点闭包成员（`product_tag`(kind=category 叶) JOIN `category_closure.ancestor_tag_id = 目标节点`）；② `product.rankable = true`；③ `unit_price.per100ml IS NOT NULL`。**P3.5**：`comparable_unit=per_100ml` 现扩绑到**乳品叶与各酒种叶**，故乳品/酒类商品也 `rankable=true`、在各自 cohort 节点入榜；数据门列由可排名成员轴定、v1 一律 `per100ml`。`category` 下推为闭包过滤；`product.category` 列**仍禁止**用作入榜判别。`per100ml=NULL` 项、`rankable=false`（待细化/待人工）项一律**排除**。
-
-**闭包 JOIN 去重（防御性）**：`category_closure` 仅含 category is-a 边 → JOIN 天然只匹配 category 叶边。单归属（每商品至多一叶）是写时应用层强制、**非** DB 约束。故节点榜查询**必须**对 `unit_price.id` 加 `SELECT DISTINCT` 兜底（对齐 `listProductIdsInCategoryNode`）。
-
-**排序与查询计划口径**：**必须**按 `per100ml` 升序主键、`unit_price.id` 升序次键（**禁用**跨表 `product.id`）。节点路径查询计划契约（驱动表全扫、`category_closure` 与 `unit_price` 经各自唯一键 `SEARCH ... USING INDEX`、允许 temp B-tree、EXPLAIN 先 `ANALYZE` 按表 substring 断言、不加 `category_closure(ancestor_tag_id,tag_id)`）以 `rankings-api`「节点路径的查询计划口径」节为单一事实源、本规范不重述。
-
-**投影形状与校验口径**：返回反规范化只读投影（`unit_price ⋈ product ⋈ product_raw ⋈ product_tag ⋈ category_closure`）。`confidence` **必须**取 `unit_price.confidence`（非 `product.confidence`）。`warnings` 经 `decodeJson` + `WarningsSchema` 还原为 `string[]`、**禁止**透原始串；损坏列 fail-closed 抛错 → handler `500`、不静默丢行。
-
-#### 场景:按品类节点闭包 + rankable + per100ml 升序分页（含酒种/乳品 cohort）
-
-- **当** 调用节点榜查询 `category='carbonated'`（库含碳酸叶 rankable 软饮、其它叶软饮、`rankable=false` 行、`per100ml=NULL` 行）
-- **那么** **必须**只返回碳酸节点闭包下 `rankable=true ∧ per100ml` 非空成员、按 `per100ml` 升序、同值按 `unit_price.id`，切片 `[offset,offset+limit)`；非该节点成员/`rankable=false`/`per100ml=NULL` 行**不出现**
-- **当** 调用 `category='beer'`（啤酒叶，本期绑 `per_100ml`）
-- **那么** **必须**返回啤酒 cohort（葡萄酒/白酒等其它酒种不出现）；乳品叶同理各返回其 cohort
-
-#### 场景:默认节点 soft-drink；跨 cohort 节点不经本查询
-
-- **当** API 处理无参 `/rankings`
-- **那么** 解析默认节点 `soft-drink` 调本查询、返回软饮 cohort（取代 P3 默认 root）
-- **当** API 收到 `category=beverage`(root) 或 `category=alcohol`(酒类父)（解析单位 `null`）
-- **那么** API **必须** cohort 守卫 `400`、**不调用**本查询（不产生混排了不同酒种或软饮+酒类的结果）；酒类商品仅在**各酒种叶** cohort 查询里 `rankable=true` 出现
-
-#### 场景:违反单归属（同商品双叶）仍至多一行
-
-- **当** 某商品违反单归属、挂两条 category 叶边且都命中目标节点
-- **那么** 结果中**必须**至多出现一次（`SELECT DISTINCT unit_price.id` 兜底）
-
-#### 场景:per100ml/formula/confidence 取存储值不重算且 confidence 取权威列
-
-- **当** 某行 `unit_price.per100ml=0.505`、`formula="40 / (330 * 24 * 1) * 100"`、`unit_price.confidence=0.95`，其 `product.confidence=0.5`
-- **那么** 投影 `per100ml`/`formula` 等于 `unit_price` 存储值（未重算）、`confidence` 等于 `0.95`，**禁止**返回 `0.5`
-
-#### 场景:同 per100ml 分页稳定且计划走有效护栏
-
-- **当** 多行 `per100ml` 相同，分两次取同一节点榜（`offset=0` 与 `offset=N`，数据不变）
-- **那么** 两次按 `unit_price.id` 升序不重叠不遗漏覆盖；EXPLAIN（先 `ANALYZE`）中 `category_closure` 与 `unit_price` **必须** `SEARCH ... USING INDEX`，**允许** temp B-tree 与驱动表全扫
-
 ### 需求:迁移必须可复现且本地测试不依赖外部数据库
 
 变更**必须**提供 Drizzle 迁移(sqlite 方言,可由 schema 生成、可应用),并提供本地测试基座(in-memory SQLite,如 `better-sqlite3`/`@libsql/client`,或 Miniflare D1),使 `pnpm -r test` 在 CI/本地**无需**外部托管数据库即可跑通持久层测试,且与生产 D1 同方言(SQLite)。测试基座**必须**显式 `PRAGMA foreign_keys=ON`(裸 SQLite 默认 OFF、驱动行为可能随版本/换型漂移,显式 ON 与 D1 强制 FK 对齐)——否则 `saveParsed` 单事务的 FK 回滚原子性会**假绿**(测试库不校验 FK 则回滚断言测不出);单事务原子性测试的失败注入**必须**用在测试库上确实生效的手段(`mock` 抛错或 NOT NULL/FK 约束,且 FK 已开)。重复运行迁移**必须**幂等——幂等由 **drizzle migration journal**(`__drizzle_migrations` 记录已应用的迁移、再次 `drizzle-kit migrate` 时跳过)保证,**而非**依赖 `CREATE TABLE IF NOT EXISTS`(drizzle-kit 默认生成裸 `CREATE TABLE`)。
@@ -283,62 +240,117 @@
 - **当** 重报使商品从可计算变为不可计算(如新价为 0 / 负),本次 `calc` 的 `per100ml`/`per100g`/`formula` 均为 `null`
 - **那么** 既有 `unit_price` 行的这三列**必须**被覆写为 NULL、`confidence`/`warnings` 同步更新;**禁止**保留旧的非空单价与旧 `formula`(该行随之退出 `per100ml` 榜,属预期后果)
 
-### 需求:repository 必须提供品类树 + 每节点可排名计数的只读查询
-
-`@unit-price/db` 的 repository **必须**提供只读方法（供 `category-tree-api` 的 `GET /categories`）返回 category is-a 树及每节点可排名计数。**必须只读**、不写库、不解析/计算。
-
-- **节点集与继承**：返回全部 `kind=category` 节点（`slug`/`name`/`parentSlug`）+ 经 is-a 继承解析的 `comparableUnit`。继承解析**必须**一次性加载全部 category 节点后在**内存**沿 parent map 求解，**禁止**逐节点串行 `resolveComparableUnit`。**P3.5**：软饮全线、**乳品全线**、**各酒种叶**解析得 `per_100ml`；`酒类` **父**与 root 解析得 `null`。
-- **rankableCount 与节点榜同源**：每节点 `rankableCount` 过滤谓词（闭包成员 ∧ `rankable=true` ∧ `per100ml` 非空）**必须**与 listRankings 取自**同一份可复用 builder 片段**，`rankableCount` = `COUNT(DISTINCT product.id)`；两者基数相等依赖 `unit_price` 与 `product` 1:1（`unit_price_product_id_unique`）、须显式成立。
-- **`rankable` 语义（P3.5 收敛）**：节点 `rankable` = `comparableUnit !== null`，现等价于「该节点是单一 cohort、可点进榜」——软饮/软饮叶/乳品/乳品叶/各酒种叶 = `true`；`酒类` 父与 root = `false`。
-- **rankableCount 与 rankable 正交、但口径分可点进/不可点进**：`rankableCount` = 闭包后代可排名数。对 `rankable=true`（可点进）节点，等于其 `/rankings?category=该节点` cohort 榜基数。对 `rankable=false` 节点（root / `酒类` 父），`rankableCount` 为**分支信息性计数**（**P3.5 起 `酒类` 父 `rankableCount>0`**，因其后代各酒种叶 rankable；不再为 0），但该节点**无对应单一榜**（API cohort 守卫拒榜）。**禁止**把 `rankable=false` 推成 `rankableCount=0`；亦**禁止**把 `rankableCount>0` 推成「可点进」。
-- **未 seed 退化**：`tag` 无 category 行时返回空节点集（不报错）。
-
-#### 场景:返回全 category 节点 + 继承单位 + 每节点可排名计数（含乳品/酒种叶 per_100ml）
-
-- **当** 调用品类树查询，库已 seed P3.5 树且有可排名软饮/乳品/酒类商品
-- **那么** **必须**返回全部 kind=category 节点（root/软饮子树/乳品子树/酒类子树），每节点带继承解析 `comparableUnit`（软饮线/乳品线/各酒种叶 `per_100ml`；`酒类` 父/root `null`）与 `rankableCount`
-
-#### 场景:rankableCount 与节点榜基数逐节点相等（限可点进节点）
-
-- **当** 对每个 `rankable=true` 节点比较其 `rankableCount` 与对应节点榜（同片段、同快照）行数
-- **那么** 二者**必须**逐节点相等（软饮/乳品/各酒种叶）；`rankable=false` 节点（root/酒类父）无对应榜、不适用该一致性，其 `rankableCount` 为分支信息计数（酒类父 `>0`）
-
-#### 场景:未 seed 时返回空节点集
-
-- **当** `tag` 表无任何 kind=category 行
-- **那么** 查询**必须**返回空节点集，**禁止**报错
-
 ### 需求:product_raw 必须维护历史最低价水位(lowest_price)
 
 `product_raw` **必须**新增可空列 `lowest_price`(可移植 `INTEGER`,整数分,语义同 `price`),记录该 `(store, store_sku)` 商品**历次正价观测到的最低整件价**。它是溯源/派生增列、**不在** `RawProductSchema` 内,与领域列正交。它是 `product_raw` 首个**跨观测运行聚合**列(既有列都是当次/首次观测的时点属性),故 `productRaw` docstring 须点明这一新语义。
 
-- **仅正价入水位(硬约束)**:`RawProductSchema` **放行 ≤0/负价**(`product_raw` 忠实存含异常价的原始观察,由 core 路由到 per100ml=null)。若把 0/负价折进 `min`,水位会被**永久毒化**(`min` 单调只降),(本变更前此处的举例是「叠加 `unit_price` first-write-wins 使已入榜项恢复价后显示历史低 ¥0.00」;该举例**已失效**——去重命中刷新落地后,一次 ≤0 观测会把 `per100ml` 刷成 NULL 而使该行**整条退出榜单**,不会以「历史低 ¥0.00」的形态留在榜上。硬约束本身**不变**,理由收窄为:水位是 `product_raw` 的跨观测聚合,`min` 单调只降、毒化**不可逆**。)故水位维护与回填**必须只纳入 `price > 0` 的观测**,`price <= 0` 的观测**禁止**改动或初始化水位。
-- **列必须可空**;经标准 `drizzle-kit generate` DDL 迁移加列(登记 `_journal.json`,**区别于** 0004/0005 的目录扫描幂等 DML 种子迁移)。prod `product_raw` 非空表加**可空 `INTEGER`** 列对 SQLite 安全(无需 DEFAULT)。同一迁移文件尾部**必须**一次性回填存量行 `UPDATE product_raw SET lowest_price = price WHERE price > 0 AND lowest_price IS NULL`——存量无历史价格流水,只能以当前正价初始化(不可追溯真实历史低点);`WHERE ... IS NULL` 使回填**自幂等**(即便 journal 被手工改动误重放也是 no-op、不把已累积真实低点重置回当前价),`price > 0` 排除异常价存量。
-- **`upsertRaw` 必须维护水位**:首次插入写 `lowest_price = (price > 0 ? price : NULL)`;对 `(store, storeSku)` 冲突时,新价为正才折进——`lowest_price = CASE WHEN 新价 > 0 THEN min(coalesce(lowest_price, 新价), 新价) ELSE lowest_price END`(既有水位与新正价取小者,`coalesce` 兜住无水位时以新价起算;新价 ≤0 则保留旧水位不动)。`title`/`price`/`captured_at` 仍随最新观测覆写(不受本列影响);水位对正价**只降不升**。
+- **仅正价入水位(硬约束)**:`RawProductSchema` **放行 ≤0/负价**(`product_raw` 忠实存含异常价的原始观察,由 core 路由到 per100ml=null)。若把 0/负价折进 `min`,水位会被**永久毒化**(`min` 单调只降且不可逆)。故水位维护与回填**必须只纳入 `price > 0` 的观测**,`price <= 0` 的观测**禁止**改动或初始化水位。
+- **列必须可空**;经标准 `drizzle-kit generate` DDL 迁移加列并登记 `_journal.json`。prod 非空表增加可空 `INTEGER` 列不得要求 DEFAULT;同一迁移文件必须执行 `UPDATE product_raw SET lowest_price = price WHERE price > 0 AND lowest_price IS NULL`。`WHERE ... IS NULL` 使回填自幂等,不得把已累积的真实低点重置回当前价;`price > 0` 排除异常价存量。
+- **`upsertRaw` 必须维护水位**:首次插入写 `lowest_price = (price > 0 ? price : NULL)`;对 `(store, storeSku)` 冲突时,新价为正才折进 `lowest_price = CASE WHEN 新价 > 0 THEN min(coalesce(lowest_price, 新价), 新价) ELSE lowest_price END`。`title` / `price` / `captured_at` 仍随最新观测覆写,水位对正价只降不升。
 - **禁止**用价格历史明细表实现:本列只承载「历史最低价」这一标量,不保留逐次流水。
-- 榜单读投影(`listRankings` 及其 `RawRankingRow`/`RankingRow`)**必须**投出 `lowest_price` 供 `rankings-api` 透出为 `lowestPriceCents`,并以 `COALESCE(lowest_price, price)` 取值,使投影结果**恒为整数**(存量偶有 `NULL` 或仅异常价历史时退化为当前价)。因客户端仅当 `priceCents > lowestPriceCents` 才呈现「历史低」,退化为当前价时(相等)不呈现、异常价也不会被当作历史低呈现。该投影仍**只读、不重算**(与既有 per100ml/formula 取存储值同口径)。
+- **全量榜单快照读投影必须透出水位**:读路径必须投出 `lowest_price` 为 `lowestPriceCents`,并以 `COALESCE(lowest_price, price)` 取值,使结果恒为整数。客户端仅当 `priceCents > lowestPriceCents` 才呈现「历史低」;退化为当前价时不呈现,异常价也不得被当作历史低。投影只读、不重算 `per100ml` 或 formula。
 
 #### 场景:首次正价上报把水位置为当前价
+
 - **当** 某 `(store, store_sku)` 商品首次经 `upsertRaw` 落库、`price = 1290`
 - **那么** `product_raw.lowest_price` **必须** = `1290`
 
 #### 场景:价格回落刷新更低水位
+
 - **当** 同款先以 `price = 1290` 落库(`lowest_price = 1290`),后重报 `price = 990`
 - **那么** `product_raw.price` 更新为 `990`、`lowest_price` **必须**刷新为 `990`(取 `min`)
 
 #### 场景:价格上涨保留历史低点
+
 - **当** 同款先以 `price = 990` 落库(`lowest_price = 990`),后重报 `price = 1490`
 - **那么** `product_raw.price` 更新为 `1490`、`lowest_price` **必须**保留 `990`(`min(990, 1490)`,水位只降不升)
 
 #### 场景:异常 0/负价不毒化水位
+
 - **当** 同款先以 `price = 990` 落库(`lowest_price = 990`),后重报异常 `price = 0`(或负价)
-- **那么** `product_raw.price` 忠实更新为 `0`、但 `lowest_price` **必须**保留 `990`(≤0 观测不折进水位);若某款**仅**有过 ≤0 观测,则其 `lowest_price` **必须**为 `NULL`(读投影退化为当前价、不呈现历史低)
+- **那么** `product_raw.price` 忠实更新为异常价、但 `lowest_price` **必须**保留 `990`;若某款仅有过 ≤0 观测,其 `lowest_price` **必须**为 `NULL`
 
 #### 场景:加列迁移对非空 prod 表安全并仅回填正价存量为当前价
+
 - **当** 生产经自动 migrate 应用该加列迁移
-- **那么** `product_raw.lowest_price` **必须**以可空 `INTEGER` 落地、不破坏既有数据,且同迁移的回填**必须**把每条 `price > 0` 存量行的 `lowest_price` 置为其 `price`、`price <= 0` 的存量行保持 `NULL`(回填带 `WHERE price > 0 AND lowest_price IS NULL`、幂等)
+- **那么** `product_raw.lowest_price` **必须**以可空 `INTEGER` 落地、不破坏既有数据;同迁移的回填必须把每条 `price > 0` 且水位为空的存量行初始化为当前价,`price <= 0` 保持 `NULL`,并可安全重放
 
 #### 场景:读投影经 COALESCE 恒为整数
-- **当** 榜单读投影读取某行(其 `lowest_price` 因无正价历史/回填前边角态为 `NULL`)
-- **那么** 投出的历史最低价 **必须** = `COALESCE(lowest_price, price)`(退化为当前价),**禁止**透出 `NULL`;正常有正价水位的行直接取 `lowest_price`
 
+- **当** 全量榜单快照读投影读取某行(其 `lowest_price` 因无正价历史或回填前边角态为 `NULL`)
+- **那么** 投出的 `lowestPriceCents` **必须** = `COALESCE(lowest_price, price)`(退化为当前价),**禁止**透出 `NULL`;正常有正价水位的行直接取 `lowest_price`
+
+### 需求:repository 必须提供全量榜单快照的只读查询契约
+
+`@unit-price/db` 必须为 `/rankings` 提供不分页、无节点作用域的只读查询:返回全部可比行,每行附带其**全部** category slug,并附 taxonomy 节点。
+
+**入榜两门**:`rankable = true` ∧ `per100ml IS NOT NULL`。
+
+**没有叶性门。** `attachTag` 已在写入侧强制叶粒度(非叶挂载直接抛),故唯一能产生非叶挂载的是 taxonomy 演化——一个叶后来长出子节点。那些商品仍在售,把它们剔除等于在一次 taxonomy 编辑里静默丢掉在售行。归属由 `categorySlugs` 承载,判据是「任一 slug 是目标节点或其后代」,对叶与非叶一致成立。
+
+**单个成员缺陷不得升级为整查询失败**:不满足行不变量或 wire 必填字段的行、以及不满足节点字段 schema 的节点,必须被排除并按 reason 计数;引用被排除节点的行随之排除。正常的非成员(`rankable=0`、无可比轴)在 SQL 里就被滤掉,不计入排除计数。
+
+**reason 的生产与传输边界不同**:生产者必须用受类型约束的词表防止拼写错误,当前已知值为 `rankable_without_category_edge` / `warnings_undecodable` / `warnings_wrong_shape` / `formula_missing` / `row_shape_invalid` / `node_shape_invalid` / `row_references_invalid_node`。wire schema 只要求非空字符串,不得复制为封闭枚举;新增健康信号必须可被旧客户端安全忽略,不能否决整份载荷。
+
+**排除集必须覆盖下发契约的全部必填字段**:数据库 `NOT NULL` 不排除空串,故准入必须以共享下发 schema 为最终判据。`/rankings` 与 `/compute` 必须看到同一个准入后集合,否则被榜剔除的成员仍会计入比价的 `rank` 与 `total`。
+
+**每行恰一行**:按 `unit_price.id` 聚合其全部 category slug。不得因双叶发两行,亦不得只取其一。
+
+**装配一致性**:行、归属边、taxonomy 节点是三次读。当前实现按顺序发三条独立读;唯一可制造悬空 slug 的删除 `tag` 路径当前不存在,故撕裂窗口作为已知接受项。出现删除 `tag` 的写路径时必须收进一次一致性 `batch()` / 事务。响应侧对象级断言是兜底。
+
+**排序**:`per100ml` 升序、`unit_price.id` 升序。下发即全序,客户端只过滤与切片、不重排。
+
+**节点集不带 `rankableCount`**:`/rankings.categoryNodes` 与 `GET /categories` 响应的 `nodes` 使用同一无计数投影。需要数量的客户端从快照派生。
+
+**查询计划口径**:本查询无 `LIMIT`、含 slug 聚合,必须有自己的计划契约,不得沿用已删除节点分页查询的基线。
+
+#### 场景:返回全部可比行且每行携带全部 category slug
+
+- **当** 调用全量快照查询
+- **那么** 返回全部满足两门的行、不分页;每行携带非空的 category slug 数组
+- **当** 某商品挂两条 category 叶边
+- **那么** 结果中恰有一行,其 slug 数组同时含两个 slug
+
+#### 场景:非叶挂载的行必须留在快照内
+
+- **当** 某 `rankable` 行只挂在一个非叶节点上(taxonomy 演化留下的历史挂载)
+- **那么** 该行必须照常出现在快照中;不得因挂载点不是叶而被排除
+
+#### 场景:不合规行被排除且不使查询失败
+
+- **当** 库中存在无 category 归属、`warnings` 损坏、`formula` 为空或不满足 wire 行 schema 的入榜候选
+- **那么** 该行被排除并按 reason 计数,查询照常成功返回其余行
+
+#### 场景:不合规节点被排除且不使查询失败
+
+- **当** 某 category 节点不满足共享节点 schema
+- **那么** 该节点计入 `node_shape_invalid`;引用它且自身形状合法的行计入 `row_references_invalid_node`,其余快照照常返回
+
+#### 场景:排除计数不包含正常的非成员
+
+- **当** 库中存在 `rankable=0` 或无可比轴的行
+- **那么** 它们在 SQL 里被滤掉,不计入排除计数
+
+#### 场景:装配一致性与其已知接受的撕裂窗口
+
+- **当** 核对三条读是否在一次一致性读内
+- **那么** 当前顺序三读在现有写路径下不可制造悬空 slug;出现删除 `tag` 的写路径时必须改为一次一致性读
+
+#### 场景:全量快照与节点查询的计划契约相互独立
+
+- **当** 核对查询计划基线
+- **那么** 全量快照查询必须有独立基线,不得以树-only 查询或已删除分页查询的计划代替
+
+### 需求:repository 必须提供品类树只读查询
+
+`@unit-price/db` 必须提供只读品类树查询,返回全部 `kind=category` 节点并在一次加载后沿 parent map 解析继承的 `comparableUnit`;不得逐节点串行查询。每节点只含 `slug` / `name` / `parentSlug` / `comparableUnit` / `rankable`,其中 `rankable = comparableUnit !== null`;不得返回 `rankableCount`。查询不得写库、解析商品或计算单价。
+
+#### 场景:返回完整 category 树且不返回计数
+
+- **当** taxonomy 已播种并调用树查询
+- **那么** 返回全部 category 节点及继承后的 `comparableUnit` / `rankable`,任一节点均不含 `rankableCount`
+
+#### 场景:未 seed 时返回空节点集
+
+- **当** `tag` 表无任何 `kind=category` 行
+- **那么** 查询返回空节点集,不得报错
