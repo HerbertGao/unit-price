@@ -35,6 +35,6 @@
     "babel-preset-taro": "4.2.1",
     "react-refresh": "^0.18.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
