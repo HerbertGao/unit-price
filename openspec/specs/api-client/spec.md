@@ -3,7 +3,9 @@
 ## 目的
 
 `packages/api-client`（`@unit-price/api-client`）提供服务端与薄客户端共享的传输无关契约：Zod schema、推导类型、纯 URL 构造和响应解析，以及从全量榜单快照派生 cohort、搜索与分页的纯函数。它不发网络请求，并作为 `/rankings`、`/categories`、`/compute` 契约的单一事实源。
+
 ## 需求
+
 ### 需求:api-client 必须提供传输无关的 rankings 契约
 
 `packages/api-client`（`@unit-price/api-client`）**必须**作为四个客户端与 `apps/api` 共享的 API 契约包，本期承载 `/rankings` 契约。它**必须传输无关**——**禁止**包含任何网络调用（`fetch`/`Taro.request`/`wx.request` 等），发请求由各客户端自理。本包导出：
@@ -85,4 +87,3 @@
 
 - **当** 检查 `parseCategoryTreeResponse` 的签名与实现
 - **那么** 它**必须**只接 `json` 一个入参、内部以 `{ jitless: true }` 调 `CategoryTreeResponseSchema.parse`（与 `parseRankingsResponse` 形态一致、不把 jitless 外露）；收到不满足 schema 的 JSON（缺字段、`rankableCount` 非整、`nodes` 非数组等）时**必须**抛 `ZodError`（fail-closed），**禁止**返回未校验/部分数据
-

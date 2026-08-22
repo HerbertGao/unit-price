@@ -8,20 +8,20 @@
 import {
   SEARCH_MAX_CODEPOINTS,
   SEARCH_MIN_CODEPOINTS,
-} from '@unit-price/api-client';
+} from "@unit-price/api-client";
 
 export type SearchTermResult =
-  | { kind: 'empty' } // trim → length 0: no intent, do nothing (no nav, no request)
-  | { kind: 'too-short' } // length 1: intent but too wide (server 400 parity) — hint, no nav
-  | { kind: 'ok'; term: string }; // length ≥ 2: code-point-truncated term, ready to navigate
+  | { kind: "empty" } // trim → length 0: no intent, do nothing (no nav, no request)
+  | { kind: "too-short" } // length 1: intent but too wide (server 400 parity) — hint, no nav
+  | { kind: "ok"; term: string }; // length ≥ 2: code-point-truncated term, ready to navigate
 
 /** Normalize a raw search input: trim, measure by code points, truncate to 64. */
 export function normalizeSearchTerm(raw: string): SearchTermResult {
   const trimmed = raw.trim();
   const cps = [...trimmed];
-  if (cps.length === 0) return { kind: 'empty' };
-  if (cps.length < SEARCH_MIN_CODEPOINTS) return { kind: 'too-short' };
+  if (cps.length === 0) return { kind: "empty" };
+  if (cps.length < SEARCH_MIN_CODEPOINTS) return { kind: "too-short" };
   // Truncate to ≤ 64 code points (never splits a surrogate pair, unlike .slice on
   // the raw string) so the encoded URL, board title, and server filter all agree.
-  return { kind: 'ok', term: cps.slice(0, SEARCH_MAX_CODEPOINTS).join('') };
+  return { kind: "ok", term: cps.slice(0, SEARCH_MAX_CODEPOINTS).join("") };
 }

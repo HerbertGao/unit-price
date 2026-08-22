@@ -6,28 +6,31 @@
 //
 // Read-only: no on-device calculation or write path. comparableUnit is already
 // inheritance-resolved; the response deliberately carries no server-side count.
-import { View, Text } from '@tarojs/components';
-import Taro, { useLoad } from '@tarojs/taro';
-import { useState } from 'react';
+import { View, Text } from "@tarojs/components";
+import Taro, { useLoad } from "@tarojs/taro";
+import { useState } from "react";
 import {
   buildCategoriesUrl,
   parseCategoryTreeResponse,
   type CategoryTreeNode,
-} from '@unit-price/api-client';
-import { BASE, BASE_IS_PLACEHOLDER } from '../index/config';
-import { toRows, type Row } from './tree';
+} from "@unit-price/api-client";
+import { BASE, BASE_IS_PLACEHOLDER } from "../index/config";
+import { toRows, type Row } from "./tree";
 
-import './index.css';
+import "./index.css";
 
-type Phase = 'idle' | 'loading' | 'ready' | 'error';
+type Phase = "idle" | "loading" | "ready" | "error";
 
 /** One validated GET /categories fetch. Throws on network OR schema failure
  *  (parseCategoryTreeResponse is fail-closed) — caught into the error state. */
 async function fetchTree(): Promise<CategoryTreeNode[]> {
   if (BASE_IS_PLACEHOLDER) {
-    throw new Error('BASE 未配置：见 src/pages/index/config.ts');
+    throw new Error("BASE 未配置：见 src/pages/index/config.ts");
   }
-  const res = await Taro.request({ url: buildCategoriesUrl(BASE), method: 'GET' });
+  const res = await Taro.request({
+    url: buildCategoriesUrl(BASE),
+    method: "GET",
+  });
   return parseCategoryTreeResponse(res.data).nodes;
 }
 
@@ -38,24 +41,26 @@ function StateCard(props: { hint: string; sub?: string; onTap?: () => void }) {
       <View className="placeholder__card" onClick={props.onTap}>
         <Text className="placeholder__title">分类比价</Text>
         <Text className="placeholder__hint">{props.hint}</Text>
-        {props.sub ? <Text className="placeholder__sub">{props.sub}</Text> : null}
+        {props.sub ? (
+          <Text className="placeholder__sub">{props.sub}</Text>
+        ) : null}
       </View>
     </View>
   );
 }
 
 export default function Category() {
-  const [phase, setPhase] = useState<Phase>('idle');
+  const [phase, setPhase] = useState<Phase>("idle");
   const [rows, setRows] = useState<Row[]>([]);
 
   const load = () => {
-    setPhase('loading');
+    setPhase("loading");
     fetchTree()
       .then((nodes) => {
         setRows(toRows(nodes));
-        setPhase('ready');
+        setPhase("ready");
       })
-      .catch(() => setPhase('error'));
+      .catch(() => setPhase("error"));
   };
 
   useLoad(() => {
@@ -70,10 +75,10 @@ export default function Category() {
     });
   };
 
-  if (phase === 'idle' || phase === 'loading') {
+  if (phase === "idle" || phase === "loading") {
     return <StateCard hint="加载中…" />;
   }
-  if (phase === 'error') {
+  if (phase === "error") {
     return <StateCard hint="加载失败" sub="点击重试" onTap={load} />;
   }
   if (rows.length === 0) {
@@ -85,7 +90,7 @@ export default function Category() {
       {rows.map(({ node, depth }) => (
         <View
           key={node.slug}
-          className={`ctree__row${node.rankable ? ' ctree__row--clickable' : ' ctree__row--group'}`}
+          className={`ctree__row${node.rankable ? " ctree__row--clickable" : " ctree__row--group"}`}
           style={{ paddingLeft: `${24 + depth * 32}rpx` }}
           onClick={() => open(node)}
         >

@@ -1,9 +1,5 @@
 ---
-name: "OPSX: Propose"
 description: "提议新变更 - 创建变更并一步生成所有产出物"
-allowed-tools: Bash(openspec-cn:*)
-category: "Workflow"
-tags: ["workflow", "artifacts", "experimental"]
 ---
 
 提议新变更 - 创建变更并一步生成所有产出物。
@@ -24,7 +20,8 @@ tags: ["workflow", "artifacts", "experimental"]
 
 **存储选择：** 若用户指定了一个存储（存储是注册在本机上的独立 OpenSpec 仓库）或工作位于某个存储中，请运行 `openspec-cn store list --json` 发现已注册的存储 ID，然后在读写 spec 和变更的命令上传递 `--store <id>`（`new change`、`status`、`instructions`、`list`、`show`、`validate`、`archive`、`doctor`、`context`、`schemas`、`view`）。选定后，将 `--store <id>` 视为在当前工作流其余部分中固定不变。以下每个未限定范围的命令示例均为简写形式：运行前请追加该标志。例如，运行 `openspec-cn status --change "<name>" --json --store "<id>"`，而非下面展示的未限定形式。其他命令不接受此标志。命令输出的提示已包含该标志；在后续操作中请保留它。若不指定存储，命令将对最近的本地 `openspec/` 根目录生效。
 
-**Input**: `/opsx:propose` 之后的参数是变更名称（kebab-case），或用户想要构建内容的描述。
+**Input**: `/opsx-propose` 之后的参数是变更名称（kebab-case），或用户想要构建内容的描述。
+**Provided arguments**: $@
 
 **步骤**
 
@@ -123,7 +120,7 @@ tags: ["workflow", "artifacts", "experimental"]
 - 变更名称和位置
 - 已创建产出物列表及简要描述，加上跳过的任何条件性产出物及原因
 - 就绪状态："实现所需的所有产出物已就绪。"
-- 提示："产出物已就绪，待审核。当你准备就绪时，运行 `/opsx:apply`。"
+- 提示："产出物已就绪，待审核。当你准备就绪时，运行 `/opsx-apply`。"
 
 **产出物创建指南**
 

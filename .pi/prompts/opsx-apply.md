@@ -1,20 +1,13 @@
 ---
-name: openspec-apply-change
-description: 从 OpenSpec 变更中实现任务。当用户想开始实现、继续实现或处理任务时使用。
-allowed-tools: Bash(openspec-cn:*)
-license: MIT
-compatibility: 需要 openspec-cn CLI。
-metadata:
-  author: openspec
-  version: "1.0"
-  generatedBy: "1.10.0"
+description: "从 OpenSpec 变更中实现任务（实验性）"
 ---
 
 从 OpenSpec 变更中实现任务。
 
 **存储选择：** 若用户指定了一个存储（存储是注册在本机上的独立 OpenSpec 仓库）或工作位于某个存储中，请运行 `openspec-cn store list --json` 发现已注册的存储 ID，然后在读写 spec 和变更的命令上传递 `--store <id>`（`new change`、`status`、`instructions`、`list`、`show`、`validate`、`archive`、`doctor`、`context`、`schemas`、`view`）。选定后，将 `--store <id>` 视为在当前工作流其余部分中固定不变。以下每个未限定范围的命令示例均为简写形式：运行前请追加该标志。例如，运行 `openspec-cn status --change "<name>" --json --store "<id>"`，而非下面展示的未限定形式。其他命令不接受此标志。命令输出的提示已包含该标志；在后续操作中请保留它。若不指定存储，命令将对最近的本地 `openspec/` 根目录生效。
 
-**Input**: 可选地指定变更名称（例如 `/opsx:apply add-auth`）。若省略，检查能否从对话上下文推断。若模糊或歧义，你必须提示用户从可用变更中选择。
+**Input**: 可选地指定变更名称（例如 `/opsx-apply add-auth`）。若省略，检查能否从对话上下文推断。若模糊或歧义，你必须提示用户从可用变更中选择。
+**Provided arguments**: $@
 
 **步骤**
 
@@ -25,7 +18,7 @@ metadata:
    - 若仅有一个活跃变更则自动选择
    - 若存在歧义，运行 `openspec-cn list --json` 获取可用变更并让用户选择
 
-   始终宣告："使用变更：<name>"，以及如何覆盖（例如 `/opsx:apply <other>`）。
+   始终宣告："使用变更：<name>"，以及如何覆盖（例如 `/opsx-apply <other>`）。
 
 2. **检查状态以理解 schema**
    ```bash
@@ -51,7 +44,7 @@ metadata:
    - 可选的 `operationGuidance`：当前 apply 的咨询性指导
 
    **处理状态：**
-   - 若 `state: "blocked"`（缺少制品）：显示消息，建议使用 `/opsx:continue`（若未安装，运行 `openspec-cn status --change "<name>" --json` 查看下一个制品，`openspec-cn instructions <artifact-id> --change "<name>" --json` 了解如何创建）
+   - 若 `state: "blocked"`（缺少制品）：显示消息，建议使用 `/opsx-continue`（若未安装，运行 `openspec-cn status --change "<name>" --json` 查看下一个制品，`openspec-cn instructions <artifact-id> --change "<name>" --json` 了解如何创建）
    - 若 `state: "all_done"`：祝贺，建议归档
    - 否则：继续实现
 
@@ -128,7 +121,7 @@ metadata:
 - [x] 任务 2
 ...
 
-All tasks complete! 你可以用 `/opsx:archive` 归档此变更。
+All tasks complete! 你可以用 `/opsx-archive` 归档此变更。
 ```
 
 **暂停时输出（遇到问题）**

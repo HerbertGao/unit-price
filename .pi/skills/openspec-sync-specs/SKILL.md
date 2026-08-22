@@ -1,9 +1,13 @@
 ---
-name: "OPSX: Sync"
-description: "将变更中的增量 spec 同步到主 spec"
+name: openspec-sync-specs
+description: 将变更中的增量 spec 同步到主 spec。当用户希望将增量 spec 的变更更新到主 spec 中（而不归档变更）时使用。
 allowed-tools: Bash(openspec-cn:*)
-category: "Workflow"
-tags: ["workflow", "specs", "experimental"]
+license: MIT
+compatibility: 需要 openspec-cn CLI。
+metadata:
+  author: openspec
+  version: "1.0"
+  generatedBy: "1.10.0"
 ---
 
 将变更中的增量 spec 同步到主 spec。
@@ -14,7 +18,7 @@ tags: ["workflow", "specs", "experimental"]
 
 `<capability-path>` 是相对于 `specs/` 的 spec 目录（例如 `user-auth` 或 `identity/user-auth`）。在解析主 spec 时保留每个增量 spec 的完整路径。
 
-**Input**: 可选地在 `/opsx:sync` 后指定变更名称（例如 `/opsx:sync add-auth`）。若省略，检查能否从对话上下文推断。若模糊或歧义，你必须提示用户从可用变更中选择。
+**Input**: 可选地指定变更名称。若省略，检查能否从对话上下文推断。若模糊或歧义，你必须提示用户从可用变更中选择。
 
 **步骤**
 
@@ -27,7 +31,7 @@ tags: ["workflow", "specs", "experimental"]
 
    提示时，显示有增量 spec（位于 `specs/` 目录下）的变更。
 
-   始终宣告："使用变更：<name>"，以及如何覆盖（例如 `/opsx:sync <other>`）。
+   始终宣告："使用变更：<name>"，以及如何覆盖（例如 `/opsx-sync <other>`）。
 
 2. **解析变更上下文**
 

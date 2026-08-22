@@ -3,7 +3,9 @@
 ## 目的
 
 `GET /rankings` 是只读、治理豁免的全量榜单快照接口，一次返回已落库的可比单价行、同版本品类树和排除健康信号。服务端按真实单价确定全序且不重算；客户端从该快照本地派生单一 cohort 榜、搜索和分页。
+
 ## 需求
+
 ### 需求:GET /rankings 只读榜单接口
 
 `apps/api` 必须提供 `GET /rankings`，从既有持久化层读取已落库的单价计算结果，按真实单价升序分页返回一张**品类节点作用域**的榜单。基础读取为 `unit_price ⋈ product ⋈ product_raw`，追加 `product_tag`(叶 category 边) JOIN `category_closure`(祖先 = 目标节点) 的闭包命中，并读取 `product.rankable` 派生列作入榜门。该接口**只读**：禁止写入、禁止调用 LLM、禁止触发任何后台任务、禁止任何出站 fetch。
@@ -177,4 +179,3 @@
 - **那么** 响应**必须**带 `Cache-Control: no-store`（不只是省略 `public`）
 - **当** 客户端 `GET /rankings?q=`/`?q=%20%20`（校验后 `undefined`）或无 `q`
 - **那么** 响应**必须**与无-`q` cohort board 一样带既有 `public Cache-Control`（**禁止**因 URL 含 `q` 键而误判 `no-store`）
-

@@ -3,10 +3,10 @@
 // date (D6 / spec): the /rankings v1 contract has no count/collect-time field,
 // and surfacing a fake dynamic value would be pseudo-honest. Real freshness is
 // P8, real category filtering is P3. Pure presentational, no props.
-import { View, Text } from '@tarojs/components';
+import { View, Text } from "@tarojs/components";
 
-import { LANDING_SCOPE_TEXT } from '../pages/index/config';
-import './ScopeBar.css';
+import { LANDING_SCOPE_TEXT } from "../pages/index/config";
+import "./ScopeBar.css";
 
 /** Static scope wording, aligned with /rankings v1 data (in-ranking = per100ml
  *  non-null, i.e. Sam's soft drinks) and the per100ml unit. NO dynamic values.
@@ -16,9 +16,9 @@ import './ScopeBar.css';
 export const SCOPE_TEXT = LANDING_SCOPE_TEXT;
 
 export default function ScopeBar() {
-  return (
-    <View className="scopebar">
-      <Text className="scopebar__text">{SCOPE_TEXT}</Text>
-    </View>
-  );
+ return (
+  <View className="scopebar">
+   <Text className="scopebar__text">{SCOPE_TEXT}</Text>
+  </View>
+ );
 }

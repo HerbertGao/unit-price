@@ -3,7 +3,9 @@
 ## 目的
 
 `apps/miniapp`（`@unit-price/miniapp`）是浏览优先的 Taro 微信小程序：读取一份榜单快照后在端上本地派生软饮榜、分类下钻、搜索和分页，并通过无状态 `/compute` 提供结构化即时比价。浏览路径不解析脏标题、不重算单价、不贡献或纠错入库。
+
 ## 需求
+
 ### 需求:miniapp 必须是消费 /rankings 的只读榜单小程序骨架
 
 `apps/miniapp`(`@unit-price/miniapp`)**必须**是一个 Taro(React + TS)微信小程序工程,定位为**浏览优先**:采用 **3 个底部 Tab**——**榜单(首页)/ 分类 / 我的**,其中**榜单为首页 Tab**、承载真实单价榜浏览。`navigationBarTitleText` **必须**为 `会员商店值不值`。
@@ -23,10 +25,12 @@
 - **那么** **必须**有 3 个底部 Tab(榜单 / 分类 / 我的),榜单为首页;切换 Tab 不破坏边界——`我的` 为只读工具 + 关于页、**自身禁止**发起**任何**网络请求(其即时比价入口仅 `navigateTo`、比价历史为端上存储读写、关于区为静态文案 + 原生反馈),顶部搜索入口**仅**发起**只读** `GET /rankings?q=<词>`,`分类` Tab **仅**发起**只读** `GET /categories`、其下钻榜**仅**发起**只读** `GET /rankings?category=<slug>`;唯一写形请求是 `榜单` 首页比价入口进入的比价表单页发起的**无状态** `POST /compute`(即时比价、不写库、无 AI);全程**禁止**扫码 / 拍照 / 贡献 / 纠错 / 写库入口(比价表单的结构化输入是**一次性比价**、**非**录入到库)
 
 #### 场景:经 api-client 消费 /rankings
+
 - **当** 小程序请求榜单
 - **那么** **必须**用 `@unit-price/api-client` 的 `buildRankingsUrl` 构造 URL、`Taro.request` 发请求、`parseRankingsResponse` 校验响应;**禁止**在 miniapp 内手写重复的响应类型或绕过校验
 
 #### 场景:miniapp 不进根 tsc -b reference 图
+
 - **当** 检查根 `tsconfig.json` 的 references
 - **那么** **必须不含** `apps/miniapp`(Taro 自管构建);miniapp 消费 api-client 的预构建 dist,api-client/core 先于 Taro 打包构建
 
@@ -81,14 +85,17 @@
 榜单首页**必须**至少呈现以下元素:品牌头(`会员商店值不值`)、顶部搜索入口、**静态范围说明条**、以及榜单列表(每行含 rank 徽标、`per100ml` 大字、整件价)。**范围说明条本期为静态**:只声明榜单范围与单位口径(如「山姆软饮真实单价榜 · 元/100ml」;此为静态运营声明,不声称端上已做品类过滤——品类真实过滤属 P3;范围话术须与 `/rankings` v1 实际数据口径一致——v1 入榜 = `per100ml` 非空,即山姆软饮),**禁止**呈现动态件数 N 或「更新于 X月X日」采集日期——`/rankings` 现无件数 / 采集时间字段,真实新鲜度横幅属 P8、品类范围属 P3,本期提前展示动态值即伪诚实。本需求约束「呈现哪些元素 + tokens 集中化」,不约束像素级审美。
 
 #### 场景:首页视觉元素齐全
+
 - **当** 进入榜单 Tab
 - **那么** **必须**可见:品牌头 `会员商店值不值`、顶部搜索入口、**静态范围说明条**、以及榜单列表(每行含 rank 徽标 / `per100ml` 大字 / 整件价);范围说明条**禁止**出现动态件数 N 或采集日期
 
 #### 场景:设计 tokens 集中(机械可验:页面 css 零颜色字面量)
+
 - **当** 对 `apps/miniapp/src` 的 **`pages/**` 与 `components/**` 下的 `.css` 与组件 JSX 内联 `style`**(**不扫 `app.css` 自身**——它是 token 定义处、允许出现色值)`grep` 任意颜色字面量(`#` 3/6/8 位 hex、`rgb()` / `rgba()`、`hsl()` / `hsla()`、具象命名色)
 - **那么** 页面 / 组件的 css 与内联 style **禁止出现任何**颜色字面量(hex / rgb(a) / hsl(a) / 具象命名色;**不含** `transparent` / `inherit` / `currentColor` 等功能性关键字)——一律改用 `var(--…)`(含**阴影走 `var(--shadow)`**,不得直写 `rgba(...)`);颜色字面量**只允许**出现在 `app.css` 的 token 定义处(既有 `index.css` 的旧硬编码色**必须**已清理为变量引用)。**例外(不在本 grep 范围)**:`app.config.ts` 与各页 `*.config.ts` 的原生配置色字段(`window.navigationBarBackgroundColor`、`tabBar` 的 `color` / `selectedColor` / `backgroundColor`)、以及 tabBar PNG 图标——小程序框架限制、不能引 CSS 变量,故豁免;其中 tabBar **`selectedColor`(及选中图标烧入色)必须 = `--blue`(`#014B90`)**,其余原生配色字段按 P0 设计取**对应** token 同值(如导航栏背景取 `--paper` 同值、tabBar 未选中 `color` 取 `--muted` 同值、tabBar `backgroundColor` 取 `--paper-card` 同值),**不强制全部 = 蓝**
 
 #### 场景:可比单价仍以 per100ml 呈现、不被整件价反推
+
 - **当** 渲染榜单行
 - **那么** 行内**必须**以服务端 `per100ml` 作为可比真值的大字呈现,整件价(`priceCents / 100`)仅作参考标价;**禁止**用整件价反推或替代 `per100ml`
 
@@ -105,10 +112,12 @@
 本期**不做**:相关性 / 模糊 / 拼音 / 分词搜索、跨 cohort 混合单位同列、搜索历史 / 联想 / 热词(均见提案非目标)。
 
 #### 场景:输入商品名后跳转复用 board 列表页搜索
+
 - **当** 用户在顶部搜索入口输入「可乐」并确认
 - **那么** **必须** `navigateTo` 至 `board?q=<encodeURIComponent(可乐)>`(**不带** `name`),board 确定性解码 `q`、`buildRankingsUrl({ q })` 发起**只读** `GET /rankings?q=可乐`、按 `per100ml` 升序复用三态 / 分页渲染结果,**禁止**端上计算或重排
 
 #### 场景:board 标题按来源派生
+
 - **当** board 带解码后非空的 `q`(搜索入口)进入
 - **那么** 标题为 `搜索：<解码后的 q>`(用解码后的词、非编码态)
 - **当** board 带 `category`+`name`(分类下钻)进入、无 `q`
@@ -119,10 +128,12 @@
 - **那么** 标题为既有默认 `分类榜`(不出空「搜索：」)
 
 #### 场景:含 % / & 的搜索词逐字节往返不变
+
 - **当** 用户输入含字面 `%`/`&` 的词,含会被误判为有效转义的 `100%20纯`/`a%20b` 与不完整转义的 `100%`,并确认
 - **那么** 经 `encodeURIComponent` + board 侧确定性解码,board 实际过滤的 `q` 与用户输入**逐字节一致**(`100%20纯` 不得被解成 `100 纯`),参数解析不破裂
 
 #### 场景:空输入或单字不发起请求
+
 - **当** 用户点击搜索入口但未输入(或仅空白,trim 后长度 0)即确认
 - **那么** **禁止**发起任何网络请求、**禁止**跳转空查询页;搜索**禁止**构成录入 / 扫码 / 拍照路径
 - **当** 用户仅输入单字(trim 后长度 1 码点,如「水」)即确认
@@ -139,18 +150,22 @@
 四态**必须**明确:loading、error(整屏错误 + 重试)、空(`nodes` 为 `[]` 的未播种 taxonomy 窗口——**必须**显式空态、**禁止**白屏或报错)、就绪。
 
 #### 场景:经 api-client 只读消费 /categories
+
 - **当** 进入 `分类` Tab
 - **那么** **必须**用 `buildCategoriesUrl` + `Taro.request` + `parseCategoryTreeResponse` 一次性取整树并渲染稳定 pre-order 缩进树;**禁止**手写响应类型、绕过校验或在端上做单价计算
 
 #### 场景:可点性由 rankable 闸口
+
 - **当** 树中存在 `rankable=false` 的 root / parent 节点(如 `饮料` / `酒类`)
 - **那么** 这些节点**必须**为不可点分组头、**禁止**对其发起 `/rankings`;仅 `rankable=true` 节点可点下钻
 
 #### 场景:下钻 category-scoped 榜
+
 - **当** 点击一个 `rankable=true` 品类节点
 - **那么** **必须** `navigateTo` 非 tab 榜页、标题为品类名,经 `buildRankingsUrl({ category })` 消费 `GET /rankings?category=<slug>` 并按 `per100ml` 升序展示,沿用榜单首页的三态 / 分页 / page-error 语义
 
 #### 场景:未播种 taxonomy 的空态
+
 - **当** `GET /categories` 返回 `{ nodes: [] }`
 - **那么** **必须**显示显式空态(非白屏、非报错)
 
@@ -166,38 +181,46 @@
 比价**全程**:**禁止**扫码 / 拍照、**禁止**把结果写库 / 贡献 / 纠错、**禁止**引入 `packages/core` 做端上计算(计算在服务端 `/compute`)。`我的` Tab **另设**一个 `navigateTo` 到本比价表单页(`/pages/compute/index`)的入口(见「我的 Tab 必须提供比价工具区」需求);本工具的**表单仍只承载于本页**(`pages/compute`)、`我的` **不内嵌**表单。free-text 标题输入 + AI 解析为**非目标**(留待后续)。
 
 #### 场景:搜索无结果态提供比价入口
+
 - **当** 用户在榜单首页按商品名搜索且返回零结果
 - **那么** 空态**必须**呈现比价 CTA(「没搜到这件商品？」+「输入规格,算它值不值」),点击进入比价表单页;**禁止**仅显示空白或纯「无结果」而不给出比价出路
 
 #### 场景:搜索框旁有紧凑常驻入口
+
 - **当** 用户在榜单首页(未搜索)
 - **那么** 搜索行旁**必须**有一个**视觉次于搜索**的紧凑比价入口(链接 / 图标,非整行大按钮),点击进入比价表单页
 
 #### 场景:结构化输入提交后得到单价与定位
+
 - **当** 用户在比价表单页填入总价、数量、单件容量(或总容量)、单位、品类并提交(输入集足够、单位轴与品类一致)
 - **那么** **必须**经 `buildComputeUrl`/`parseComputeResponse` 调 `POST /compute`,渲染单价 + 可展开 `formula` + 该 cohort 的 `rank`/`total` + **服务端返回的 `percentile`**(「比 X% 便宜」直接用服务端 `percentile`,**禁止**在端上用 rank/total 另算一个口径不同的百分比) + 最接近的同类品;**禁止**端上跑 core 计算、**禁止**写库
 - **注**:`percentile` **始终为数值**(契约 `number`,`total=0` 时为 `0`,**永不** null/缺省),故客户端无需处理 null;裁决/位置点/百分比**全部由 `percentile` 单源派生**(口径一致、不会自相矛盾),空态(`total=0`)的中性渲染据 `total===0` 判定(见下「空 cohort」场景),不依赖 `percentile` 判空
 
 #### 场景:服务端 400 文案必须呈现给用户
+
 - **当** `POST /compute` 返回非 `200`(如跨轴不可比、未知品类、per_100g 不支持)
 - **那么** 端上**必须**据 `res.statusCode` 分支、把响应体的 `message` 作为行内提示**呈现给用户**;**禁止**把所有非 200 都吞成一句泛化的「计算失败」(`parseComputeResponse` 仅用于 `200` 体;`Taro.request` 不会对 4xx 抛错,故必须显式判状态码)
 
 #### 场景:空 cohort 或用户值越界的结果卡片不误导
+
 - **当** 结果 `total===0`(该 cohort 暂无同类)
 - **那么** 结果卡**必须**呈现中性「暂无同类可比」(**禁止**显示绿/红裁决或位置点,**禁止**出现「比 0% 便宜、偏贵」这类零样本却下结论的文案)
 - **当** 结果 `rank > total`(用户比所有同类都贵)或 `rank===1`(最便宜)等边界
 - **那么** 位置点**必须**clamp 在 `[0,1]` 轨道内、名次显示**必须**自洽(不得出现「第 6 / 共 5」或点跑出轨道)
 
 #### 场景:空或非法输入不发起请求
+
 - **当** 用户未填必填项、填了非正数、或单件容量与总容量都未填(输入集不足)即提交
 - **那么** **禁止**发起任何网络请求,**必须**给行内轻提示指明缺哪项;比价**禁止**构成扫码 / 拍照 / 写库 / 贡献路径
 
 #### 场景:单位选项按所选品类的可比单位轴约束
+
 - **当** 用户在品类选择里选了一个 `per_100ml` cohort(如软饮)
 - **那么** 单位选项**必须**约束为容量轴(`ml`/`L`)、并提示该品类按每 100ml 比价——与服务端跨轴不可比 `400` 守卫同口径,端上预约束以减少被拒往返
 - **注**:本期 `toCohorts` **只派生 `per_100ml` cohort**(与服务端 per_100g→`400` 同口径),故 UI 本期不提供 `per_100g` 选项;待重量轴 backfill 解禁后,`per_100g` cohort 的单位选项再约束为 `g`/`kg`
 
 #### 场景:经 api-client 消费 /compute、不手写类型
+
 - **当** 比价表单页请求计算
 - **那么** **必须**用 `@unit-price/api-client` 的 `buildComputeUrl` 构造 URL、`Taro.request` 发 `POST`、`parseComputeResponse` 校验响应;**禁止**在 miniapp 内手写重复的请求/响应类型或绕过校验
 
@@ -211,7 +234,7 @@
 
 - **写**:比价表单页 `POST /compute` **成功**后**必须**写一条;写入**必须**先**去重**(剔除 `input` 相等的旧项,把"重算"视作移到最新)再以 `unshift` 置于**最新端**,并 `slice(0, 20)` 环形覆盖**最旧**(`N=20`、切尾、**禁止**无限增长);写入项 `ts` **必须单调唯一**——以**去重前**历史的最大 `ts`(`prevMaxTs`)计 `Math.min(Number.MAX_SAFE_INTEGER, Math.max(Date.now(), prevMaxTs + 1))`(去重后再算会在"剔除的恰是最新项"时失去单调;`Math.min` 封顶防被篡改的 `MAX_SAFE_INTEGER` 存储项令新 `ts` 溢出安全整数区),使其作回填 handle 与列表 key 恒不重复(同毫秒两次不同输入不撞);整个写入**禁止**额外网络请求,且**必须**包错误处理——`setStorage` 失败(配额满/不可用)**仅丢历史、禁止阻断比价结果展示**(不得谎报)。
 - **读**:`我的` **必须**在**每次进入页面时**(`useDidShow`,非仅首次 `useLoad`)重读历史,使"比价一次后回到我的"能见到新项。读取**必须**健壮:① 顶层值**非数组**(未写过/损坏)→ 视作空、**禁止**对其 `.map`;② 对**每项**校验——包裹字段(`summary` 为字符串、`ts` 须 `Number.isSafeInteger(ts) && ts>0`)用朴素判断(**禁**为此在 miniapp 引入 `zod`/`z.object` 依赖),`input` 用 api-client 既有 `ComputeRequestSchema.safeParse(item.input, { jitless: true })`,**并校验完整必填集**(镜像服务端 `meetsComputeRequiredSet` 的 presence:`totalAmount != null || (unitSize != null && quantity != null)`——schema 只禁二者皆有、不禁皆无,且 `quantity` schema **可选**;"既无量字段"**或**"有 `unitSize` 却无 `quantity`"的退化项须在读端丢弃,免回填出 `unit=undefined` 或凭空补 `quantity`;端上不引 core,此为手写镜像、与服务端必填集同口径);任一不过 → **无效项静默丢弃**(覆盖缺字段 / `summary`·`ts` 非安全正整数 / 旧版 schema 残留 / 退化项);③ 过滤后**再按 `ts` 去重**(同 `ts` 仅留最先一项,防被篡改存储的重复 `ts` 致 `find`/key 歧义)。**禁止**因坏数据白屏或抛错。**`{ jitless: true }` 为硬约束**:weapp 禁 `eval`、Zod 默认 JIT(`new Function`)在 weapp 崩(同 `parseComputeResponse`),端上任何直接 `.parse/.safeParse` **必须**带 `jitless`。
-- **列出与回填**:`我的` **必须**按时间倒序列出历史(存储已最新在前,直接渲染、无需再排序;每项含可读摘要 + 时间),读取**禁止**发起网络请求;点击一项**必须** `Taro.navigateTo({ url: \`/pages/compute/index?h=${ts}\` })`(handle 用项的**稳定 `ts`**、**非数组索引**——索引对可变环形表会错指/错位;`ts` 由写端单调保证唯一),比价表单页据 `h` **回填**并可重算:`Number(h)` 解析 + **正整数**校验(`Number.isInteger(n) && n>0`,`ts` 必为正整数)→ `readHistory().find(x => x.ts === n)`,**找不到 / `h` 非法 → 不回填、维持空表单**(不崩)。
+- **列出与回填**:`我的` **必须**按时间倒序列出历史(存储已最新在前,直接渲染、无需再排序;每项含可读摘要 + 时间),读取**禁止**发起网络请求;点击一项**必须** `Taro.navigateTo({ url: \`/pages/compute/index?h=${ts}\` })`(handle 用项的**稳定`ts`**、**非数组索引**——索引对可变环形表会错指/错位;`ts` 由写端单调保证唯一),比价表单页据 `h`**回填**并可重算:`Number(h)`解析 + **正整数**校验(`Number.isInteger(n) && n>0`,`ts` 必为正整数)→ `readHistory().find(x => x.ts === n)`,**找不到 /`h` 非法 → 不回填、维持空表单**(不崩)。
 - **回填水合**(request→表单,**必须在 cohorts 异步加载完成后**做):`loadCohorts` 当前 fire-and-forget 返回 `void`,**必须改为可消费形**(把消费放进其 `.then`,或令其 `return` promise 链——直接 `loadCohorts().then` 会 `undefined.then` 抛错);`useLoad((options)=>…)` 把 `h` 存入 `pendingH`,在 cohorts 落地的**同一 `.then` 内**用**该回调局部 `cs`(非 `cohorts` React state,`setState` 异步)**消费,且**排在默认 `setCohortIdx(0)`/`setUnit` 之后**(否则默认盖掉回填);`pendingH` 清除分三态:命中水合 / **加载成功但 `cs` 为空(终态空品类、无表单)→ 清**;`.catch` 失败 → **不清**(重试再触发)。映射(对局部 `cs`):`mode = input.unitSize != null ? 'unit':'total'`(`ComputeRequest` 无 `mode`,反推);`amount/unit` 取自 `input.unitSize ?? input.totalAmount`、数字转字符串;`cohortIdx = cs.findIndex(c => c.slug === input.category)`。容错:**⓪ `cs.length===0` → 跳过水合并清 `pendingH`(避免 `cs[0]` 解引用)**;① slug 已不在树中(`findIndex` 返回 -1)→ **降级**填价格/数量/量 + 退回默认品类 + 内联提示"原品类已变动,请重选",**禁止**置 -1 或崩;② `unit` 不在**最终(命中或①退回默认)** cohort 的轴上 → 用 `unitsForAxis(最终cohort.axis)[0]` 钳制(①退回默认时按默认 cohort 轴、不按失效原 cohort);③ `/categories` 加载失败 → 保留品类错误态、**本次不回填**(不崩),且 `h` 经 `pendingH` **不丢失**、重试加载成功时再触发。
 
 视觉**必须**复用 P0 设计 tokens(引用 `app.css` 的 `var(--…)`),**禁止**在该页 css / 内联 style 散写色板十六进制字面量。
@@ -332,30 +355,36 @@
 - 本需求约束逐行标注的呈现逻辑,**不**引入榜单顶部「全局新鲜度横幅 / 更新于 X月X日」——该全局横幅仍属 P8、非本期(与逐行置灰不同)。呈现所用颜色**必须**沿用 `app.css` 设计 tokens、**禁止**在页面/组件散写颜色字面量(遵既有「设计 tokens 集中」约束)。
 
 #### 场景:>30 天未重报的行置灰但仍在榜
+
 - **当** 榜单某行 `capturedAt` 距当前已超过 `STALE_AFTER_MS`(30 天)
 - **那么** 该行**必须**呈现失效/灰态视觉,且**仍出现在榜单列表内**(未被移除、rank 序不因失效改变)
 
 #### 场景:30 天内的行正常呈现
+
 - **当** 榜单某行 `capturedAt` 距当前在 30 天以内
 - **那么** 该行**必须**以正常(非灰)态呈现
 
 #### 场景:现价高于历史低点时标注历史低价
+
 - **当** 榜单某行 `priceCents = 1490`、`lowestPriceCents = 990`
 - **那么** 该行**必须**呈现「历史低 ¥9.90」标注
 
 #### 场景:现价即历史低点时不标注
+
 - **当** 榜单某行 `priceCents = 990`、`lowestPriceCents = 990`(现价即历史低点)
 - **那么** 该行**禁止**呈现历史低价标注
 
 #### 场景:失效与历史低价标注可并存
+
 - **当** 某行既 `capturedAt` 超 30 天、又 `priceCents > lowestPriceCents`
 - **那么** 该行**必须**同时呈现灰态与「历史低 ¥X.XX」标注(两标注正交、不互斥)
 
 #### 场景:缺字段的旧响应降级为无标注而非报错
+
 - **当** 榜单某行(来自旧服务端 / CDN 旧缓存)`capturedAt` 或 `lowestPriceCents` 为 `undefined`
 - **那么** 该行**禁止**置灰(缺 `capturedAt`)、**禁止**呈现历史低价标注(缺 `lowestPriceCents`),退化为无标注的正常行,**禁止**崩溃或触发整屏错
 
 #### 场景:即时比价页的邻居行同样标注、用户自填行不标注
+
 - **当** 即时比价页经 `RankingRow` 渲染 `neighbors`(一条失效且现价高于历史低点的邻居)与用户自填比价行
 - **那么** 邻居行**必须**按规则置灰 + 标「历史低」(它是真实榜单行);用户自填行(无 `capturedAt`/`lowestPriceCents`)**禁止**置灰或标注
-

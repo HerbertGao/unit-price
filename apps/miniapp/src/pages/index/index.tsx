@@ -10,26 +10,26 @@
 // Data layer (state machine + Taro lifecycle hooks) stays in the page; components
 // are pure presentation. It renders loading/empty/first-screen-error, supports
 // pull-to-refresh, and reveals additional local slices on reach-bottom.
-import { View, Text } from '@tarojs/components';
-import { useLoad, usePullDownRefresh, useReachBottom } from '@tarojs/taro';
-import Taro from '@tarojs/taro';
-import { Fragment } from 'react';
-import { useRankings } from './useRankings';
-import { isAdSlotAfterRank } from './adSlots';
-import AdSlot from '../../components/AdSlot';
-import BrandHead from '../../components/BrandHead';
-import SearchEntry from '../../components/SearchEntry';
-import ScopeBar from '../../components/ScopeBar';
-import RankingRow from '../../components/RankingRow';
-import ListFooter from '../../components/ListFooter';
+import { View, Text } from "@tarojs/components";
+import { useLoad, usePullDownRefresh, useReachBottom } from "@tarojs/taro";
+import Taro from "@tarojs/taro";
+import { Fragment } from "react";
+import { useRankings } from "./useRankings";
+import { isAdSlotAfterRank } from "./adSlots";
+import AdSlot from "../../components/AdSlot";
+import BrandHead from "../../components/BrandHead";
+import SearchEntry from "../../components/SearchEntry";
+import ScopeBar from "../../components/ScopeBar";
+import RankingRow from "../../components/RankingRow";
+import ListFooter from "../../components/ListFooter";
 import {
   ListLoading,
   ListEmpty,
   FirstScreenError,
   cohortRejectionCopy,
-} from '../../components/ListStates';
+} from "../../components/ListStates";
 
-import './index.css';
+import "./index.css";
 
 /** Header block shown above every list state so the brand / search / scope are
  *  present whether the list is loading, empty, errored, or ready. */
@@ -46,10 +46,13 @@ function Header() {
           「搜索前就知道没收录」的用户一个常驻 handle。→ pages/compute。 */}
       <View
         className="homecalc"
-        onClick={() => { void Taro.navigateTo({ url: '/pages/compute/index' }); }}
+        onClick={() => {
+          void Taro.navigateTo({ url: "/pages/compute/index" });
+        }}
       >
         <Text className="homecalc__t">
-          店里有、榜上没有的？<Text className="homecalc__lnk">输入规格算单价 ›</Text>
+          店里有、榜上没有的？
+          <Text className="homecalc__lnk">输入规格算单价 ›</Text>
         </Text>
       </View>
     </Fragment>
@@ -81,7 +84,7 @@ export default function Index() {
 
   // FIRST-SCREEN error: whole-screen error + retry. Never a blank screen. Error
   // judgement stays in useRankings (unchanged); the page just renders it.
-  if (r.phase === 'error') {
+  if (r.phase === "error") {
     return (
       <View className="screen">
         <Header />
@@ -91,7 +94,7 @@ export default function Index() {
   }
 
   // First-screen loading (no list yet).
-  if (r.phase === 'idle' || (r.phase === 'loading' && r.items.length === 0)) {
+  if (r.phase === "idle" || (r.phase === "loading" && r.items.length === 0)) {
     return (
       <View className="screen">
         <Header />
@@ -104,11 +107,13 @@ export default function Index() {
   // A REFUSED cohort is a different empty and says so — telling the user to pull
   // to refresh a board that can never exist is the kind of dead retry affordance
   // this page deleted from its footer.
-  if (r.phase === 'ready' && r.items.length === 0) {
+  if (r.phase === "ready" && r.items.length === 0) {
     return (
       <View className="screen">
         <Header />
-        <ListEmpty {...(r.rejection ? cohortRejectionCopy(r.rejection.kind) : {})} />
+        <ListEmpty
+          {...(r.rejection ? cohortRejectionCopy(r.rejection.kind) : {})}
+        />
       </View>
     );
   }
@@ -124,15 +129,15 @@ export default function Index() {
           return (
             <Fragment key={item.id}>
               <RankingRow item={item} />
-              {showAdAfter ? <AdSlot id={`ad-slot-after-${item.rank}`} /> : null}
+              {showAdAfter ? (
+                <AdSlot id={`ad-slot-after-${item.rank}`} />
+              ) : null}
             </Fragment>
           );
         })}
       </View>
 
-      <ListFooter
-        reachedEnd={r.reachedEnd}
-      />
+      <ListFooter reachedEnd={r.reachedEnd} />
     </View>
   );
 }

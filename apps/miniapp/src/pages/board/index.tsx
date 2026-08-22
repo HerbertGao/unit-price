@@ -2,22 +2,27 @@
 // call useRankings(category, q), which reads one snapshot and filters/slices it
 // locally while preserving server order. This non-tab page only changes title
 // chrome; it never issues category- or query-specific rankings requests.
-import { View } from '@tarojs/components';
-import Taro, { useRouter, useLoad, usePullDownRefresh, useReachBottom } from '@tarojs/taro';
-import { useRankings } from '../index/useRankings';
-import { readBoardParams } from './params';
-import RankingRow from '../../components/RankingRow';
-import ListFooter from '../../components/ListFooter';
+import { View } from "@tarojs/components";
+import Taro, {
+  useRouter,
+  useLoad,
+  usePullDownRefresh,
+  useReachBottom,
+} from "@tarojs/taro";
+import { useRankings } from "../index/useRankings";
+import { readBoardParams } from "./params";
+import RankingRow from "../../components/RankingRow";
+import ListFooter from "../../components/ListFooter";
 import {
   ListLoading,
   ListEmpty,
   FirstScreenError,
   cohortRejectionCopy,
-} from '../../components/ListStates';
-import ComputeCta from '../../components/ComputeCta';
+} from "../../components/ListStates";
+import ComputeCta from "../../components/ComputeCta";
 
 // Reuse the 榜单 Tab's .screen/.list rules — same list chrome, no second copy.
-import '../index/index.css';
+import "../index/index.css";
 
 export default function Board() {
   const router = useRouter();
@@ -43,7 +48,7 @@ export default function Board() {
     r.loadNext();
   });
 
-  if (r.phase === 'error') {
+  if (r.phase === "error") {
     return (
       <View className="screen">
         <FirstScreenError onRetry={() => r.retryFirst()} />
@@ -51,7 +56,7 @@ export default function Board() {
     );
   }
 
-  if (r.phase === 'idle' || (r.phase === 'loading' && r.items.length === 0)) {
+  if (r.phase === "idle" || (r.phase === "loading" && r.items.length === 0)) {
     return (
       <View className="screen">
         <ListLoading />
@@ -63,7 +68,7 @@ export default function Board() {
   // moment, primary entry to /compute); in category-drill mode → plain empty.
   // A refused cohort outranks the search CTA: "no match for 元气森林" is the wrong
   // story when the board itself could never be derived.
-  if (r.phase === 'ready' && r.items.length === 0) {
+  if (r.phase === "ready" && r.items.length === 0) {
     return (
       <View className="screen">
         {r.rejection ? (
@@ -84,9 +89,7 @@ export default function Board() {
           <RankingRow key={item.id} item={item} />
         ))}
       </View>
-      <ListFooter
-        reachedEnd={r.reachedEnd}
-      />
+      <ListFooter reachedEnd={r.reachedEnd} />
     </View>
   );
 }

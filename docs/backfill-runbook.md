@@ -136,9 +136,8 @@ native-id 已落后,按本文「驱动」节重跑 `POST /admin/backfill`(幂等
 
 下表是**修正前**的基线,保留作对照:
 
-
 | 项 | 实测 |
-|---|---|
+| --- | --- |
 | `product` / `product_raw` / `rankable=1` | **1197 / 1297 / 507** |
 | 偏差行(`unit_price` 派生值 ≠ `product_raw.price`) | **69**,其中 `rankable=1` **46**、可修 **69**、幽灵 **0** |
 | 幽灵行(同一 `raw_id` 挂多条 `product`) | **4 组 8 条**(零偏差、`per100ml` 全 NULL 故零在榜) |
