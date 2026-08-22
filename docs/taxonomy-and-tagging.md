@@ -15,7 +15,7 @@
 标签分 `kind`:
 
 | kind | 例 | 结构 | 作用 |
-| --- | --- | --- | --- |
+|---|---|---|---|
 | **category 品类** | 碳酸饮料 ⊂ 软饮 ⊂ 饮料 | is-a 树(**单归属**) | 绑定**可比单位**、定义对比 peer 集 |
 | **attribute 属性** | 无糖、进口、有机、气泡 | 扁平多值 | 跨品类筛选 |
 | **brand 品牌** | 可口可乐 | 扁平 | 身份/去重(品牌**权威存于 tag 侧**) |
@@ -24,7 +24,6 @@
 **「多节点可搜」= 两机制叠加**:① 品类 is-a 向上传播(归一个叶子→自动是祖先成员);② 正交标签命中。
 
 **复合查询能力**(原子标签组合,含**跨品类并集**):
-
 - `碳酸饮料` = 品类闭包 ∋ 碳酸饮料
 - `无糖碳酸饮料` = 碳酸饮料闭包 ∧ attribute:无糖
 - `无糖可乐` = product_line:可乐 ∧ attribute:无糖
@@ -32,14 +31,11 @@
 - `所有气泡饮品` = **attribute:气泡**(不限品类子树——attribute 过滤独立于品类闭包,可跨碳酸/饮用水等子树取并集)
 
 ### 单归属与歧义叶判定(规则,非 AI)
-
 品类**单归属**:一个**已完成分类**的商品归到**恰好一个叶子**品类(经 `product_tag(kind=category)` 挂该叶)。允许一个**中间终态**:仅有粗 native 映射、标题又无细关键词时,商品停在 `category` 字段层的**非叶节点指针** `product.pending_category_tag_id`(`粗分类/待细化`,**不写入只挂叶的 `product_tag`**),并置 `rankable=false`——此态商品**不出现在任何对比榜中(包括其挂载的那个非叶节点本身的榜)**,直到 tier1 规则/人工把它落到叶子(转为正式 `product_tag` 叶标签、清 pending)。归属由 **tier1 关键词规则表**确定性给出(命中即定),规则给出优先级以解歧义:
-
 - 例:气泡水/苏打水 → 归 `饮用水` 叶(规则:`苏打水/气泡水/含气矿泉`→饮用水),**物理上的「含气」由 attribute `气泡` 承载**,不再单独归「碳酸饮料」。「碳酸饮料」叶专指含糖配方汽水类(可乐/汽水/雪碧)。(本期 `饮用水` 为单叶;`气泡·电解质` 等子分待软饮 HAR 细化,见 §八。)
 - 规则冲突(同时命中两叶关键词)→ 取**优先级更高**的那条:判据 = **目标叶在 is-a 树更深(更细) > 规则显式优先级数 > 匹配长度**(长度仅作末位 tiebreak,非主判据;优先级数由规则表对每条规则显式赋值、人工维护,初版可空——空则退到深度/长度)。仍无法判定 → `category` 留空 + 标 `待人工`,不强归。
 
 ### 工作示例
-
 - `可口可乐 无糖 330ml*24`:原子标签 `品类=碳酸饮料`、`属性=无糖`、`品牌=可口可乐`、`品名=可乐` → 品类成员经传播:碳酸饮料/软饮/饮料。横向对比「碳酸饮料」按软饮继承的 `per_100ml` 排名。
 - `屈臣氏苏打水 330ml*24`:`品类=饮用水`、`属性=气泡`。搜「碳酸饮料」**不含它**(它归饮用水);搜「所有气泡饮品」(attribute:气泡)**含它**与含糖汽水。这是预期——含气 ≠ 含糖碳酸,二者分别由 attribute 与 category 表达。
 
@@ -119,7 +115,6 @@ category_closure          品类 is-a 闭包(tag 维度,非 product 维度——
      → 确定性闭包(挂叶→category_closure 补祖先)
      → 人工纠错(source=manual,沉淀规则/few-shot)
 ```
-
 - LLM 永不单方面定品类/标签:只在规则/映射未命中时给候选,且**任何 kind 的候选都须过对应受控白名单 + kind 校验**,否则落人工。tier1 规则未覆盖的属性(有机/进口)由「LLM 候选过属性白名单」或人工补,不靠 LLM 自由造值。这守住第一节红线。
 
 ## 六、跨商超
@@ -137,9 +132,7 @@ category_closure          品类 is-a 闭包(tag 维度,非 product 维度——
 - **v2**:LLM 候选打标签 + 白名单 guard;**eval 新增「品类标签准确率」维度**(见下);策展视图(无糖饮料等保存查询);跨店同款匹配;酒类/纸品等可比单位与计算扩展(届时 core 增 per_100g/per_100sheet 计算 + 解除 spec-parsing `category` 恒 beverage 约束)。
 
 ### eval「品类标签准确率」(是 eval-harness 的**新增需求**,非复用)
-
 现行 `eval-harness` 主规范的真值字段是 `samPkgNum/samPkgUnit/samUnitPrice/isCompare`、指标是召回/可算率/quantity 精度/per-unit 误差——**均无品类**;`spec-parsing` 的 `category` 现恒为 `beverage`。故品类准确率需配套:
-
 1. `eval-harness` 增真值字段 `samCategoryLeafId`(HAR 提取器**新抽** `categoryIdList` 的**叶 ID**=路径末端;已用真实 HAR 验证 `categoryIdList` 存在且为稳定数值路径、簇纯净);
 2. **评分桥(关键)**:预测侧是**我们的名称叶 tag**,真值侧是**山姆数值叶 ID**,二者在不同空间——故须一张**人工策展的评分金标准** `eval_category_gold(samCategoryLeafId → 我们规范叶 tag)`,比对粒度=**叶对叶**;指标 = 我们打的叶 tag 是否等于 `gold[samCategoryLeafId]`,算 precision/recall + 新回归方向。**缺键/留空分支**(对齐 eval-harness 既有纪律「缺真值→不计该指标」「空分母→n/a 不入回归」):
    - 样本的 `samCategoryLeafId` 在 gold 中**缺键**(gold 人工策展、必然部分覆盖)→ 该样本**不计入** precision/recall(标「无品类真值样本」),不算 miss;
@@ -160,7 +153,7 @@ category_closure          品类 is-a 闭包(tag 维度,非 product 维度——
 ## 九、与 architecture / 既有规范的关系(取代/并存/衔接)
 
 | 既有(architecture / 归档主规范) | 本设计 | 关系 |
-| --- | --- | --- |
+|---|---|---|
 | `CategoryPlugin.getComparableUnits(spec) → [per_100ml, per_liter, per_bottle]`(代码、单品类**多单位数组**) | `tag.comparable_unit`(数据、**单值=排名主单位**);展示派生单位(每升/每瓶)由前端从 per100ml + 规格换算 | **取代**:排名主单位收为单值存 tag;多单位仅作展示派生,不再各自当可比基准 |
 | `comparison_group` 表(物化字符串分组) | category 闭包 ∧ attribute **动态查询** | **取代**:对比组不物化,改查询(`comparison_group` 表废弃) |
 | `comparable` / `excludedReason`(商品是否可比) | 不覆盖——仍由 core `comparability` 产出 | **并存正交**:本设计管「比哪组/按什么单位」,comparability 管「该商品能不能参与」(组合/赠品/规格缺失) |

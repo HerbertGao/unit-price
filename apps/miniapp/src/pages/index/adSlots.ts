@@ -20,8 +20,8 @@ const AD_EVERY = 12; // then one slot after every 12th row
  * 1-based render `rank`? True for rank 10, 22, 34, … only.
  */
 export function isAdSlotAfterRank(rank: number): boolean {
- if (!Number.isInteger(rank) || rank < FIRST_AD_AFTER_RANK) return false;
- return (rank - FIRST_AD_AFTER_RANK) % AD_EVERY === 0;
+  if (!Number.isInteger(rank) || rank < FIRST_AD_AFTER_RANK) return false;
+  return (rank - FIRST_AD_AFTER_RANK) % AD_EVERY === 0;
 }
 
 /**
@@ -30,11 +30,11 @@ export function isAdSlotAfterRank(rank: number): boolean {
  * helper used by tests and (optionally) the renderer to reason about placement.
  */
 export function adSlotRanks(rowCount: number): number[] {
- const ranks: number[] = [];
- for (let r = FIRST_AD_AFTER_RANK; r <= rowCount; r += AD_EVERY) {
-  ranks.push(r);
- }
- return ranks;
+  const ranks: number[] = [];
+  for (let r = FIRST_AD_AFTER_RANK; r <= rowCount; r += AD_EVERY) {
+    ranks.push(r);
+  }
+  return ranks;
 }
 
 export const AD_SLOT_CONSTANTS = { FIRST_AD_AFTER_RANK, AD_EVERY } as const;

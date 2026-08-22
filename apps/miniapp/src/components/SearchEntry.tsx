@@ -5,22 +5,22 @@
 //
 // The magnifier glyph is drawn with bordered Views using currentColor (which
 // inherits the placeholder text color, var(--muted)) — NO inline hex.
-import { View, Input } from "@tarojs/components";
-import type { BaseEventOrig, InputProps } from "@tarojs/components";
-import Taro from "@tarojs/taro";
+import { View, Input } from '@tarojs/components';
+import type { BaseEventOrig, InputProps } from '@tarojs/components';
+import Taro from '@tarojs/taro';
 
-import { normalizeSearchTerm } from "./searchTerm";
-import "./SearchEntry.css";
+import { normalizeSearchTerm } from './searchTerm';
+import './SearchEntry.css';
 
-export const SEARCH_PLACEHOLDER = "搜软饮名，如 元气森林 / 无糖可乐";
+export const SEARCH_PLACEHOLDER = '搜软饮名，如 元气森林 / 无糖可乐';
 
 export default function SearchEntry() {
   const onConfirm = (e: BaseEventOrig<InputProps.inputValueEventDetail>) => {
-    const result = normalizeSearchTerm(e.detail.value ?? "");
-    if (result.kind === "empty") return; // no intent → no nav, no request
-    if (result.kind === "too-short") {
+    const result = normalizeSearchTerm(e.detail.value ?? '');
+    if (result.kind === 'empty') return; // no intent → no nav, no request
+    if (result.kind === 'too-short') {
       // Single code point is too broad for the local catalogue → hint, no nav.
-      void Taro.showToast({ title: "至少输入 2 个字", icon: "none" });
+      void Taro.showToast({ title: '至少输入 2 个字', icon: 'none' });
       return;
     }
     // ≥2 code points: board derives the title and local filter from decoded q.

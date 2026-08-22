@@ -5,8 +5,8 @@
 //  - 5xx config-error: runtime config error (distinguishable error code)
 //  - 200: everything else, including determined-uncomputable (per100ml=null),
 //         contracted-form, and low-confidence results.
-import { Hono, type Context } from "hono";
-import { z } from "zod";
+import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 import {
   ParsedSpecSchema,
   UnitPriceSchema,
@@ -16,7 +16,7 @@ import {
   type ComparableUnit,
   type ParsedSpec,
   type RawProduct,
-} from "@unit-price/core";
+} from '@unit-price/core';
 import {
   RankingsSnapshotSchema,
   SnapshotRowSchema,
@@ -28,34 +28,23 @@ import {
   ComputeResultSchema,
   type ComputeRequest,
   type RankingsItem,
-} from "@unit-price/api-client";
-import {
-  CATEGORY_NODES,
-  type Db,
-  type RankingRow,
-  type Repository,
-} from "@unit-price/db";
-import { orchestrate } from "./orchestrate.js";
-import type { SpecParserLLM } from "./llm.js";
-import type { AppEnv, Bindings } from "./bindings.js";
+} from '@unit-price/api-client';
+import { CATEGORY_NODES, type Db, type RankingRow, type Repository } from '@unit-price/db';
+import { orchestrate } from './orchestrate.js';
+import type { SpecParserLLM } from './llm.js';
+import type { AppEnv, Bindings } from './bindings.js';
 import {
   authOnlyMiddleware,
   createRealGovernance,
   governanceMiddleware,
   type Governance,
-} from "./governance.js";
-import {
-  runBackfill,
-  ADMIN_BACKFILL_DEFAULT_LIMIT,
-  ADMIN_BACKFILL_MAX_LIMIT,
-} from "./tagging.js";
+} from './governance.js';
+import { runBackfill, ADMIN_BACKFILL_DEFAULT_LIMIT, ADMIN_BACKFILL_MAX_LIMIT } from './tagging.js';
 
 /** Request schema: title non-empty string, price a finite number, optional hint. */
 export const ParseRequestSchema = z.object({
-  title: z.string().min(1, "title must be a non-empty string"),
-  price: z
-    .number({ error: "price must be a number" })
-    .finite("price must be a finite number"),
+  title: z.string().min(1, 'title must be a non-empty string'),
+  price: z.number({ error: 'price must be a number' }).finite('price must be a finite number'),
   categoryHint: z.string().optional(),
 });
 
@@ -97,28 +86,23 @@ export const ParseResponseSchema = z.object({
  */
 export const ContributeRequestSchema = z.object({
   // Domain fields (aligned with RawProductSchema).
-  title: z.string().min(1, "title must be a non-empty string"),
-  price: z
-    .number({ error: "price must be a number" })
-    .finite("price must be a finite number"),
+  title: z.string().min(1, 'title must be a non-empty string'),
+  price: z.number({ error: 'price must be a number' }).finite('price must be a finite number'),
   categoryHint: z.string().optional(),
   // Provenance fields (dedupe / source-of-record). Trim BEFORE min(1) so a
   // whitespace-only dedupe key is rejected at the request layer (400) rather
   // than slipping past min(1) and tripping the repository's DedupeKeyGate
   // (which trims) into a generic 500 persistence-error. Mirrors DedupeKeyGate.
-  store: z.string().trim().min(1, "store must be a non-empty string"),
-  storeSku: z.string().trim().min(1, "storeSku must be a non-empty string"),
+  store: z.string().trim().min(1, 'store must be a non-empty string'),
+  storeSku: z.string().trim().min(1, 'storeSku must be a non-empty string'),
   source: z.string().optional(),
   sourceUrl: z.string().optional(),
-  capturedAt: z
-    .number()
-    .int("capturedAt must be an integer epoch-ms timestamp")
-    .optional(),
+  capturedAt: z.number().int('capturedAt must be an integer epoch-ms timestamp').optional(),
   // Store-provenance native category id (feeds store-map). null/empty/whitespace
   // → omitted (null + success), not 400; a non-string → 400. See docstring.
   nativeCategoryId: z.preprocess(
     (v) =>
-      v == null || (typeof v === "string" && v.trim() === "") ? undefined : v,
+      v == null || (typeof v === 'string' && v.trim() === '') ? undefined : v,
     z.string().trim().min(1).optional(),
   ),
 });
@@ -174,7 +158,7 @@ export const BG_POOL = 5;
  * Tune the TTL here. Aliyun includes query strings in cache keys by default;
  * the release config normalizes `/rankings` after purging historical variants.
  */
-export const PUBLIC_CACHE_CONTROL = "public, max-age=86400";
+export const PUBLIC_CACHE_CONTROL = 'public, max-age=86400';
 
 /**
  * Neighbors returned each side of the user's value by POST /compute (up to N
@@ -232,10 +216,7 @@ export type BatchIngestResponse = z.infer<typeof BatchIngestResponseSchema>;
  * `as [string, ...string[]]` assertion satisfies `z.enum`'s non-empty-tuple type
  * (CATEGORY_NODES always seeds `beverage` and more).
  */
-export const CATEGORY_SLUGS = CATEGORY_NODES.map((n) => n.slug) as [
-  string,
-  ...string[],
-];
+export const CATEGORY_SLUGS = CATEGORY_NODES.map((n) => n.slug) as [string, ...string[]];
 
 /**
  * Static slug→node map over the COMPILE-TIME seed truth (`CATEGORY_NODES`), built
@@ -261,9 +242,7 @@ const CATEGORY_NODE_BY_SLUG = new Map(CATEGORY_NODES.map((n) => [n.slug, n]));
  * contract hold simultaneously. An unknown slug (already rejected by the
  * `CATEGORY_SLUGS` enum gate before this is called) also resolves null.
  */
-export function resolveComparableUnitStatic(
-  slug: string,
-): ComparableUnit | null {
+export function resolveComparableUnitStatic(slug: string): ComparableUnit | null {
   let cursor = CATEGORY_NODE_BY_SLUG.get(slug);
   let guard = 0;
   while (cursor != null && guard < 64) {
@@ -275,6 +254,7 @@ export function resolveComparableUnitStatic(
   return null;
 }
 
+
 export const AdminBackfillQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
   limit: z
@@ -284,9 +264,7 @@ export const AdminBackfillQuerySchema = z.object({
     .pipe(z.number().int().positive())
     .transform((n) => Math.min(n, ADMIN_BACKFILL_MAX_LIMIT))
     .optional()
-    .transform((n) =>
-      Math.min(n ?? ADMIN_BACKFILL_DEFAULT_LIMIT, ADMIN_BACKFILL_MAX_LIMIT),
-    ),
+    .transform((n) => Math.min(n ?? ADMIN_BACKFILL_DEFAULT_LIMIT, ADMIN_BACKFILL_MAX_LIMIT)),
 });
 
 export interface AppDeps {
@@ -340,9 +318,7 @@ export interface AppDeps {
  * identical (and /contribute's behavior is unchanged) — the two endpoints only
  * diverge afterward on parse timing + response.
  */
-type HelperResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; response: Response };
+type HelperResult<T> = { ok: true; value: T } | { ok: false; response: Response };
 
 /**
  * Validate the request body against ContributeRequestSchema. Non-JSON or schema
@@ -358,13 +334,7 @@ async function parseContributeBody(
   } catch {
     return {
       ok: false,
-      response: c.json(
-        {
-          error: "invalid-request",
-          message: "request body must be valid JSON",
-        },
-        400,
-      ),
+      response: c.json({ error: 'invalid-request', message: 'request body must be valid JSON' }, 400),
     };
   }
 
@@ -374,12 +344,9 @@ async function parseContributeBody(
       ok: false,
       response: c.json(
         {
-          error: "invalid-request",
-          message: "request body failed validation",
-          issues: parsedReq.error.issues.map((i) => ({
-            path: i.path,
-            message: i.message,
-          })),
+          error: 'invalid-request',
+          message: 'request body failed validation',
+          issues: parsedReq.error.issues.map((i) => ({ path: i.path, message: i.message })),
         },
         400,
       ),
@@ -404,23 +371,11 @@ function resolveRepo(
   } catch {
     return {
       ok: false,
-      response: c.json(
-        {
-          error: "persistence-error",
-          message: "persistence layer initialization failed",
-        },
-        500,
-      ),
+      response: c.json({ error: 'persistence-error', message: 'persistence layer initialization failed' }, 500),
     };
   }
   if (repo === null) {
-    return {
-      ok: false,
-      response: c.json(
-        { error: "persistence-error", message: "no database bound" },
-        500,
-      ),
-    };
+    return { ok: false, response: c.json({ error: 'persistence-error', message: 'no database bound' }, 500) };
   }
   return { ok: true, value: repo };
 }
@@ -441,11 +396,7 @@ async function upsertRawOrNull(
     return await repo.upsertRaw({
       store: req.store,
       storeSku: req.storeSku,
-      raw: {
-        title: req.title,
-        price: req.price,
-        categoryHint: req.categoryHint,
-      },
+      raw: { title: req.title, price: req.price, categoryHint: req.categoryHint },
       source: req.source,
       sourceUrl: req.sourceUrl,
       capturedAt: req.capturedAt,
@@ -472,10 +423,7 @@ async function landRaw(
   if (rawId === null) {
     return {
       ok: false,
-      response: c.json(
-        { error: "persistence-error", message: "failed to persist raw report" },
-        500,
-      ),
+      response: c.json({ error: 'persistence-error', message: 'failed to persist raw report' }, 500),
     };
   }
   return { ok: true, value: rawId };
@@ -484,18 +432,9 @@ async function landRaw(
 /** admin key 的审计标识:HMAC-SHA256(key, secret) hex 截断。绝不落原文 key。 */
 async function hmacKeyId(key: string, secret: string): Promise<string> {
   const enc = new TextEncoder();
-  const ck = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", ck, enc.encode(key));
-  return [...new Uint8Array(sig)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-    .slice(0, 16);
+  const ck = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', ck, enc.encode(key));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
 /**
@@ -505,15 +444,15 @@ async function hmacKeyId(key: string, secret: string): Promise<string> {
  * calculable volume/weight axis) and any unmapped value return null → the cohort
  * is not compute-positionable on either axis, so the route 400s as incomparable.
  */
-function cohortAxisField(unit: ComparableUnit): "per100ml" | "per100g" | null {
-  if (unit === "per_100ml") return "per100ml";
-  if (unit === "per_100g") return "per100g";
+function cohortAxisField(unit: ComparableUnit): 'per100ml' | 'per100g' | null {
+  if (unit === 'per_100ml') return 'per100ml';
+  if (unit === 'per_100g') return 'per100g';
   return null;
 }
 
 /** The response `axis` literal for the cohort's per100 field. */
-function axisLabel(field: "per100ml" | "per100g"): "per_100ml" | "per_100g" {
-  return field === "per100ml" ? "per_100ml" : "per_100g";
+function axisLabel(field: 'per100ml' | 'per100g'): 'per_100ml' | 'per_100g' {
+  return field === 'per100ml' ? 'per_100ml' : 'per_100g';
 }
 
 /**
@@ -557,12 +496,7 @@ function projectNeighbor(row: RankingRow, boardRank: number): RankingsItem {
 function positionInCohort(
   rows: RankingRow[],
   userValue: number,
-): {
-  rank: number;
-  total: number;
-  percentile: number;
-  neighbors: RankingsItem[];
-} {
+): { rank: number; total: number; percentile: number; neighbors: RankingsItem[] } {
   const total = rows.length;
   // Rows are ASC by per100ml. cheaperCount = strictly-cheaper rows; the user's
   // insertion slot is right after them (ties are NOT cheaper, so the user ranks
@@ -585,12 +519,7 @@ function positionInCohort(
   // array index + 1.
   const below = rows
     .slice(Math.max(0, cheaperCount - COMPUTE_NEIGHBORS_N), cheaperCount)
-    .map((r, i) =>
-      projectNeighbor(
-        r,
-        Math.max(0, cheaperCount - COMPUTE_NEIGHBORS_N) + i + 1,
-      ),
-    );
+    .map((r, i) => projectNeighbor(r, Math.max(0, cheaperCount - COMPUTE_NEIGHBORS_N) + i + 1));
   const above = rows
     .slice(cheaperCount, cheaperCount + COMPUTE_NEIGHBORS_N)
     .map((r, i) => projectNeighbor(r, cheaperCount + i + 1));
@@ -598,14 +527,10 @@ function positionInCohort(
 }
 
 /** One row as `listBoardSnapshot` hands it over, before wire projection. */
-type BoardRow = Awaited<
-  ReturnType<Repository["listBoardSnapshot"]>
->["rows"][number];
+type BoardRow = Awaited<ReturnType<Repository['listBoardSnapshot']>>['rows'][number];
 
 /** One category node as `listBoardSnapshot` hands it over. */
-type BoardNode = Awaited<
-  ReturnType<Repository["listBoardSnapshot"]>
->["categoryNodes"][number];
+type BoardNode = Awaited<ReturnType<Repository['listBoardSnapshot']>>['categoryNodes'][number];
 
 /** Project a snapshot row onto the wire shape. `rank` is absent by design — it is
  *  a position within a view, meaningless in the unfiltered whole. */
@@ -647,12 +572,7 @@ function toWireRow(row: BoardRow): SnapshotRow {
 function admitSnapshotRows(
   rows: BoardRow[],
   categoryNodes: BoardNode[],
-): {
-  rows: BoardRow[];
-  nodes: BoardNode[];
-  shapeInvalid: number;
-  nodeInvalid: number;
-} {
+): { rows: BoardRow[]; nodes: BoardNode[]; shapeInvalid: number; nodeInvalid: number } {
   // Nodes need the same gate rows got. `tag.name` / `tag.slug` are NOT NULL with
   // no non-empty CHECK, so `''` is storable — verbatim the reasoning that
   // motivated the row gate. Without this, one bad node fails whole-body
@@ -699,7 +619,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
 
   // /health is exempt from the entire governance chain (auth + rate + usage),
   // so liveness probes can hit it keyless and high-frequency.
-  app.get("/health", (c) => c.json({ ok: true }));
+  app.get('/health', (c) => c.json({ ok: true }));
 
   // GET /rankings — public read-only leaderboard. Like /health, it is EXEMPT
   // from the governance chain: NO `app.use('/rankings', …)` is mounted, so it
@@ -709,7 +629,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // middleware never wraps this route. The handler is strictly READ-ONLY:
   // it calls repo.listBoardSnapshot, admits rows through the wire schema and
   // returns the whole object — no write, no LLM, no background task.
-  app.get("/rankings", async (c) => {
+  app.get('/rankings', async (c) => {
     // ── The full board snapshot: ONE cacheable object holding every comparable
     //    row plus the category nodes needed to resolve ancestry. No query params
     //    — a parameter would fork the response into another CDN cache object,
@@ -726,14 +646,11 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (!resolved.ok) return resolved.response;
     const repo = resolved.value;
 
-    let snapshot: Awaited<ReturnType<Repository["listBoardSnapshot"]>>;
+    let snapshot: Awaited<ReturnType<Repository['listBoardSnapshot']>>;
     try {
       snapshot = await repo.listBoardSnapshot();
     } catch {
-      return c.json(
-        { error: "persistence-error", message: "failed to read rankings" },
-        500,
-      );
+      return c.json({ error: 'persistence-error', message: 'failed to read rankings' }, 500);
     }
 
     // ── Project to the wire shape. `rank` is absent by design (a position
@@ -752,26 +669,16 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     const admitted = admitSnapshotRows(snapshot.rows, snapshot.categoryNodes);
     const excluded = [...snapshot.excluded];
     if (admitted.shapeInvalid > 0) {
-      excluded.push({
-        reason: "row_shape_invalid",
-        count: admitted.shapeInvalid,
-      });
+      excluded.push({ reason: 'row_shape_invalid', count: admitted.shapeInvalid });
       // Logged HERE, not inside the admission helper: /compute admits the same
       // rows on every request and is `no-store`, so warning there would emit one
       // line per user compare. This path is behind the CDN — at most once per miss.
-      console.warn(
-        `[rankings] excluded ${admitted.shapeInvalid} row(s): row_shape_invalid`,
-      );
+      console.warn(`[rankings] excluded ${admitted.shapeInvalid} row(s): row_shape_invalid`);
     }
 
     if (admitted.nodeInvalid > 0) {
-      excluded.push({
-        reason: "node_shape_invalid",
-        count: admitted.nodeInvalid,
-      });
-      console.warn(
-        `[rankings] excluded ${admitted.nodeInvalid} category node(s): node_shape_invalid`,
-      );
+      excluded.push({ reason: 'node_shape_invalid', count: admitted.nodeInvalid });
+      console.warn(`[rankings] excluded ${admitted.nodeInvalid} category node(s): node_shape_invalid`);
     }
 
     const body = {
@@ -787,16 +694,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    whole, which is worse than a visible failure.
     const validated = RankingsSnapshotSchema.safeParse(body);
     if (!validated.success) {
-      console.error(
-        "[rankings] response validation failed",
-        validated.error.issues,
-      );
-      return c.json(
-        { error: "internal", message: "response failed validation" },
-        500,
-      );
+      console.error('[rankings] response validation failed', validated.error.issues);
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
-    c.header("Cache-Control", PUBLIC_CACHE_CONTROL);
+    c.header('Cache-Control', PUBLIC_CACHE_CONTROL);
     return c.json(validated.data, 200);
   });
 
@@ -808,7 +709,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // in `{ nodes }`, validates the contract, and returns — no write, no LLM, no
   // background task, no outbound fetch. An unseeded taxonomy (DB connected, no
   // kind=category rows) → 200 { nodes: [] }, never an error.
-  app.get("/categories", async (c) => {
+  app.get('/categories', async (c) => {
     // ── Resolve the repository (shared helper; null/throw → 500 persistence-
     //    error, mirroring /rankings). Read-only — no write path is reachable.
     const resolved = resolveRepo(c, deps);
@@ -818,31 +719,22 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     // ── Read the full kind=category tree. Nodes use the same count-free shape
     //    carried by the rankings snapshot. A throw → 500 persistence-error; an
     //    unseeded taxonomy returns [] → 200 { nodes: [] }.
-    let nodes: Awaited<ReturnType<Repository["listCategoryTree"]>>;
+    let nodes: Awaited<ReturnType<Repository['listCategoryTree']>>;
     try {
       nodes = await repo.listCategoryTree();
     } catch {
-      return c.json(
-        { error: "persistence-error", message: "failed to read categories" },
-        500,
-      );
+      return c.json({ error: 'persistence-error', message: 'failed to read categories' }, 500);
     }
 
     // ── Validate the response shape before returning (contract enforcement,
     //    mirrors /rankings). Failure → 500 internal.
     const validated = CategoryTreeResponseSchema.safeParse({ nodes });
     if (!validated.success) {
-      console.error(
-        "[categories] response validation failed",
-        validated.error.issues,
-      );
-      return c.json(
-        { error: "internal", message: "response failed validation" },
-        500,
-      );
+      console.error('[categories] response validation failed', validated.error.issues);
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     // Edge-cacheable like /rankings; the category tree changes even less often.
-    c.header("Cache-Control", PUBLIC_CACHE_CONTROL);
+    c.header('Cache-Control', PUBLIC_CACHE_CONTROL);
     return c.json(validated.data, 200);
   });
 
@@ -857,7 +749,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // (invalid-request 400, persistence-error 500, internal 500). Every response
   // carries `Cache-Control: no-store` (each input is unique — caching is pure
   // CDN-pollution, decision D6).
-  app.post("/compute", async (c) => {
+  app.post('/compute', async (c) => {
     // ── Validate body with the SHARED api-client schema (the trust-boundary
     //    authoritative validation, decision D7): non-JSON / schema fail (incl.
     //    totalPrice ≤ 0, a zero/negative measurement, empty category) → 400.
@@ -865,24 +757,15 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     try {
       body = await c.req.json();
     } catch {
-      return c.json(
-        {
-          error: "invalid-request",
-          message: "request body must be valid JSON",
-        },
-        400,
-      );
+      return c.json({ error: 'invalid-request', message: 'request body must be valid JSON' }, 400);
     }
     const parsedReq = ComputeRequestSchema.safeParse(body);
     if (!parsedReq.success) {
       return c.json(
         {
-          error: "invalid-request",
-          message: "request body failed validation",
-          issues: parsedReq.error.issues.map((i) => ({
-            path: i.path,
-            message: i.message,
-          })),
+          error: 'invalid-request',
+          message: 'request body failed validation',
+          issues: parsedReq.error.issues.map((i) => ({ path: i.path, message: i.message })),
         },
         400,
       );
@@ -909,9 +792,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (!meetsComputeRequiredSet(spec, req.totalPrice)) {
       return c.json(
         {
-          error: "invalid-request",
+          error: 'invalid-request',
           message:
-            "输入集不足：请补充「总量」或「单件容量 + 数量」之一（再加总价）才能计算单价",
+            '输入集不足：请补充「总量」或「单件容量 + 数量」之一（再加总价）才能计算单价',
         },
         400,
       );
@@ -926,14 +809,14 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (calc.unitPrice.formula === null) {
       return c.json(
         {
-          error: "invalid-request",
-          message: calc.warnings[0] ?? "无法计算单价",
+          error: 'invalid-request',
+          message: calc.warnings[0] ?? '无法计算单价',
         },
         400,
       );
     }
-    const inputAxisField: "per100ml" | "per100g" =
-      calc.unitPrice.per100ml !== null ? "per100ml" : "per100g";
+    const inputAxisField: 'per100ml' | 'per100g' =
+      calc.unitPrice.per100ml !== null ? 'per100ml' : 'per100g';
     const userValue = calc.unitPrice[inputAxisField] as number;
 
     // ── Known-slug gate (BEFORE the cohort resolver): `category` MUST be a member
@@ -944,7 +827,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    its `z.enum(CATEGORY_SLUGS)` query schema; /compute's category arrives in
     //    the body as a plain `z.string().min(1)`, so the gate is explicit here.)
     if (!CATEGORY_SLUGS.includes(req.category)) {
-      return c.json({ error: "invalid-request", message: "未知品类" }, 400);
+      return c.json({ error: 'invalid-request', message: '未知品类' }, 400);
     }
 
     // ── Cohort comparability guard (decision D4), reusing the SAME static
@@ -956,8 +839,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (cohortUnit === null) {
       return c.json(
         {
-          error: "invalid-request",
-          message: "该品类跨多个比价口径，无法直接比价；请选择具体子品类",
+          error: 'invalid-request',
+          message:
+            '该品类跨多个比价口径，无法直接比价；请选择具体子品类',
         },
         400,
       );
@@ -966,12 +850,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     // The snapshot currently admits only per100ml rows. A per_100g cohort would
     // compare a mass value against a volume-only population, so reject it until
     // the snapshot contract grows a weight axis.
-    if (cohortAxis === "per100g") {
+    if (cohortAxis === 'per100g') {
       return c.json(
-        {
-          error: "invalid-request",
-          message: "本期暂不支持按重量（每100g）比价",
-        },
+        { error: 'invalid-request', message: '本期暂不支持按重量（每100g）比价' },
         400,
       );
     }
@@ -981,11 +862,11 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (cohortAxis === null || cohortAxis !== inputAxisField) {
       return c.json(
         {
-          error: "invalid-request",
+          error: 'invalid-request',
           message:
             cohortAxis === null
-              ? "该品类暂不支持比价"
-              : "输入单位与该品类的比价口径不一致：该品类按每 100ml 比价，请使用 ml/L",
+              ? '该品类暂不支持比价'
+              : '输入单位与该品类的比价口径不一致：该品类按每 100ml 比价，请使用 ml/L',
         },
         400,
       );
@@ -1034,34 +915,17 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
         excluded: snapshot.excluded,
       });
       if (!consistent.success) {
-        console.error(
-          "[compute] snapshot validation failed",
-          consistent.error.issues,
-        );
-        return c.json(
-          { error: "internal", message: "snapshot failed validation" },
-          500,
-        );
+        console.error('[compute] snapshot validation failed', consistent.error.issues);
+        return c.json({ error: 'internal', message: 'snapshot failed validation' }, 500);
       }
-      rows = admitted.rows.filter((r) =>
-        r.categorySlugs.some((s) => within.has(s)),
-      );
+      rows = admitted.rows.filter((r) => r.categorySlugs.some((s) => within.has(s)));
     } catch {
-      return c.json(
-        {
-          error: "persistence-error",
-          message: "failed to read cohort for positioning",
-        },
-        500,
-      );
+      return c.json({ error: 'persistence-error', message: 'failed to read cohort for positioning' }, 500);
     }
 
     // ── Deterministic positioning (pure): rank / total / percentile + boundary
     //    neighbors. `rows` is already ASC by per100ml (the /rankings order).
-    const { rank, total, percentile, neighbors } = positionInCohort(
-      rows,
-      userValue,
-    );
+    const { rank, total, percentile, neighbors } = positionInCohort(rows, userValue);
 
     // ── Assemble + validate the response (contract enforcement, mirrors the
     //    other endpoints). EXACTLY one per100 axis is non-null (the computed one).
@@ -1076,49 +940,34 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       neighbors,
     });
     if (!validated.success) {
-      console.error(
-        "[compute] response validation failed",
-        validated.error.issues,
-      );
-      return c.json(
-        { error: "internal", message: "response failed validation" },
-        500,
-      );
+      console.error('[compute] response validation failed', validated.error.issues);
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     // Each input is unique → never edge-cache (decision D6). The 400/500 paths
     // above carry NO Cache-Control (never cached).
-    c.header("Cache-Control", "no-store");
+    c.header('Cache-Control', 'no-store');
     return c.json(validated.data, 200);
   });
 
   // Governance runs only on /parse, before the business handler. Order inside
   // the middleware: auth → rate-limit → usage → next().
-  app.use("/parse", governanceMiddleware(deps.governance));
+  app.use('/parse', governanceMiddleware(deps.governance));
 
-  app.post("/parse", async (c) => {
+  app.post('/parse', async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
     } catch {
-      return c.json(
-        {
-          error: "invalid-request",
-          message: "request body must be valid JSON",
-        },
-        400,
-      );
+      return c.json({ error: 'invalid-request', message: 'request body must be valid JSON' }, 400);
     }
 
     const parsedReq = ParseRequestSchema.safeParse(body);
     if (!parsedReq.success) {
       return c.json(
         {
-          error: "invalid-request",
-          message: "request body failed validation",
-          issues: parsedReq.error.issues.map((i) => ({
-            path: i.path,
-            message: i.message,
-          })),
+          error: 'invalid-request',
+          message: 'request body failed validation',
+          issues: parsedReq.error.issues.map((i) => ({ path: i.path, message: i.message })),
         },
         400,
       );
@@ -1130,26 +979,20 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     const llm = deps.makeLlm(c.env);
     const outcome = await orchestrate(input, llm);
 
-    if (outcome.kind === "config-error") {
+    if (outcome.kind === 'config-error') {
       // Distinguishable 5xx: runtime configuration error (no confidence body).
-      return c.json({ error: "config-error", message: outcome.message }, 500);
+      return c.json({ error: 'config-error', message: outcome.message }, 500);
     }
-    if (outcome.kind === "insufficient") {
+    if (outcome.kind === 'insufficient') {
       // Distinguishable 5xx: information insufficient — can't even judge
       // computability (tier2 transport failed + tier1 had no shape).
-      return c.json(
-        { error: "insufficient-information", message: outcome.message },
-        503,
-      );
+      return c.json({ error: 'insufficient-information', message: outcome.message }, 503);
     }
 
     // Validate the response shape before returning (contract enforcement).
     const validated = ParseResponseSchema.safeParse(outcome.response);
     if (!validated.success) {
-      return c.json(
-        { error: "internal", message: "response failed validation" },
-        500,
-      );
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     return c.json(validated.data, 200);
   });
@@ -1157,9 +1000,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // Governance runs on /contribute too, mounted BEFORE the handler so Hono
   // (which matches by registration order) wraps the route. Mounting the
   // middleware after the handler would leave /contribute unauthenticated.
-  app.use("/contribute", governanceMiddleware(deps.governance));
+  app.use('/contribute', governanceMiddleware(deps.governance));
 
-  app.post("/contribute", async (c) => {
+  app.post('/contribute', async (c) => {
     // ── Validate request body (4.2): non-JSON / schema fail / empty dedupe
     //    keys → 400 invalid-request. No row written, orchestrate not entered.
     const parsed = await parseContributeBody(c);
@@ -1182,24 +1025,14 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    the client knows the observation is saved and a retry only re-parses
     //    (which re-triggers tier2 LLM — abuse cost is bounded by api-governance
     //    rate limiting).
-    const input: RawProduct = {
-      title: req.title,
-      price: req.price,
-      categoryHint: req.categoryHint,
-    };
+    const input: RawProduct = { title: req.title, price: req.price, categoryHint: req.categoryHint };
     const outcome = await orchestrate(input, deps.makeLlm(c.env));
 
-    if (outcome.kind === "config-error") {
-      return c.json(
-        { error: "config-error", message: outcome.message, rawId },
-        500,
-      );
+    if (outcome.kind === 'config-error') {
+      return c.json({ error: 'config-error', message: outcome.message, rawId }, 500);
     }
-    if (outcome.kind === "insufficient") {
-      return c.json(
-        { error: "insufficient-information", message: outcome.message, rawId },
-        503,
-      );
+    if (outcome.kind === 'insufficient') {
+      return c.json({ error: 'insufficient-information', message: outcome.message, rawId }, 503);
     }
 
     // ── saveParsed on ok (4.6). calc is assembled directly from orchestrate's
@@ -1211,21 +1044,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       saved = await repo.saveParsed({
         rawId,
         spec: res.spec,
-        calc: {
-          unitPrice: res.unitPrice,
-          confidence: res.confidence,
-          warnings: res.warnings,
-        },
+        calc: { unitPrice: res.unitPrice, confidence: res.confidence, warnings: res.warnings },
       });
     } catch {
-      return c.json(
-        {
-          error: "persistence-error",
-          message: "failed to persist parsed result",
-          rawId,
-        },
-        500,
-      );
+      return c.json({ error: 'persistence-error', message: 'failed to persist parsed result', rawId }, 500);
     }
 
     // ── Assemble + validate the response (4.7). Validation failure → internal.
@@ -1239,10 +1061,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       unitPriceId: saved.unitPriceId,
     });
     if (!validated.success) {
-      return c.json(
-        { error: "internal", message: "response failed validation" },
-        500,
-      );
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     return c.json(validated.data, 200);
   });
@@ -1250,7 +1069,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // Governance runs on /ingest too, mounted BEFORE the handler (same order as
   // /parse and /contribute) so Hono — which matches by registration order —
   // wraps the route; mounting it after would leave /ingest unauthenticated.
-  app.use("/ingest", governanceMiddleware(deps.governance));
+  app.use('/ingest', governanceMiddleware(deps.governance));
 
   // POST /ingest — async crowd-sourced capture: land raw synchronously, return
   // 202 immediately, run orchestrate + saveParsed in the BACKGROUND. Shares the
@@ -1260,7 +1079,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // internal(500), accepted(202)} plus governance codes — NO insufficient-
   // information / config-error, because upsertRaw success is already a 202 and
   // any orchestrate/saveParsed failure happens in the background (logged only).
-  app.post("/ingest", async (c) => {
+  app.post('/ingest', async (c) => {
     // ── Same preamble as /contribute (helpers keep the behavior identical).
     const parsed = await parseContributeBody(c);
     if (!parsed.ok) return parsed.response; // 400 invalid-request
@@ -1281,27 +1100,23 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    decided 202 path. Three-state failure disposition: log only — no retry,
     //    no LLM re-burn (event-driven, each report parsed exactly once).
     const env = c.env;
-    const input: RawProduct = {
-      title: req.title,
-      price: req.price,
-      categoryHint: req.categoryHint,
-    };
+    const input: RawProduct = { title: req.title, price: req.price, categoryHint: req.categoryHint };
     const run = async (): Promise<void> => {
       try {
         const outcome = await orchestrate(input, deps.makeLlm(env));
-        if (outcome.kind === "insufficient") {
+        if (outcome.kind === 'insufficient') {
           // tier2 transport failed + tier1 had no shape (e.g. a spec-less title):
           // log structured (rawId/store/sku) and stop — leaves the intentionally
           // accepted "raw, no product" intermediate state.
-          console.warn("[ingest] background parse insufficient", {
+          console.warn('[ingest] background parse insufficient', {
             rawId,
             store: req.store,
             storeSku: req.storeSku,
           });
           return;
         }
-        if (outcome.kind === "config-error") {
-          console.error("[ingest] background parse config-error", {
+        if (outcome.kind === 'config-error') {
+          console.error('[ingest] background parse config-error', {
             rawId,
             store: req.store,
             storeSku: req.storeSku,
@@ -1315,16 +1130,12 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
         await repo.saveParsed({
           rawId,
           spec: res.spec,
-          calc: {
-            unitPrice: res.unitPrice,
-            confidence: res.confidence,
-            warnings: res.warnings,
-          },
+          calc: { unitPrice: res.unitPrice, confidence: res.confidence, warnings: res.warnings },
         });
       } catch (err) {
         // saveParsed throw (or any other background failure): log only, no
         // retry, no LLM re-burn. Keeps the "raw, no product" intermediate state.
-        console.error("[ingest] background work failed", {
+        console.error('[ingest] background work failed', {
           rawId,
           store: req.store,
           storeSku: req.storeSku,
@@ -1343,10 +1154,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    is a defensive guard); failure → 500 internal (mirrors /contribute).
     const validated = IngestResponseSchema.safeParse({ rawId });
     if (!validated.success) {
-      return c.json(
-        { error: "internal", message: "response failed validation" },
-        500,
-      );
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     return c.json(validated.data, 202);
   });
@@ -1355,7 +1163,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // matches `app.use('/ingest', …)` by EXACT path, so the /ingest middleware
   // does NOT wrap /ingest/batch — the batch endpoint MUST mount its own
   // governance. Registered right after /ingest for locality.
-  app.use("/ingest/batch", governanceMiddleware(deps.governance));
+  app.use('/ingest/batch', governanceMiddleware(deps.governance));
 
   // POST /ingest/batch — batch async crowd-sourced capture: land each item's raw
   // SYNCHRONOUSLY (shared upsertRawOrNull map), then schedule a SINGLE bounded-
@@ -1364,19 +1172,13 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // {invalid-request(400), persistence-error(500), internal(500), accepted(202)}
   // plus governance codes. accepted=0 (every upsertRaw failed) → 500 (NO 2xx
   // masking a whole-batch write failure as accepted).
-  app.post("/ingest/batch", async (c) => {
+  app.post('/ingest/batch', async (c) => {
     // ── Envelope validation. Non-JSON → 400 invalid-request.
     let body: unknown;
     try {
       body = await c.req.json();
     } catch {
-      return c.json(
-        {
-          error: "invalid-request",
-          message: "request body must be valid JSON",
-        },
-        400,
-      );
+      return c.json({ error: 'invalid-request', message: 'request body must be valid JSON' }, 400);
     }
 
     // Strict: empty array / over MAX_BATCH / any item failing
@@ -1385,12 +1187,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (!parsedReq.success) {
       return c.json(
         {
-          error: "invalid-request",
-          message: "request body failed validation",
-          issues: parsedReq.error.issues.map((i) => ({
-            path: i.path,
-            message: i.message,
-          })),
+          error: 'invalid-request',
+          message: 'request body failed validation',
+          issues: parsedReq.error.issues.map((i) => ({ path: i.path, message: i.message })),
         },
         400,
       );
@@ -1407,8 +1206,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    independently; a throw (null) does not stop the rest. Invariant:
     //    accepted + failed.length === items.length.
     const landed: Array<{ rawId: string; req: ContributeRequest }> = [];
-    const failed: Array<{ index: number; store: string; storeSku: string }> =
-      [];
+    const failed: Array<{ index: number; store: string; storeSku: string }> = [];
     for (let index = 0; index < items.length; index++) {
       const item = items[index]!;
       const rawId = await upsertRawOrNull(repo, item);
@@ -1432,28 +1230,21 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       pool: number,
     ): Promise<void> => {
       let cursor = 0;
-      const runOne = async (unit: {
-        rawId: string;
-        req: ContributeRequest;
-      }): Promise<void> => {
+      const runOne = async (unit: { rawId: string; req: ContributeRequest }): Promise<void> => {
         const { rawId, req } = unit;
         try {
-          const input: RawProduct = {
-            title: req.title,
-            price: req.price,
-            categoryHint: req.categoryHint,
-          };
+          const input: RawProduct = { title: req.title, price: req.price, categoryHint: req.categoryHint };
           const outcome = await orchestrate(input, deps.makeLlm(env));
-          if (outcome.kind === "insufficient") {
-            console.warn("[ingest/batch] background parse insufficient", {
+          if (outcome.kind === 'insufficient') {
+            console.warn('[ingest/batch] background parse insufficient', {
               rawId,
               store: req.store,
               storeSku: req.storeSku,
             });
             return;
           }
-          if (outcome.kind === "config-error") {
-            console.error("[ingest/batch] background parse config-error", {
+          if (outcome.kind === 'config-error') {
+            console.error('[ingest/batch] background parse config-error', {
               rawId,
               store: req.store,
               storeSku: req.storeSku,
@@ -1467,14 +1258,10 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
           await repo.saveParsed({
             rawId,
             spec: res.spec,
-            calc: {
-              unitPrice: res.unitPrice,
-              confidence: res.confidence,
-              warnings: res.warnings,
-            },
+            calc: { unitPrice: res.unitPrice, confidence: res.confidence, warnings: res.warnings },
           });
         } catch (err) {
-          console.error("[ingest/batch] background work failed", {
+          console.error('[ingest/batch] background work failed', {
             rawId,
             store: req.store,
             storeSku: req.storeSku,
@@ -1499,40 +1286,28 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       // concurrency internally. Production's waitUntil returns void so this
       // `await` resolves immediately; the dev/default sync version awaits the
       // whole drain (deterministic for tests).
-      await (deps.scheduleBackground ?? ((_c, r) => r()))(c, () =>
-        drainBackground(landed, BG_POOL),
-      );
+      await (deps.scheduleBackground ?? ((_c, r) => r()))(c, () => drainBackground(landed, BG_POOL));
     }
 
     // ── Usage stacking: admission already counted 1 (governance middleware).
     //    Total usage for the request should equal `accepted`, so add (accepted-1)
     //    when accepted>1. Guard >1 so we never pass amount ≤ 0 (would corrupt the
     //    KV count). Stacking failure does not throw / does not change the response.
-    const key = c.get("govKey");
-    if (accepted > 1)
-      await deps.governance.recordUsage(c.env, key, accepted - 1);
+    const key = c.get('govKey');
+    if (accepted > 1) await deps.governance.recordUsage(c.env, key, accepted - 1);
 
     // ── Status code. accepted=0 (every upsertRaw failed) → 500 persistence-error,
     //    NO result body (mirrors single /ingest upsertRaw failure → 500; never a
     //    2xx masking a whole-batch write failure as accepted).
     if (accepted === 0) {
-      return c.json(
-        {
-          error: "persistence-error",
-          message: "failed to persist any raw report",
-        },
-        500,
-      );
+      return c.json({ error: 'persistence-error', message: 'failed to persist any raw report' }, 500);
     }
 
     // accepted ≥ 1 → assemble + validate the 202 body. Validation failure → 500
     // internal (defensive guard, effectively unreachable).
     const validated = BatchIngestResponseSchema.safeParse({ accepted, failed });
     if (!validated.success) {
-      return c.json(
-        { error: "internal", message: "response failed validation" },
-        500,
-      );
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     return c.json(validated.data, 202);
   });
@@ -1540,24 +1315,12 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // POST /admin/backfill — admin-tier taxonomy backfill 驱动。挂专用 authenticate-
   // only admin gate(独立 ADMIN_API_KEYS;**非**公共 governanceMiddleware → 不跑
   // rate/usage)。Hono 精确路径:每个 /admin/* 各自挂 gate(无前缀 catch-all)。
-  const adminGov =
-    deps.adminGovernance ??
-    createRealGovernance({ allowlistVar: "ADMIN_API_KEYS" });
-  app.use("/admin/backfill", authOnlyMiddleware(adminGov));
-  app.post("/admin/backfill", async (c) => {
+  const adminGov = deps.adminGovernance ?? createRealGovernance({ allowlistVar: 'ADMIN_API_KEYS' });
+  app.use('/admin/backfill', authOnlyMiddleware(adminGov));
+  app.post('/admin/backfill', async (c) => {
     const parsed = AdminBackfillQuerySchema.safeParse(c.req.query());
     if (!parsed.success) {
-      return c.json(
-        {
-          error: "invalid-request",
-          message: "invalid cursor/limit",
-          issues: parsed.error.issues.map((i) => ({
-            path: i.path,
-            message: i.message,
-          })),
-        },
-        400,
-      );
+      return c.json({ error: 'invalid-request', message: 'invalid cursor/limit', issues: parsed.error.issues.map((i) => ({ path: i.path, message: i.message })) }, 400);
     }
     const { cursor, limit } = parsed.data;
 
@@ -1566,71 +1329,41 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     const repo = resolved.value;
 
     let db: Db | null;
-    try {
-      db = deps.makeDb?.(c.env) ?? null;
-    } catch {
-      db = null;
-    }
-    if (db === null)
-      return c.json(
-        { error: "persistence-error", message: "no database bound" },
-        500,
-      );
+    try { db = deps.makeDb?.(c.env) ?? null; } catch { db = null; }
+    if (db === null) return c.json({ error: 'persistence-error', message: 'no database bound' }, 500);
 
     // 审计:keyed-哈希 admin key(原文绝不落日志);adminKey 由 authenticate-only gate 放行时设。
     // secret 缺失则 fail-close — 审计 keying 是必需项,绝不降级到源码常量 salt。
     const auditSecret = c.env.AUDIT_LOG_HMAC_SECRET;
     if (!auditSecret) {
-      console.warn(
-        "[admin/backfill] AUDIT_LOG_HMAC_SECRET unconfigured — refusing (audit keying required)",
-      );
-      return c.json(
-        { error: "config-error", message: "service configuration error" },
-        500,
-      );
+      console.warn('[admin/backfill] AUDIT_LOG_HMAC_SECRET unconfigured — refusing (audit keying required)');
+      return c.json({ error: 'config-error', message: 'service configuration error' }, 500);
     }
-    const adminKey = c.get("adminKey") ?? "";
+    const adminKey = c.get('adminKey') ?? '';
     const keyHash = await hmacKeyId(adminKey, auditSecret);
 
     let result;
     try {
       result = await runBackfill(repo, db, { cursor, limit });
     } catch {
-      console.warn("[admin/backfill] failed", {
-        keyHash,
-        cursor: cursor ?? null,
-        limit,
-      });
-      return c.json(
-        { error: "persistence-error", message: "backfill failed" },
-        500,
-      );
+      console.warn('[admin/backfill] failed', { keyHash, cursor: cursor ?? null, limit });
+      return c.json({ error: 'persistence-error', message: 'backfill failed' }, 500);
     }
 
-    console.warn("[admin/backfill]", {
-      keyHash,
-      cursor: cursor ?? null,
-      limit,
-      total: result.total,
-      classified: result.classified,
-      pending: result.pending,
-      manual: result.manual,
-      rankable: result.rankable,
-      storeMapDecisions: result.storeMapDecisions,
-      nextCursor: result.nextCursor,
+    console.warn('[admin/backfill]', {
+      keyHash, cursor: cursor ?? null, limit,
+      total: result.total, classified: result.classified, pending: result.pending,
+      manual: result.manual, rankable: result.rankable,
+      storeMapDecisions: result.storeMapDecisions, nextCursor: result.nextCursor,
       at: new Date().toISOString(),
     });
 
     // 响应:只回计数 + nextCursor(投影掉 results[])。storeMapDecisions = 本块内
     // store-map 定叶(异叶)的决定数;backfill 分块续跑时门值须跨所有块累加。
     return c.json({
-      total: result.total,
-      classified: result.classified,
-      pending: result.pending,
-      manual: result.manual,
-      rankable: result.rankable,
-      storeMapDecisions: result.storeMapDecisions,
-      nextCursor: result.nextCursor,
+      total: result.total, classified: result.classified, pending: result.pending,
+      manual: result.manual, rankable: result.rankable,
+      storeMapDecisions: result.storeMapDecisions, nextCursor: result.nextCursor,
     });
   });
 
