@@ -4,8 +4,8 @@
   "private": true,
   "description": "只读榜单微信小程序（消费 GET /rankings）",
   "scripts": {
-    "build:weapp": "node scripts/vendor-api-client.mjs && taro build --type weapp",
-    "dev:weapp": "node scripts/vendor-api-client.mjs && taro build --type weapp --watch",
+    "build:weapp": "node scripts/check-react-compat.mjs && node scripts/vendor-api-client.mjs && taro build --type weapp",
+    "dev:weapp": "node scripts/check-react-compat.mjs && node scripts/vendor-api-client.mjs && taro build --type weapp --watch",
     "typecheck": "tsc --noEmit",
     "pretest": "pnpm --filter @unit-price/api-client build",
     "test": "vitest run --passWithNoTests"
@@ -21,8 +21,8 @@
     "@tarojs/shared": "4.2.1",
     "@tarojs/taro": "4.2.1",
     "@unit-price/api-client": "workspace:*",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
@@ -30,7 +30,7 @@
     "@tarojs/cli": "4.2.1",
     "esbuild": "^0.28.2",
     "@tarojs/webpack5-runner": "4.2.1",
-    "@types/react": "^19.2.18",
+    "@types/react": "18.3.31",
     "@types/webpack-env": "^1.18.0",
     "babel-preset-taro": "4.2.1",
     "react-refresh": "^0.18.0",
