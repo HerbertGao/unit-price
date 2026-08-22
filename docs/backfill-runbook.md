@@ -223,23 +223,28 @@ census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `pro
 
 公共读端点 `/rankings`、`/categories` 的 `Cache-Control` 是 **`public, max-age=86400`(1 天)**(`apps/api/src/routes.ts` 的 `PUBLIC_CACHE_CONTROL`)。长 TTL 是为了让国内访问命中阿里云 POP、绕开跨境回源——代价是**任何改了 prod 数据的操作(`/ingest` 新批次、临时优惠、本文的 backfill / native-id 回填)生效前,边缘还会按旧缓存服务,最多 1 天**。
 
-数据变更后**主动刷新阿里云 CDN**让其立即生效(否则只能等 TTL 自然过期)。**两个端点 ObjectType 不同**(`/rankings` 有 `?limit/offset/category` 等 query 变体、`/categories` 无 query):
+数据变更后**主动刷新阿里云 CDN**让其立即生效(否则只能等 TTL 自然过期)。发布快照新形状时顺序固定:
 
-- `/rankings` 用**目录(Directory)**刷新。**`ObjectPath` 必须以 `/` 结尾**,否则阿里云直接 `InvalidObjectPath.Malformed` 拒绝。而 `/rankings?...` 这类带 query 的键**不在** `/rankings/` 目录下,所以要覆盖全部 query 变体,刷的是**站点根目录**:
-  `aliyun cdn RefreshObjectCaches --ObjectPath 'https://unit-price.herbert-dev.cn/' --ObjectType Directory`
-- `/categories` 用 **URL(File)**刷新该精确地址(它无 query,目录型反而刷不到这个精确文件):
-  `aliyun cdn RefreshObjectCaches --ObjectPath 'https://unit-price.herbert-dev.cn/categories' --ObjectType File`
-- 控制台等价:`/rankings` 选"目录"、`/categories` 选"URL"。
+1. 源站部署完成后,先 purge `/rankings*` 历史对象与精确 `/categories` 对象。
+2. 实测 Directory/wildcard purge 是否覆盖一个预先加热的旧带参对象;若不覆盖,按 OpenSpec deployment 规范列出的 16 条历史 rankings URL 逐条 `ObjectType=File` 刷新。
+3. purge 完成后再启用 `/rankings` query-string 归一化;先归一化会把旧数组对象钉在唯一键上。
+4. 最后预热并从国内视角验形,通过后才发布客户端。
 
-**刷新后预热(建议,且必须预热客户端真实请求的精确 URL)**:单次回源跨境要 ~3–7s(实测 TTFB,POP→海外 CF/D1),purge 后**第一个真实用户会吃满这一跳**。CDN **按完整 query 串分键**,所以**必须预热小程序逐字节实际发的 URL**——榜单落地 Tab 调 `useRankings()` **不带 category**、发的是 `/rankings?limit=20&offset=0`(**不是** `?category=soft-drink`),预热错键等于没热。用 `PushObjectCache`(或直接 `curl`)逐条预热:
+`/categories` 的精确刷新命令为:
+`aliyun cdn RefreshObjectCaches --ObjectPath 'https://unit-price.herbert-dev.cn/categories' --ObjectType File`。
 
-- 落地榜:`https://unit-price.herbert-dev.cn/rankings?limit=20&offset=0`
-- 各 category-scoped 榜(用户从品类树下钻会发的):`…/rankings?limit=20&offset=0&category=<slug>`。**发参顺序必须与 `buildRankingsUrl` 一致(`limit→offset→category`)**——CDN 按原始 query 串分键,顺序错即键错、等于没热。slug 全集直接从 `/categories` 取:`curl -sS <域>/categories | jq -r '[.. | objects | select(.slug) | .slug] | unique | join(" ")'`。其中 **`beverage`(root)与 `alcohol` 返回 `400`**——它们跨 cohort、无静态可比单位,是既有设计而非故障,预热时跳过即可
+**刷新后预热(建议,且必须预热客户端真实请求的精确 URL)**:单次回源跨境要 ~3–7s(实测 TTFB,POP→海外 CF/D1),purge 后**第一个真实用户会吃满这一跳**。归一化后客户端只请求裸榜单 URL。
+
+`/rankings` 已改为**无参全量快照**,客户端只会请求裸路径,故预热清单恰为两条:
+
+- 榜单快照:`https://unit-price.herbert-dev.cn/rankings`
 - 品类树:`https://unit-price.herbert-dev.cn/categories`
 
-(`limit`/`offset` 必须与端上 `PAGE_SIZE=20`、首页 `offset=0` 一致;改了 `PAGE_SIZE` 这里同步改。)命中后 total 降到 ~50ms。
+**不要**预热任何 `?limit=` / `?offset=` / `?category=` 变体:源站对它们返回逐字相同的响应,但 CDN 会按 query 串各存一个对象——预热它们等于把改造前那 17 个键重新灌回国内 POP,而客户端唯一会命中的裸键一次都没热。品类下钻与搜索现在都是端上在这份快照里本地派生,不发请求。
 
-**遵循源站(部署/依赖前必复验)**:长 TTL 生效的前置是阿里云 CDN **遵循源站 `Cache-Control`**(不以自有 TTL 规则覆盖)。当前实测满足(无自定义 TTL 规则;二次请求 `X-Cache: HIT`),但这是**控制台活配置、仓库管不住**——任何人加一条自定义 TTL/忽略源站规则就会静默让 86400 失效。故**不是一次性"已确认无需配置"**:每次依赖长 TTL 前、以及改动该域名 CDN 配置后,`curl -D - 'https://unit-price.herbert-dev.cn/rankings?category=soft-drink'` 看二次请求 `X-Cache` 是否 `HIT` 且 `Cache-Control` 透传为 `max-age=86400`,不满足说明源站头被覆盖、需到控制台修。`no-store`(搜索 `?q=`、`/compute`)不受影响、永不被缓存。
+命中后 total 降到 ~50ms。
+
+**遵循源站(部署/依赖前必复验)**:长 TTL 生效的前置是阿里云 CDN **遵循源站 `Cache-Control`**(不以自有 TTL 规则覆盖)。当前实测满足(无自定义 TTL 规则;二次请求 `X-Cache: HIT`),但这是**控制台活配置、仓库管不住**——任何人加一条自定义 TTL/忽略源站规则就会静默让 86400 失效。故**不是一次性"已确认无需配置"**:每次依赖长 TTL 前、以及改动该域名 CDN 配置后,`curl -D - 'https://unit-price.herbert-dev.cn/rankings'` 看二次请求 `X-Cache` 是否 `HIT` 且 `Cache-Control` 透传为 `max-age=86400`,不满足说明源站头被覆盖、需到控制台修。`no-store`(`/compute`)不受影响、永不被缓存;搜索已改为端上本地筛选、不再发请求。
 
 ## 安全注
 

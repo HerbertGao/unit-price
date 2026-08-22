@@ -90,8 +90,8 @@ unit-price/
   - `POST /parse` — RawProduct → ParsedSpec + UnitPrice + confidence + comparable + explanation
   - `POST /compare` — 多商品 → 归一化排名 + 自然语言 summary（解释用 AI，计算不用）
   - `POST /contribute` — 上报 RawProduct 入中心库（众包，需轻量鉴权/限频）
-  - `GET /rankings` — 按品类节点取榜单（小程序主消费）：`?category=<品类节点 slug>`（**缺省 `soft-drink`**）按 `category_closure` 闭包取该节点子树的可排名成员（`rankable=true` ∧ 数据门），per100ml 升序分页。前置 **cohort 守卫**：榜只对「自身解析出非空 `comparable_unit`」的节点开放（软饮/乳品/各酒种叶各为一个绑定点 cohort），跨多个 cohort 的节点（root `beverage`、`alcohol` 父，解析单位 `null`）→ `400`，杜绝「水 + 酒」「啤酒 + 威士忌」混榜
-  - `GET /categories` — 品类树浏览接口（小程序「分类树」Tab）：返回 store-agnostic 的 category is-a 树，每节点带继承解析的 `comparableUnit`、节点自身轴标记 `rankable`（= 该节点是单一 cohort、可点进榜）与闭包后代可排名数 `rankableCount`（榜入口判定用 `rankable`；root/`alcohol` 父 `rankable=false` 不可点进，其 `rankableCount` 为分支信息性计数、不对应任何榜）
+  - `GET /rankings` — 返回单一可缓存全量快照 `{ rows, categoryNodes, excluded }`，忽略查询参数。服务端按 `(per100ml, unit_price.id)` 全序下发；小程序从同一快照本地派生 cohort、搜索与分页，客户端不重算单价、不重排。任何呈现榜仍限定在 `rankable=true` 的单一可比 cohort，root `beverage` / `alcohol` 父由客户端拒绝混排
+  - `GET /categories` — 品类树浏览接口（小程序「分类树」Tab）：返回与快照 `categoryNodes` 完全同形的 store-agnostic category is-a 树，每节点仅带 `slug/name/parentSlug/comparableUnit/rankable`。不下发 `rankableCount`；需要实际榜行数时从同一快照派生
   - `POST /corrections` — 人工纠错（`parse_source=manual_corrected`，沉淀 few-shot 样本）
 - **公众 API 治理**：API key + 限频 + 用量统计。
 - **DB**：Cloudflare D1（SQLite）+ Drizzle ORM（CF 优先；schema 用 SQLite↔Postgres 可移植类型，撑爆 D1 时可平滑迁 Postgres）。表：`product_raw / product / unit_price / corrections`。（`product` 即规范商品表，承载商品身份而非仅 spec；`product_raw` 含可空 `native_category_id`——门店原生叶级分类 id 的 provenance 列，由 ingest 采集、backfill 读它喂打标签 store-map 仲裁，与 `category_hint`[`product.category` 透传源] 分列；`comparison_group` 不物化——对比组按 `docs/taxonomy-and-tagging.md` §九 改动态查询。品类 `tag` 系列表（`tag / product_tag / store_category_map / category_closure`）已随 taxonomy 上线，定义见该文档。）

@@ -18,7 +18,11 @@ import {
   type RawProduct,
 } from '@unit-price/core';
 import {
-  RankingsResponseSchema,
+  RankingsSnapshotSchema,
+  SnapshotRowSchema,
+  SnapshotCategoryNodeSchema,
+  type SnapshotRow,
+  cohortSlugs,
   CategoryTreeResponseSchema,
   ComputeRequestSchema,
   ComputeResultSchema,
@@ -151,8 +155,8 @@ export const BG_POOL = 5;
  * hop). 1 day caps staleness if a purge is ever missed (self-heals next day); to
  * push a promo out sooner, purge the CDN after the ingest/backfill that added it
  * (see docs/backfill-runbook.md). Errors (400/500) carry no header → never cached.
- * Tune the TTL here. (Aliyun CDN keeps the query string in its cache key by
- * default, so /rankings?category=… variants cache separately.)
+ * Tune the TTL here. Aliyun includes query strings in cache keys by default;
+ * the release config normalizes `/rankings` after purging historical variants.
  */
 export const PUBLIC_CACHE_CONTROL = 'public, max-age=86400';
 
@@ -162,18 +166,6 @@ export const PUBLIC_CACHE_CONTROL = 'public, max-age=86400';
  * not part of the response contract's核心.
  */
 export const COMPUTE_NEIGHBORS_N = 3;
-
-/**
- * Upper bound on cohort rankable rows POST /compute pulls to position the user.
- * Positioning needs the FULL ascending cohort board (count rows below the user
- * value + pick the boundary neighbors), so the端点 reads the whole cohort via the
- * SAME `repo.listRankings` cohort/rankable/per100ml query as /rankings (decision
- * D6 — "定位" and "榜单" share one population), capped to keep one bounded read
- * (v1 cohorts are ~hundreds). The slice is in SQL; rows past this cap (a far
- * larger cohort than any v1 leaf) would silently under-count — raise this if a
- * cohort ever approaches it.
- */
-export const COMPUTE_COHORT_FETCH_MAX = 5000;
 
 /**
  * Batch ingest request: an envelope of 1..MAX_BATCH single-item contributions.
@@ -211,7 +203,7 @@ export type BatchIngestResponse = z.infer<typeof BatchIngestResponseSchema>;
  * GET /rankings response contract (`RankingsResponseSchema`) + its `RankingsItem`
  * shape now live in `@unit-price/api-client` — the transport-agnostic single
  * source of truth shared by apps/api and every client. This handler imports it
- * (see top-of-file import); it is NOT redefined here. `RankingsQuerySchema`
+ * (see top-of-file import); it is NOT redefined here. The `/compute` slug
  * below stays in apps/api: it is the server-side 400 query gate, not part of the
  * shared response contract.
  */
@@ -220,7 +212,7 @@ export type BatchIngestResponse = z.infer<typeof BatchIngestResponseSchema>;
  * Accepted `category` slugs — the seed kind=category slug set, derived at COMPILE
  * TIME from `packages/db`'s `CATEGORY_NODES` (the seed truth source). This is the
  * ONLY slug list in apps/api: hand-writing a second one would let the API drift
- * from the seed. Used to build `RankingsQuerySchema.category`'s `z.enum`. The
+ * from the seed. Used to gate `/compute`'s `category`入参. The
  * `as [string, ...string[]]` assertion satisfies `z.enum`'s non-empty-tuple type
  * (CATEGORY_NODES always seeds `beverage` and more).
  */
@@ -262,82 +254,6 @@ export function resolveComparableUnitStatic(slug: string): ComparableUnit | null
   return null;
 }
 
-/**
- * GET /rankings query parameters. Query values arrive as strings. `limit` and
- * `offset` accept ONLY a decimal non-negative integer string (STRICT, symmetric):
- * a present value is gated by `^\d+$` BEFORE numeric conversion, so loose coercion
- * (`Number("")=0`, `Number("0x10")=16`, `Number(" 5 ")=5`) can never sneak a
- * non-canonical input past validation. Only a MISSING key falls through to the
- * default. A parse failure maps to `400 invalid-request` at the route.
- *
- * `limit`: default 50 (key missing). Present: `^\d+$` → int → `positive` (rejects
- * `0`); the clamp to 200 comes AFTER the positive check (a present `>200` clamps,
- * never rejects). Empty string / hex / whitespace / decimal / negative / `abc` /
- * `Infinity` all fail the regex or the int/positive pipe → 400.
- *
- * `offset`: default 0 (key missing). Present: `^\d+$` → int → `nonnegative`
- * (allows `0`) — SAME strictness as `limit` (symmetry: empty `offset` is rejected
- * just like empty `limit`, not silently treated as 0). A valid in-range-but-past-
- * the-end offset is a route-level concern (→ 200 + []), not a parse failure.
- *
- * `category` (CASE-SENSITIVE), default `soft-drink` (the 软饮 cohort node — P3.5
- * replaces the P3 root `beverage` default so the no-param board is the soft-drink
- * cohort, not a cross-cohort root). Present: MUST exactly match one seed
- * kind=category node slug. The accepted set is `CATEGORY_SLUGS`, derived AT COMPILE
- * TIME from `packages/db`'s `CATEGORY_NODES` (the seed truth) — apps/api does NOT
- * hand-write a second slug list (would drift from seed). Validation is a pure
- * synchronous parse (NO runtime `tag`-table lookup: that cannot tell a legal-but-
- * unseeded slug apart from a typo). An unknown / non-category / wrong-case / empty
- * `?category=` slug → 400 invalid-request. A slug that IS in the set but whose `tag`
- * row is not seeded yet (migrate-before-seed window) is NOT a parse failure here: it
- * passes the gate, clears the cohort guard via the STATIC resolver (see the route
- * handler), and the repository returns [] (→ 200), so a typo and an unseeded-but-
- * legal slug stay distinguishable. The validated slug drives the closure filter
- * (`category_closure.ancestor_tag_id = <that node>` + `product.rankable=1` +
- * `per100ml IS NOT NULL`) inside listRankings.
- */
-export const RankingsQuerySchema = z.object({
-  limit: z
-    .string()
-    .regex(/^\d+$/)
-    .transform(Number)
-    .pipe(z.number().int().positive())
-    .transform((n) => Math.min(n, 200))
-    .optional()
-    .transform((n) => n ?? 50),
-  offset: z
-    .string()
-    .regex(/^\d+$/)
-    .transform(Number)
-    .pipe(z.number().int().nonnegative())
-    .optional()
-    .transform((n) => n ?? 0),
-  category: z.enum(CATEGORY_SLUGS).default('soft-drink'),
-  // `q` (title substring search) is a PURE-ADDITIVE concern — the schema is
-  // `z.object` (NOT `.strict`), so absent `q` leaves the no-`q` board unchanged.
-  // Pipeline ORDER is load-bearing (see design.md D2.1):
-  //   1. trim          — ECMAScript trim() strips half- AND full-width (　) space.
-  //   2. ''→undefined  — empty / whitespace-only means NO search intent → undefined
-  //                      (NOT filtered). This MUST run BEFORE the refine, else the
-  //                      refine would 400 on an empty `?q=`.
-  //   3. refine ≥ 2    — only the PRESENT branch is length-checked; trim→1 codepoint
-  //                      is "searched but too wide" → 400 invalid-request (single CJK
-  //                      char like 水/茶/奶 over-matches into near-full-table).
-  //   4. truncate ≤ 64 — by CODEPOINT (`[...s]`), never UTF-16 `.length`: surrogate
-  //                      pairs (emoji / rare CJK 𠮷) count as 1 and `.slice` never
-  //                      splits a pair (no lone surrogate injected into LIKE).
-  //   5. optional      — last, so absent stays absent.
-  // ALL length math is by codepoint (`[...s]`), never `.length`.
-  q: z
-    .string()
-    .transform((s) => s.trim())
-    .transform((s) => (s === '' ? undefined : s))
-    .refine((s) => s === undefined || [...s].length >= 2, { message: 'q too short' })
-    .transform((s) => (s === undefined ? undefined : [...s].slice(0, 64).join('')))
-    .optional(),
-});
-
-export type RankingsQuery = z.infer<typeof RankingsQuerySchema>;
 
 export const AdminBackfillQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
@@ -610,6 +526,94 @@ function positionInCohort(
   return { rank, total, percentile, neighbors: [...below, ...above] };
 }
 
+/** One row as `listBoardSnapshot` hands it over, before wire projection. */
+type BoardRow = Awaited<ReturnType<Repository['listBoardSnapshot']>>['rows'][number];
+
+/** One category node as `listBoardSnapshot` hands it over. */
+type BoardNode = Awaited<ReturnType<Repository['listBoardSnapshot']>>['categoryNodes'][number];
+
+/** Project a snapshot row onto the wire shape. `rank` is absent by design — it is
+ *  a position within a view, meaningless in the unfiltered whole. */
+function toWireRow(row: BoardRow): SnapshotRow {
+  return {
+    id: row.id,
+    title: row.title,
+    priceCents: row.priceCents,
+    per100ml: row.per100ml,
+    formula: row.formula,
+    confidence: row.confidence,
+    warnings: row.warnings,
+    store: row.store,
+    storeSku: row.storeSku,
+    sourceUrl: row.sourceUrl,
+    capturedAt: row.capturedAt,
+    lowestPriceCents: row.lowestPriceCents,
+    categorySlugs: row.categorySlugs,
+  };
+}
+
+/**
+ * Admit snapshot rows through the SHIPPED row schema, returning the survivors and
+ * how many were turned away.
+ *
+ * `listBoardSnapshot` can only guard what it inspects before assembly (category
+ * edge, decodable `warnings`, non-null `formula`) — three of the eleven fields the
+ * wire schema requires. The gap is reachable: `title` / `store` / `storeSku` are
+ * `NOT NULL` columns, and `NOT NULL` does not exclude `''`. Before this gate, one
+ * such row failed the WHOLE response, taking the board, the category tree, search
+ * and compare-positioning down together — the exact outcome the per-row exclusion
+ * machinery exists to prevent.
+ *
+ * Both `/rankings` and `/compute` admit through this one function. A row rejected
+ * here would otherwise still count toward `/compute`'s `rank` and `total` while
+ * being absent from the board, reintroducing the population split the snapshot was
+ * built to remove.
+ */
+function admitSnapshotRows(
+  rows: BoardRow[],
+  categoryNodes: BoardNode[],
+): { rows: BoardRow[]; nodes: BoardNode[]; shapeInvalid: number; nodeInvalid: number } {
+  // Nodes need the same gate rows got. `tag.name` / `tag.slug` are NOT NULL with
+  // no non-empty CHECK, so `''` is storable — verbatim the reasoning that
+  // motivated the row gate. Without this, one bad node fails whole-body
+  // validation and takes the board, tree, search and compare down together.
+  const nodes: BoardNode[] = [];
+  let nodeInvalid = 0;
+  for (const n of categoryNodes) {
+    if (SnapshotCategoryNodeSchema.safeParse(n).success) {
+      nodes.push(n);
+      continue;
+    }
+    nodeInvalid += 1;
+  }
+  // A dropped node must take its rows with it — otherwise a surviving row cites a
+  // slug no longer in `categoryNodes`, the cross-field invariant fires, and the
+  // exclusion turns straight back into the 500 this gate exists to prevent.
+  //
+  // Only rows citing a node THIS gate dropped, though. A row citing a slug that
+  // was never in the snapshot at all is a torn assembly — a server defect the
+  // contract requires to surface as 5xx, not to be quietly swallowed here. The
+  // two look identical at the row and are opposite in meaning.
+  const dropped = new Set<string>();
+  for (const n of categoryNodes) {
+    if (!nodes.some((k) => k.slug === n.slug)) dropped.add(n.slug);
+  }
+  const admitted: BoardRow[] = [];
+  let shapeInvalid = 0;
+  for (const row of rows) {
+    const wire = toWireRow(row);
+    if (
+      SnapshotRowSchema.safeParse(wire).success &&
+      !wire.categorySlugs.some((c) => dropped.has(c))
+    ) {
+      admitted.push(row);
+      continue;
+    }
+    shapeInvalid += 1;
+  }
+  return { rows: admitted, nodes, shapeInvalid, nodeInvalid };
+}
+
 export function createApp(deps: AppDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
@@ -623,109 +627,77 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // protected set is exactly {/parse, /contribute, /ingest, /ingest/batch}).
   // Hono matches `app.use(...)` by exact path, so the protected endpoints'
   // middleware never wraps this route. The handler is strictly READ-ONLY:
-  // it validates the query, calls repo.listRankings, projects rows (assigning
-  // `rank = offset + 1-based index`), and returns — no write, no LLM, no
-  // background task.
+  // it calls repo.listBoardSnapshot, admits rows through the wire schema and
+  // returns the whole object — no write, no LLM, no background task.
   app.get('/rankings', async (c) => {
-    // ── Validate query params. Values arrive as strings; RankingsQuerySchema
-    //    coerces/clamps limit, validates offset, and enforces category ∈ the seed
-    //    kind=category slug set (case-sensitive, default `soft-drink`). Any
-    //    failure → 400 invalid-request, same shape/code as the other endpoints.
-    //    An out-of-range (but valid) offset is NOT a parse failure — it falls
-    //    through to listRankings, which returns [] (→ 200). A legal-but-unseeded
-    //    slug also passes the gate and returns [] (→ 200), never a 400.
-    const parsedQuery = RankingsQuerySchema.safeParse(c.req.query());
-    if (!parsedQuery.success) {
-      return c.json(
-        {
-          error: 'invalid-request',
-          message: 'request query failed validation',
-          issues: parsedQuery.error.issues.map((i) => ({ path: i.path, message: i.message })),
-        },
-        400,
-      );
-    }
-    const { limit, offset, category, q } = parsedQuery.data;
-
-    // ── Cohort guard (P3.5): the board is open ONLY for a node that resolves a
-    //    non-null comparable_unit (a single rankable cohort — soft-drink / its
-    //    leaves / dairy / dairy leaves / each 酒种 leaf). A cross-cohort node
-    //    (root `beverage`, the `alcohol` parent) resolves null → reject with
-    //    400 invalid-request so per100ml-incomparable boards (矿泉水+葡萄酒,
-    //    啤酒+威士忌) never form. The resolve is the STATIC `CATEGORY_NODES`
-    //    resolver — NOT the runtime `repo.resolveComparableUnit` — so a legal-
-    //    but-unseeded cohort slug (e.g. `beer` before its `tag` row is seeded)
-    //    clears the guard (its static unit is `per_100ml`) and falls through to
-    //    listRankings → [] (200), while `alcohol`/`beverage` are 400 regardless
-    //    of seed state. The guard runs BEFORE the repo, so it adds no D1 round-
-    //    trip and reuses the existing invalid-request shape/code (no new code).
-    if (resolveComparableUnitStatic(category) === null) {
-      return c.json(
-        {
-          error: 'invalid-request',
-          message:
-            'this node spans multiple comparable cohorts and cannot be ranked directly; choose a sub-category',
-        },
-        400,
-      );
-    }
-
-    // ── Resolve the repository (shared helper; null/throw → 500 persistence-
-    //    error). Read-only — no write path is reachable from here.
+    // ── The full board snapshot: ONE cacheable object holding every comparable
+    //    row plus the category nodes needed to resolve ancestry. No query params
+    //    — a parameter would fork the response into another CDN cache object,
+    //    and collapsing that key space is the whole point of this endpoint.
+    //    Anything in the query string is ignored; the body is byte-identical.
+    //
+    //    Sorting / cohort filtering / paging / search all happen on the client
+    //    from this one object (see @unit-price/api-client's derivation helpers).
+    //    The cohort guard that used to 400 here moved with them: it is now a
+    //    precondition of deriving a view, not of fetching the data. The data is
+    //    the same for every cohort, so gating the FETCH would mean gating on a
+    //    parameter this endpoint deliberately no longer has.
     const resolved = resolveRepo(c, deps);
     if (!resolved.ok) return resolved.response;
     const repo = resolved.value;
 
-    // ── Read the ascending per100ml slice for the resolved category NODE: the
-    //    repository resolves the slug → its tag row and pushes down the closure
-    //    filter (`category_closure.ancestor_tag_id = <node>` + `product.rankable=1`
-    //    + `per100ml IS NOT NULL`). A legal-but-unseeded/non-category slug yields
-    //    [] (not an error). A throw → 500 persistence-error (no recompute, no
-    //    retry); per100ml/formula/confidence/warnings are stored values.
-    let rows: Awaited<ReturnType<Repository['listRankings']>>;
+    let snapshot: Awaited<ReturnType<Repository['listBoardSnapshot']>>;
     try {
-      rows = await repo.listRankings({ limit, offset, category, q });
+      snapshot = await repo.listBoardSnapshot();
     } catch {
       return c.json({ error: 'persistence-error', message: 'failed to read rankings' }, 500);
     }
 
-    // ── Project RankingRow[] → RankingsItem[]: DROP `id` (the same-table
-    //    tiebreak key, not part of the contract) and ADD `rank = offset + 1-based
-    //    index`. per100ml/formula/confidence/warnings are taken verbatim from the
-    //    stored row (never recomputed). An out-of-range offset yields [] → 200.
-    const items = rows.map((row, i) => ({
-      rank: offset + i + 1,
-      title: row.title,
-      priceCents: row.priceCents,
-      per100ml: row.per100ml,
-      formula: row.formula,
-      confidence: row.confidence,
-      warnings: row.warnings,
-      store: row.store,
-      storeSku: row.storeSku,
-      sourceUrl: row.sourceUrl,
-      capturedAt: row.capturedAt,
-      lowestPriceCents: row.lowestPriceCents,
-    }));
+    // ── Project to the wire shape. `rank` is absent by design (a position
+    //    within a view, meaningless in the unfiltered whole); `id` rides along
+    //    as an opaque row identity so clients have a stable list key that does
+    //    not change when they re-filter.
+    //
+    //    Each row is admitted through the SHIPPED row schema rather than a
+    //    hand-listed set of field checks. `listBoardSnapshot` can only guard what
+    //    it inspects before assembly (category edge, warnings, formula); the wire
+    //    schema requires eleven fields, and the gap was reachable — `title`/`store`
+    //    /`storeSku` are `NOT NULL` columns, which does not exclude `''`. A row
+    //    failing any of them used to fail the WHOLE response, taking the board,
+    //    the category tree, search and compare-positioning down together. Same
+    //    disposition as every other single-row defect: exclude it and count it.
+    const admitted = admitSnapshotRows(snapshot.rows, snapshot.categoryNodes);
+    const excluded = [...snapshot.excluded];
+    if (admitted.shapeInvalid > 0) {
+      excluded.push({ reason: 'row_shape_invalid', count: admitted.shapeInvalid });
+      // Logged HERE, not inside the admission helper: /compute admits the same
+      // rows on every request and is `no-store`, so warning there would emit one
+      // line per user compare. This path is behind the CDN — at most once per miss.
+      console.warn(`[rankings] excluded ${admitted.shapeInvalid} row(s): row_shape_invalid`);
+    }
 
-    // ── Validate the response shape before returning (contract enforcement,
-    //    mirrors /parse + /contribute). Failure → 500 internal.
-    const validated = RankingsResponseSchema.safeParse(items);
+    if (admitted.nodeInvalid > 0) {
+      excluded.push({ reason: 'node_shape_invalid', count: admitted.nodeInvalid });
+      console.warn(`[rankings] excluded ${admitted.nodeInvalid} category node(s): node_shape_invalid`);
+    }
+
+    const body = {
+      rows: admitted.rows.map((row) => toWireRow(row)),
+      categoryNodes: admitted.nodes,
+      excluded,
+    };
+
+    // ── Contract enforcement before send (mirrors /parse + /contribute). This
+    //    also runs the snapshot's cross-field invariants, so a row referencing a
+    //    node absent from the same response cannot reach a client — that row
+    //    would vanish from every cohort view while still counting toward the
+    //    whole, which is worse than a visible failure.
+    const validated = RankingsSnapshotSchema.safeParse(body);
     if (!validated.success) {
+      console.error('[rankings] response validation failed', validated.error.issues);
       return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
-    // ── Cache verdict keys off the POST-PARSE `q`, NOT raw URL key presence:
-    //    a real search (`q` resolved to a string, codepoint ≥ 2) gets an EXPLICIT
-    //    `no-store` — search is long-tail, each `q` is its own near-never-reused
-    //    CDN key, and the CDN partitions on the RAW un-truncated URL (out of sync
-    //    with the server's 64-codepoint truncation), so caching it just fills the
-    //    CDN with cold misses. Merely OMITTING `public` is NOT enough — Aliyun CDN
-    //    self-caches at a default TTL, so we must actively `no-store`. When `q`
-    //    parsed to `undefined` (absent / `?q=` / `?q=%20%20`, i.e. no filter) the
-    //    body equals the no-`q` cohort board, so it still rides the public edge
-    //    cache. (The 400/500 paths above carry no Cache-Control and are never
-    //    cached.)
-    c.header('Cache-Control', q !== undefined ? 'no-store' : PUBLIC_CACHE_CONTROL);
+    c.header('Cache-Control', PUBLIC_CACHE_CONTROL);
     return c.json(validated.data, 200);
   });
 
@@ -744,9 +716,8 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (!resolved.ok) return resolved.response;
     const repo = resolved.value;
 
-    // ── Read the full kind=category tree (each node carries the inheritance-
-    //    resolved comparableUnit, its own `rankable` axis flag, and the closure-
-    //    descendant `rankableCount`). A throw → 500 persistence-error. An
+    // ── Read the full kind=category tree. Nodes use the same count-free shape
+    //    carried by the rankings snapshot. A throw → 500 persistence-error; an
     //    unseeded taxonomy returns [] → 200 { nodes: [] }.
     let nodes: Awaited<ReturnType<Repository['listCategoryTree']>>;
     try {
@@ -759,6 +730,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    mirrors /rankings). Failure → 500 internal.
     const validated = CategoryTreeResponseSchema.safeParse({ nodes });
     if (!validated.success) {
+      console.error('[categories] response validation failed', validated.error.issues);
       return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     // Edge-cacheable like /rankings; the category tree changes even less often.
@@ -771,7 +743,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
   // positioning. Like /rankings and /categories it is EXEMPT from the governance
   // chain (no `app.use('/compute', …)`): it takes no API key and records no
   // usage. STRICTLY no persistence — it reuses core's `calculate` (zero new
-  // calculation) and the SAME `repo.listRankings` cohort/rankable/per100ml query
+  // calculation) and the SAME `repo.listBoardSnapshot` two-gate population
   // for "定位" as /rankings uses for "榜单" (one population, decision D6), and
   // NEVER calls a write method. Error codes mirror the other endpoints
   // (invalid-request 400, persistence-error 500, internal 500). Every response
@@ -875,10 +847,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       );
     }
     const cohortAxis = cohortAxisField(cohortUnit);
-    // per_100g cohorts are unservable this period: the positioning read reuses the
-    // per100ml-only /rankings query, so a per_100g cohort would mis-position a
-    // g-value against an ml board (a confident garbage rank). Reject explicitly
-    // until the 重量轴 backfill extends listRankings/RankingsItem to a per100g board.
+    // The snapshot currently admits only per100ml rows. A per_100g cohort would
+    // compare a mass value against a volume-only population, so reject it until
+    // the snapshot contract grows a weight axis.
     if (cohortAxis === 'per100g') {
       return c.json(
         { error: 'invalid-request', message: '本期暂不支持按重量（每100g）比价' },
@@ -908,17 +879,46 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (!resolved.ok) return resolved.response;
     const repo = resolved.value;
 
-    // ── Read the FULL ascending cohort board via the SAME cohort/rankable/
-    //    per100ml query /rankings uses (one population, decision D6). A throw →
-    //    500 persistence-error. An empty / unseeded cohort returns [] → a valid
-    //    200 with empty neighbors (never a 404).
+    // ── Read the FULL board snapshot and cut this cohort out of it with the
+    //    SAME derivation the client uses (`cohortSlugs` from
+    //    @unit-price/api-client). One population, one ancestry rule, one code
+    //    path — so "the rank the compare card shows" and "the rank the board
+    //    shows" cannot disagree. The previous split (a node-scoped SQL query
+    //    here, the snapshot there) had two ancestry sources: the materialized
+    //    `category_closure` and the live `parent_id` chain. Those agree only
+    //    while every re-parent also rebuilds the closure, which nothing
+    //    enforces — and the symptom would have been a silently wrong number,
+    //    not an error.
+    //
+    //    Reading the whole board for one compare is affordable at this scale
+    //    (hundreds of rows) and buys the invariant outright.
+    //
+    //    A throw → 500. An empty / unseeded cohort yields [] → a valid 200 with
+    //    empty neighbors (never a 404).
     let rows: RankingRow[];
     try {
-      rows = await repo.listRankings({
-        limit: COMPUTE_COHORT_FETCH_MAX,
-        offset: 0,
-        category: req.category,
+      const snapshot = await repo.listBoardSnapshot();
+      const within = cohortSlugs(snapshot.categoryNodes, req.category);
+      // Same admission gate as /rankings — a row the board turns away must not
+      // count toward this rank or total either.
+      const admitted = admitSnapshotRows(snapshot.rows, snapshot.categoryNodes);
+      // ...and the same WHOLE-BODY check. Per-row admission cannot see the
+      // object-level invariant (`categorySlugs` naming a node in the same
+      // response); /rankings catches that at its response validation and 500s,
+      // because a dangling slug means a torn assembly, not one bad row. Without
+      // the same check here, the two endpoints diverge in exactly the state the
+      // shared snapshot was meant to eliminate: /rankings down, /compute happily
+      // positioning against a row no board can show.
+      const consistent = RankingsSnapshotSchema.safeParse({
+        rows: admitted.rows.map(toWireRow),
+        categoryNodes: admitted.nodes,
+        excluded: snapshot.excluded,
       });
+      if (!consistent.success) {
+        console.error('[compute] snapshot validation failed', consistent.error.issues);
+        return c.json({ error: 'internal', message: 'snapshot failed validation' }, 500);
+      }
+      rows = admitted.rows.filter((r) => r.categorySlugs.some((s) => within.has(s)));
     } catch {
       return c.json({ error: 'persistence-error', message: 'failed to read cohort for positioning' }, 500);
     }
@@ -940,6 +940,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
       neighbors,
     });
     if (!validated.success) {
+      console.error('[compute] response validation failed', validated.error.issues);
       return c.json({ error: 'internal', message: 'response failed validation' }, 500);
     }
     // Each input is unique → never edge-cache (decision D6). The 400/500 paths

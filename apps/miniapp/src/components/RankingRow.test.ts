@@ -12,8 +12,8 @@ vi.mock('@tarojs/components', () => ({ View: () => null, Text: () => null }));
 import { isStale, historicalLowYuan, STALE_AFTER_MS } from './RankingRow';
 
 // A schema-valid RankingsItem; overrides layer the field(s) under test. capturedAt /
-// lowestPriceCents are .optional() in the api-client contract — parseRankingsResponse's
-// tolerance of missing fields is covered in packages/api-client; here we assert the
+// lowestPriceCents are optional in the shared row contract; snapshot parsing of
+// missing fields is covered in api-client, while here we assert the
 // COMPONENT's缺字段降级 (7.3): missing field → no gray, no badge, no crash.
 const item = (over: Partial<RankingsItem> = {}): RankingsItem => ({
   rank: 1,

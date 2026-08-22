@@ -2,16 +2,7 @@
 // contracts: pure URL serializers + fail-closed response validators. NONE send
 // a request — each client wires its own transport (miniapp: Taro.request,
 // web/plugin: fetch) and feeds the response body to the matching parse* helper.
-import { RankingsResponseSchema, type RankingsResponse } from './rankings.js';
 import { CategoryTreeResponseSchema, type CategoryTreeResponse } from './categories.js';
-
-/** Optional GET /rankings query parameters (all values serialized verbatim). */
-export interface RankingsParams {
-  limit?: number;
-  offset?: number;
-  category?: string;
-  q?: string;
-}
 
 /**
  * Validate that `base` is a clean `http(s)` origin (`https://host[:port]`) with
@@ -64,47 +55,18 @@ export function cleanOrigin(base: string, caller: string): string {
  * `?k=v&...`, each value `encodeURIComponent`-encoded. All-default `{}` returns
  * `<base>/rankings` (no `?` string).
  */
-export function buildRankingsUrl(base: string, params: RankingsParams = {}): string {
+export function buildRankingsUrl(base: string): string {
   // Fail-fast on a non-clean-origin base via the SHARED validator (same contract
   // as buildCategoriesUrl). Returns the canonical origin to build from.
-  const origin = cleanOrigin(base, 'buildRankingsUrl');
-  const url = `${origin}/rankings`;
-
-  // Join ONLY the given params (skip undefined), values encodeURIComponent-
-  // encoded. No value validation: serialize whatever was passed.
-  const pairs: string[] = [];
-  if (params.limit !== undefined) pairs.push(`limit=${encodeURIComponent(String(params.limit))}`);
-  if (params.offset !== undefined) pairs.push(`offset=${encodeURIComponent(String(params.offset))}`);
-  if (params.category !== undefined) {
-    pairs.push(`category=${encodeURIComponent(String(params.category))}`);
-  }
-  if (params.q !== undefined) {
-    pairs.push(`q=${encodeURIComponent(String(params.q))}`);
-  }
-
-  return pairs.length === 0 ? url : `${url}?${pairs.join('&')}`;
+  //
+  // No query parameters: `GET /rankings` returns the whole board as ONE cacheable
+  // object, and every view is derived from it client-side. Keeping a params
+  // argument would let a caller build URLs the server treats as identical while
+  // the CDN caches them separately — the exact key fan-out this endpoint was
+  // reshaped to stop.
+  return `${cleanOrigin(base, 'buildRankingsUrl')}/rankings`;
 }
 
-/**
- * Validate an untrusted GET /rankings response body against the contract.
- * Uses `RankingsResponseSchema.parse` (fail-CLOSED): on a schema mismatch the
- * raised `ZodError` bubbles up UNWRAPPED — callers catch any throw and enter
- * their error state (they do not depend on the error shape). NEVER returns
- * unvalidated or partial data.
- *
- * `jitless: true` forces Zod's interpreted parser instead of its `new Function`
- * JIT fast-path, keeping this validator runnable in eval-restricted runtimes.
- * The WeChat mini-program forbids `new Function` — and its non-throwing stub
- * even defeats Zod's eval probe, so the JIT path fails with `fn is not a
- * function` deep in `_zod.parse`. The per-parse override (vs global config) is
- * immune to schema-construction timing and propagates to nested schemas via the
- * shared parse context. Validation semantics are unchanged; the cost is one
- * interpreted parse of a small payload (negligible; on Cloudflare Workers Zod is
- * already eval-disabled).
- */
-export function parseRankingsResponse(json: unknown): RankingsResponse {
-  return RankingsResponseSchema.parse(json, { jitless: true });
-}
 
 /**
  * Serialize a GET /categories URL from a clean API origin. PURE: does not send a

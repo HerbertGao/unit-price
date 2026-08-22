@@ -22,10 +22,10 @@ import {
   type ParsedSpec,
   type RawProduct,
   type TagSource,
-} from '@unit-price/core';
-import { and, asc, countDistinct, eq, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
-import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { z } from 'zod';
+} from "@unit-price/core";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { z } from "zod";
 import {
   decodeJson,
   decodeMeasurement,
@@ -34,9 +34,9 @@ import {
   newId,
   toEpochMillis,
   yuanToCents,
-} from './codec.js';
-import type { Db } from './db.js';
-import { computeDedupeKey } from './dedupe.js';
+} from "./codec.js";
+import type { Db } from "./db.js";
+import { computeDedupeKey } from "./dedupe.js";
 import {
   categoryClosure,
   corrections,
@@ -46,7 +46,7 @@ import {
   storeCategoryMap,
   tag,
   unitPrice,
-} from './schema.js';
+} from "./schema.js";
 
 /**
  * Dedupe-key columns are provenance extras, not part of RawProductSchema —
@@ -94,32 +94,32 @@ const CalcResultGate = z.object({
     if (up.per100ml !== null && !Number.isFinite(up.per100ml)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['per100ml'],
-        message: 'per100ml must be finite or null',
+        path: ["per100ml"],
+        message: "per100ml must be finite or null",
       });
     }
     if (up.per100g !== null && !Number.isFinite(up.per100g)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['per100g'],
-        message: 'per100g must be finite or null',
+        path: ["per100g"],
+        message: "per100g must be finite or null",
       });
     }
     if (up.per100ml !== null && up.per100g !== null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['per100g'],
+        path: ["per100g"],
         message:
-          'per100ml and per100g must not both be set (a product is on at most one axis)',
+          "per100ml and per100g must not both be set (a product is on at most one axis)",
       });
     }
     const hasAxis = up.per100ml !== null || up.per100g !== null;
     if (hasAxis === (up.formula === null)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['formula'],
+        path: ["formula"],
         message:
-          'formula must be non-null IFF one of per100ml/per100g is non-null',
+          "formula must be non-null IFF one of per100ml/per100g is non-null",
       });
     }
   }),
@@ -178,35 +178,6 @@ export interface ProductRecord {
   calc: CalcResult;
 }
 
-export interface ListRankingsInput {
-  /** Page size (caller is responsible for clamping; passed straight to LIMIT). */
-  limit: number;
-  /** Row offset (passed straight to OFFSET). */
-  offset: number;
-  /**
-   * Taxonomy category-node slug that scopes the board (the root node slug is
-   * `beverage`, the default). It is resolved to a `tag` row and pushed down as
-   * a closure filter (`category_closure.ancestor_tag_id = <that node>`), paired
-   * with the `product.rankable = 1` gate and `per100ml IS NOT NULL` — see
-   * `buildRankingsQuery`. A slug with NO `tag` row yields an empty result (NOT
-   * an error); slug LEGALITY (a 400 on an unknown/non-category slug) is the
-   * API layer's job, not this query's. NOT keyed off `product.category` (always
-   * "beverage", no discriminating power).
-   */
-  category: string;
-  /**
-   * Optional product-name substring search term. Already trimmed and truncated
-   * to ≤ 64 code points by the API layer (this query only escapes LIKE
-   * specials, never re-truncates). When non-empty it is pushed down as a
-   * `product_raw.title LIKE ? ESCAPE '!'` residual filter ANDed onto the
-   * cohort/rankable/per100ml guards (see `buildRankingsQuery`). Absent / empty
-   * means no title filter — the SQL and query plan are then byte-identical to
-   * the no-`q` board (the `and()` drops the undefined predicate). NEVER applied
-   * to the rankableCount path (tree N == board N stays q-pure).
-   */
-  q?: string;
-}
-
 /**
  * Denormalized read-only ranking projection (`unit_price ⋈ product ⋈
  * product_raw`). NOT a domain object (ParsedSpec/CalcResult): the per100ml/
@@ -251,12 +222,9 @@ export interface RankingRow {
 }
 
 /**
- * One read-only category-tree node (kind=category) for the browse view. NOT a
- * domain object: `comparableUnit` is the inheritance-resolved effective unit
- * (node's own value, else nearest non-null ancestor, else null), `rankable` is
- * the node's own axis flag (`comparableUnit !== null`), and `rankableCount` is
- * the closure-descendant rankable-member count (orthogonal to `rankable`). The
- * API-layer contract schema (CategoryTreeResponseSchema) validates this shape.
+ * One read-only category-tree node shared by `/categories` and `/rankings`.
+ * `comparableUnit` is inheritance-resolved and `rankable` is its non-null flag.
+ * Counts are derived from snapshot rows by clients, never projected here.
  */
 export interface CategoryTreeNode {
   /** tag.slug (stable ASCII identifier). */
@@ -269,8 +237,61 @@ export interface CategoryTreeNode {
   comparableUnit: ComparableUnit | null;
   /** Node's own axis flag: comparableUnit !== null. */
   rankable: boolean;
-  /** Closure-descendant rankable members (COUNT(DISTINCT product.id)). */
-  rankableCount: number;
+}
+
+/**
+ * One board-snapshot row: the `/rankings` projection minus `rank` (a read-time
+ * position that has no meaning in an unordered full set — the client assigns it
+ * per derived view) plus the category slugs the product is attached to.
+ */
+export interface BoardSnapshotRow extends RankingRow {
+  /**
+   * Category tag slugs held by this product, ascending. Usually one; two is a
+   * single-attribution violation the write path guards but the DB does not, and
+   * both are kept so the row surfaces under either node rather than being
+   * dropped from one. Never empty — a row with no category edge cannot be
+   * `rankable` and is excluded upstream.
+   */
+  categorySlugs: string[];
+}
+
+/** The same category-node contract is carried by both read endpoints. */
+export type BoardSnapshotCategoryNode = CategoryTreeNode;
+
+/** The single cacheable object behind `GET /rankings`. */
+/**
+ * Why a row was kept out of the snapshot. A closed vocabulary on THIS side — the
+ * union is what stops a typo'd literal reaching `drop()`.
+ *
+ * The wire contract deliberately does NOT re-validate against these literals. An
+ * earlier revision did, with a comment claiming the union made drift a compile
+ * error; it does not — extending the union and adding a `drop()` compiles clean
+ * and every test passes, and then the first row hitting the new reason 500s the
+ * whole snapshot. Adding a reason here is safe and needs no coordinated change.
+ */
+export type ExclusionReason =
+  | "rankable_without_category_edge"
+  | "warnings_undecodable"
+  | "warnings_wrong_shape"
+  | "formula_missing"
+  | "row_shape_invalid"
+  | "node_shape_invalid";
+
+export interface BoardSnapshot {
+  /** All rankable rows with a non-null per100ml, ASC by (per100ml, id). */
+  rows: BoardSnapshotRow[];
+  /** Every kind=category node, for client-side ancestry resolution. */
+  categoryNodes: BoardSnapshotCategoryNode[];
+  /**
+   * Rows dropped for a decode/shape defect, by reason. A single bad row must
+   * never fail the whole snapshot: this is the only endpoint the client has, so
+   * one unparseable `warnings` blob would take the board, the category tree and
+   * search down together. Counted here instead, for a health signal.
+   *
+   * Rows that are simply NOT members (`rankable=0`, null per100ml) are not
+   * defects and are not counted — they are filtered in SQL and never reach here.
+   */
+  excluded: { reason: ExclusionReason; count: number }[];
 }
 
 /** Input to attach (idempotently) one product↔tag edge by tag slug. */
@@ -323,7 +344,7 @@ export interface ProductAttribution {
   /** product.pending_category_tag_id resolved to a slug, or null. */
   pendingCategorySlug: string | null;
   /** Derived three-state, mechanically from leaf + pending. */
-  state: 'classified-leaf' | 'pending' | 'manual';
+  state: "classified-leaf" | "pending" | "manual";
   /** product.rankable (stored derived flag). */
   rankable: boolean;
 }
@@ -348,32 +369,36 @@ export interface Repository {
   /** Append a correction row; never mutates product_raw/product. */
   saveCorrection(input: SaveCorrectionInput): Promise<string>;
   /**
-   * Read-only node-scoped ranking query: rows joined across
-   * `unit_price ⋈ product ⋈ product_raw ⋈ product_tag ⋈ category_closure`, kept
-   * when they are a closure member of the `category` node (`ancestor_tag_id` =
-   * that node's tag) ∧ `product.rankable = 1` ∧ `per100ml IS NOT NULL`,
-   * `SELECT DISTINCT` on `unit_price.id` (double-leaf dedupe backstop, mirrors
-   * `listProductIdsInCategoryNode`), ascending by per100ml then unit_price.id,
-   * sliced by limit/offset. `category` is the node slug (the API layer defaults
-   * it to `soft-drink`); a slug with no `tag` row yields []. Pure read — no writes, no
-   * parse/calc, no recompute. Stored per100ml/formula/confidence are returned
-   * verbatim; warnings are decoded to string[].
-   */
-  listRankings(input: ListRankingsInput): Promise<RankingRow[]>;
-
-  /**
-   * Read-only category is-a tree (kind=category nodes only) + each node's
-   * `rankableCount` (closure-descendant rankable members). Loads all category
-   * nodes in ONE query and resolves `comparableUnit` inheritance in memory
-   * (never the per-node `resolveComparableUnit` round-trip). `rankable` =
-   * `comparableUnit !== null` (the node's own axis flag). `rankableCount` is
-   * `COUNT(DISTINCT product.id)` over the SAME filter fragment as the node board
-   * (closure member ∧ rankable=1 ∧ per100ml NOT NULL) — orthogonal to the
-   * node's own `rankable` (root `beverage` and the `alcohol` parent are both
-   * rankable=false yet count>0). No
-   * category rows → empty (not an error). Pure read.
+   * Read-only category is-a tree (kind=category nodes only). Loads all nodes in
+   * one query, resolves inherited `comparableUnit` in memory, and returns the
+   * same flat node shape carried by the board snapshot. No category rows means
+   * an empty tree; no writes, parsing, calculation, or per-node count queries.
    */
   listCategoryTree(): Promise<CategoryTreeNode[]>;
+
+  /**
+   * Read-only full board snapshot: EVERY rankable row with a non-null per100ml,
+   * each carrying the category slugs it is attached to, plus the flat category
+   * node set needed to resolve ancestry client-side. No node scope, no paging,
+   * no `q` — the single cacheable object `GET /rankings` returns.
+   *
+   * NO leaf gate. `attachTag` already rejects a non-leaf category attachment at
+   * write time, so the only way a row ends up on a non-leaf node is taxonomy
+   * EVOLUTION — a leaf that later grew children (P3.5 did exactly this to
+   * `dairy` / `soft-drink`). Those products still exist and must still appear
+   * under the node they hold and its ancestors; filtering them out would drop
+   * live catalogue rows on a taxonomy edit. Hence the field is `categorySlugs`
+   * (what the row is attached to), not `leafSlugs` (a claim about shape), and
+   * membership is "any held slug is the target node or a descendant of it".
+   *
+   * `categoryNodes` uses the same flat, count-free shape as `listCategoryTree`;
+   * clients that need a count derive it from the snapshot rows.
+   *
+   * The three reads are mutually independent (no read feeds another), so a
+   * caller needing a torn-free assembly can issue them together — `batch()` on
+   * D1, one transaction on sqlite.
+   */
+  listBoardSnapshot(): Promise<BoardSnapshot>;
 
   // --- category-tagging primitives (atomic writes / closure & inheritance
   // queries). The three-state reconcile ORCHESTRATION lives in apps/api; these
@@ -466,181 +491,9 @@ export interface Repository {
  * transactions need the tagged branch (sync vs async semantics).
  */
 function queryOrm(db: Db): BetterSQLite3Database<Record<string, never>> {
+  // SAFETY: both Db variants expose Drizzle's sqlite-core query surface; only
+  // their execution sessions differ, and transaction-only paths branch by kind.
   return db.orm as unknown as BetterSQLite3Database<Record<string, never>>;
-}
-
-/**
- * The single reusable filter fragment for node-scoped rankings: the bridge +
- * display + closure JOINs paired with the two gates `product.rankable = 1` ∧
- * `per100ml IS NOT NULL`, scoped to one node by `category_closure.ancestor_tag_id
- * = nodeTagId`. BOTH the node board (buildRankingsQuery) and `rankableCount`
- * (buildRankableCountQuery) compose this ONE function, so the JOIN graph and the
- * WHERE predicate are written exactly once — the tree's "N members" can never
- * drift from the board's "N rows". Caller has already resolved the slug to
- * `nodeTagId`.
- *
- * `query` is the select builder (full projection for the board, COUNT for the
- * count). It is typed loosely on the way in (the two callers pass structurally
- * different selections) and the chained JOIN/WHERE result is `$dynamic()` so
- * each caller can finish it (ORDER/LIMIT vs nothing); callers re-assert the row
- * type they expect. Closure rows exist only for category is-a edges, so
- * `category_closure.tag_id = product_tag.tag_id` matches only category leaves —
- * attribute/brand/product_line edges in the same `product_tag` table never join
- * through.
- */
-/**
- * Escape a user search term for safe embedding in a SQLite `LIKE ? ESCAPE '!'`
- * pattern. SQLite `LIKE` has NO default escape character, and drizzle's
- * `like(col, val)` takes only two args (no escape option) — so escaping must be
- * done here, in the value, paired with an explicit `ESCAPE '!'` clause at the
- * call site. `!` is the escape char (chosen over `\` to avoid JS string
- * double-escaping confusion). The three LIKE specials — the escape char `!`
- * itself, the wildcards `%` and `_` — are each prefixed with `!` so they match
- * LITERALLY (the escape char is escaped FIRST so its own substitution doesn't
- * re-escape the wildcards it introduces). Pure: no IO, only the inner user word
- * is escaped — the surrounding `%…%` wildcards are added by the caller and must
- * NOT pass through here (else they would be escaped to literal `%` and match
- * nothing).
- */
-export function escapeLikePattern(s: string): string {
-  return s.replace(/[!%_]/g, (ch) => `!${ch}`);
-}
-
-function applyNodeRankingFilter(
-  // The select builder before `.from()`. Typed loosely (`any` chain) because the
-  // board and count callers pass structurally different selections; each
-  // re-asserts its own concrete result type at the call site. The JOIN graph and
-  // the WHERE predicate live ONLY here.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  query: { from: (table: typeof unitPrice) => any },
-  nodeTagId: string,
-  // Optional residual predicate (e.g. the `q` title-LIKE) folded into the ONE
-  // `and(...)` below. MUST be a single optional 3rd arg — never a second
-  // `.where()`: drizzle's `.where()` OVERWRITES (`config.where = where`), which
-  // would wipe the cohort/rankable/per100ml guards. `and()` drops an
-  // `undefined` arg, so passing `undefined` here yields byte-identical SQL to
-  // the pre-`q` query (protects the no-`q` board AND the rankableCount path,
-  // which ALWAYS passes `undefined`).
-  extra?: SQL,
-) {
-  return query
-    .from(unitPrice)
-    // product is the unit_price → product_raw bridge AND carries the rankable
-    // gate; product_raw carries display columns.
-    .innerJoin(product, eq(product.id, unitPrice.productId))
-    .innerJoin(productRaw, eq(productRaw.id, product.rawId))
-    // product_tag (category leaf) JOIN category_closure: the product's leaf has
-    // `nodeTagId` among its ancestors (incl. self) → the product is a member of
-    // the queried node.
-    .innerJoin(productTag, eq(productTag.productId, product.id))
-    .innerJoin(categoryClosure, eq(categoryClosure.tagId, productTag.tagId))
-    .where(
-      and(
-        eq(categoryClosure.ancestorTagId, nodeTagId),
-        eq(product.rankable, 1),
-        isNotNull(unitPrice.per100ml),
-        extra,
-      ),
-    )
-    .$dynamic();
-}
-
-/** The denormalized columns the board projection selects (pre-decode). */
-interface RawRankingRow {
-  id: string;
-  per100ml: number | null;
-  formula: string | null;
-  confidence: number;
-  warnings: string;
-  title: string;
-  priceCents: number;
-  capturedAt: number;
-  // COALESCE(lowest_price, price) — non-null integer by construction.
-  lowestPriceCents: number;
-  store: string;
-  storeSku: string;
-  sourceUrl: string | null;
-}
-
-/**
- * Single source for the node-scoped ranking query (shared by listRankings and
- * the EXPLAIN query-plan test). The test obtains its SQL via `.toSQL()` on this
- * same builder so the plan assertion runs against the production query — never a
- * hand-rebuilt copy that could silently drift from the JOIN/WHERE/ORDER here.
- * `category` (the input slug) is already resolved to `nodeTagId` by the caller.
- *
- * `selectDistinct` dedups on `unit_price.id` (the full projection is
- * functionally determined by it, so SELECT DISTINCT over the projection ≡
- * dedupe on unit_price.id) — a defensive backstop against a future
- * single-attribution violation (a product holding two category leaves both
- * under the node) listing the same product twice. ORDER BY per100ml ASC,
- * unit_price.id ASC (same-table full order → stable pagination). The closure +
- * rankable + per100ml filter comes from `applyNodeRankingFilter` (shared with
- * the count). See `rankings-api`「节点路径的查询计划口径」for the EXPLAIN contract.
- */
-export function buildRankingsQuery(
-  orm: BetterSQLite3Database<Record<string, never>>,
-  nodeTagId: string,
-  input: Pick<ListRankingsInput, 'limit' | 'offset' | 'q'>,
-) {
-  // `q` (already trimmed + code-point-truncated by the API layer) becomes a
-  // residual `product_raw.title LIKE '%<escaped>%' ESCAPE '!'` predicate. Only
-  // the user word is run through `escapeLikePattern`; the surrounding `%…%`
-  // wildcards are added here and stay wildcards. An absent/empty `q` yields
-  // `undefined` → `and()` drops it → the SQL is byte-identical to the no-`q`
-  // board. `like()` helper is NOT used (no escape option).
-  const titleFilter =
-    input.q != null && input.q !== ''
-      ? sql`${productRaw.title} LIKE ${'%' + escapeLikePattern(input.q) + '%'} ESCAPE '!'`
-      : undefined;
-  return applyNodeRankingFilter(
-    orm.selectDistinct({
-      id: unitPrice.id,
-      per100ml: unitPrice.per100ml,
-      formula: unitPrice.formula,
-      confidence: unitPrice.confidence,
-      warnings: unitPrice.warnings,
-      title: productRaw.title,
-      priceCents: productRaw.price,
-      capturedAt: productRaw.capturedAt,
-      // COALESCE so the projection is always a non-null integer: a NULL mark
-      // (no positive history / pre-backfill edge) degrades to the current price.
-      lowestPriceCents: sql<number>`coalesce(${productRaw.lowestPrice}, ${productRaw.price})`,
-      store: productRaw.store,
-      storeSku: productRaw.storeSku,
-      sourceUrl: productRaw.sourceUrl,
-    }),
-    nodeTagId,
-    titleFilter,
-  )
-    .orderBy(asc(unitPrice.per100ml), asc(unitPrice.id))
-    .limit(input.limit)
-    .offset(input.offset) as unknown as {
-    toSQL: () => { sql: string; params: unknown[] };
-  } & Promise<RawRankingRow[]>;
-}
-
-/**
- * `rankableCount` for one node, built on the SAME `applyNodeRankingFilter`
- * fragment as the board: `COUNT(DISTINCT product.id)`. Equals the (DISTINCT
- * unit_price.id) board cardinality because `unit_price` is 1:1 with `product`
- * (`unit_price_product_id_unique`) — the load-bearing invariant for "tree N ==
- * board N". If that 1:1 ever loosens, both sides must switch to the same
- * COUNT(DISTINCT product.id) keying.
- */
-export function buildRankableCountQuery(
-  orm: BetterSQLite3Database<Record<string, never>>,
-  nodeTagId: string,
-) {
-  // ALWAYS pass `undefined` for the extra predicate: the rankableCount must
-  // stay q-pure so the tree's "N members" can never drift from the no-`q`
-  // board's "N rows" (a `q` filter would shrink the count). `and()` drops
-  // `undefined`, so this SQL is byte-identical regardless of any `q`.
-  return applyNodeRankingFilter(
-    orm.select({ count: countDistinct(product.id) }),
-    nodeTagId,
-    undefined,
-  ) as unknown as Promise<Array<{ count: number }>>;
 }
 
 /**
@@ -757,7 +610,7 @@ async function loadCategoryLeafTagIds(
   const categories = await orm
     .select({ id: tag.id, parentId: tag.parentId })
     .from(tag)
-    .where(eq(tag.kind, 'category'));
+    .where(eq(tag.kind, "category"));
   const hasChild = new Set<string>();
   for (const c of categories) {
     if (c.parentId != null) hasChild.add(c.parentId);
@@ -793,7 +646,15 @@ function resolveComparableUnitInMemory(
   let guard = 0;
   while (cursor != null && guard < 64) {
     if (cursor.comparableUnit != null) {
-      return ComparableUnitSchema.parse(cursor.comparableUnit);
+      // safeParse, not parse: `tag.comparable_unit` is free TEXT with no CHECK,
+      // written by hand-authored migrations. A bare `.parse` here throws BEFORE
+      // any exclusion machinery can see it, taking /rankings AND /categories
+      // down together — the same shape as the `decodeJson` trap one function
+      // over. An unrecognised unit degrades the node to not-rankable, which is
+      // the safe direction: it disappears from cohort selection instead of
+      // taking the board with it.
+      const parsed = ComparableUnitSchema.safeParse(cursor.comparableUnit);
+      return parsed.success ? parsed.data : null;
     }
     if (cursor.parentId == null) return null;
     cursor = byId.get(cursor.parentId);
@@ -802,11 +663,63 @@ function resolveComparableUnitInMemory(
   return null;
 }
 
+/**
+ * Preserve a malformed non-category parent as an invalid field instead of
+ * silently promoting the child to a root. The shared node schema rejects `''`;
+ * snapshot admission can then exclude/count it and `/categories` can fail
+ * visibly rather than publish a false tree.
+ */
+function parentSlugInCategorySet(
+  node: CategoryTagRow,
+  byId: Map<string, CategoryTagRow>,
+): string | null {
+  if (node.parentId == null) return null;
+  return byId.get(node.parentId)?.slug ?? "";
+}
+
 /** Create the typed repository over an initialized Db (from createDb). */
+/**
+ * The board snapshot's row query — the ONLY query behind `/rankings` and, since
+ * `/compute` reads the same snapshot, behind every compare as well.
+ *
+ * Exported so the query-plan baseline runs `EXPLAIN` on the SQL production
+ * actually emits (via `.toSQL()`) rather than on a hand-copied lookalike that
+ * can drift. Same discipline the retired node-scoped board used.
+ *
+ * No closure JOIN: the snapshot has no node scope, so membership is resolved
+ * client-side from `categorySlugs` + `categoryNodes`. `productId` rides along
+ * only to stitch the edge query on; it is not part of the wire row.
+ */
+export function buildBoardSnapshotQuery(
+  orm: BetterSQLite3Database<Record<string, never>>,
+) {
+  return orm
+    .select({
+      id: unitPrice.id,
+      productId: unitPrice.productId,
+      per100ml: unitPrice.per100ml,
+      formula: unitPrice.formula,
+      confidence: unitPrice.confidence,
+      warnings: unitPrice.warnings,
+      title: productRaw.title,
+      priceCents: productRaw.price,
+      capturedAt: productRaw.capturedAt,
+      lowestPriceCents: sql<number>`coalesce(${productRaw.lowestPrice}, ${productRaw.price})`,
+      store: productRaw.store,
+      storeSku: productRaw.storeSku,
+      sourceUrl: productRaw.sourceUrl,
+    })
+    .from(unitPrice)
+    .innerJoin(product, eq(product.id, unitPrice.productId))
+    .innerJoin(productRaw, eq(productRaw.id, product.rawId))
+    .where(and(eq(product.rankable, 1), isNotNull(unitPrice.per100ml)))
+    .orderBy(asc(unitPrice.per100ml), asc(unitPrice.id));
+}
+
 export function createRepository(db: Db | null | undefined): Repository {
-  if (db == null || (db.kind !== 'sqlite' && db.kind !== 'd1')) {
+  if (db == null || (db.kind !== "sqlite" && db.kind !== "d1")) {
     throw new Error(
-      'Repository requires an initialized Db from createDb(connection); DB connection missing or invalid',
+      "Repository requires an initialized Db from createDb(connection); DB connection missing or invalid",
     );
   }
 
@@ -864,7 +777,7 @@ export function createRepository(db: Db | null | undefined): Repository {
         .returning({ id: productRaw.id });
       const first = rows[0];
       if (!first) {
-        throw new Error('upsertRaw: upsert returned no row');
+        throw new Error("upsertRaw: upsert returned no row");
       }
       return first.id;
     },
@@ -911,7 +824,7 @@ export function createRepository(db: Db | null | undefined): Repository {
         warnings: encodeJson(calc.warnings),
       };
 
-      if (db.kind === 'sqlite') {
+      if (db.kind === "sqlite") {
         // better-sqlite3 transactions are native and synchronous: the
         // callback must not await, or statements escape the tx boundary.
         // Single connection, no real concurrency — onConflictDoNothing on the
@@ -1095,52 +1008,10 @@ export function createRepository(db: Db | null | undefined): Repository {
           productId,
           rawId,
           correctedSpec: encodeJson(spec),
-          parseSource: 'manual_corrected',
+          parseSource: "manual_corrected",
           createdAt: toEpochMillis(input.createdAt ?? Date.now()),
         });
       return id;
-    },
-
-    async listRankings(input) {
-      const orm = queryOrm(db);
-      // Resolve the category-node slug → its tag row. A slug with no tag row
-      // (legal-but-unseeded window) yields []; a non-category slug also yields
-      // [] (closure rows are category-only). Slug LEGALITY (400 on a
-      // typo/non-category slug) is the API layer's job — never an error here.
-      const node = await loadTagBySlug(orm, CategoryTagSlugGate.parse(input.category));
-      if (node == null || node.kind !== 'category') {
-        return [];
-      }
-      // Read-only projection. confidence is taken explicitly from unit_price
-      // (the authoritative band) — product also has a `confidence` column
-      // (parse-time intermediate) and must NOT be selected here. per100ml/
-      // formula/confidence are stored values, never recomputed from the cents
-      // price. The closure + rankable=1 + per100ml-non-null filter and the
-      // SELECT DISTINCT / ORDER BY / LIMIT come from the shared
-      // buildRankingsQuery so the EXPLAIN test runs against this exact SQL (no
-      // drift). Slicing is in SQL — rows are never pulled into app memory.
-      // `input.q` (already trimmed + truncated upstream) threads through to the
-      // residual title-LIKE; absent/empty → no LIKE, SQL unchanged.
-      const rows = await buildRankingsQuery(orm, node.id, input);
-
-      return rows.map((row) => ({
-        // per100ml is non-null by the WHERE filter; the column type is
-        // `number | null`, so narrow it here without recomputing.
-        id: row.id,
-        per100ml: row.per100ml as number,
-        formula: row.formula as string,
-        confidence: row.confidence,
-        // warnings is JSON-text: decode (codec, symmetric to encodeJson) then
-        // re-validate to string[] — the raw JSON string is never exposed.
-        warnings: WarningsSchema.parse(decodeJson(row.warnings)),
-        title: row.title,
-        priceCents: row.priceCents,
-        capturedAt: row.capturedAt,
-        lowestPriceCents: row.lowestPriceCents,
-        store: row.store,
-        storeSku: row.storeSku,
-        sourceUrl: row.sourceUrl,
-      }));
     },
 
     async listCategoryTree() {
@@ -1156,32 +1027,143 @@ export function createRepository(db: Db | null | undefined): Repository {
           comparableUnit: tag.comparableUnit,
         })
         .from(tag)
-        .where(eq(tag.kind, 'category'));
+        .where(eq(tag.kind, "category"));
       // No category rows seeded yet (migrate-before-seed window) → empty tree,
       // not an error.
       if (nodes.length === 0) return [];
 
       const byId = new Map<string, CategoryTagRow>(nodes.map((n) => [n.id, n]));
-      const out: CategoryTreeNode[] = [];
-      for (const n of nodes) {
+      const out: CategoryTreeNode[] = nodes.map((n) => {
         const comparableUnit = resolveComparableUnitInMemory(n, byId);
-        // rankableCount uses the SAME filter fragment as the node board
-        // (buildRankableCountQuery → applyNodeRankingFilter), so the count can
-        // never drift from the board's row count. It is orthogonal to the node's own
-        // `rankable`: root `beverage` and the `alcohol` parent (both
-        // rankable=false) still count their rankable descendants (count > 0);
-        // only a subtree with genuinely no rankable descendants counts 0.
-        const countRows = await buildRankableCountQuery(orm, n.id);
-        out.push({
+        return {
           slug: n.slug,
           name: n.name,
-          parentSlug: n.parentId == null ? null : (byId.get(n.parentId)?.slug ?? null),
+          parentSlug: parentSlugInCategorySet(n, byId),
           comparableUnit,
           rankable: comparableUnit !== null,
-          rankableCount: countRows[0]?.count ?? 0,
+        };
+      });
+      out.sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
+      return out;
+    },
+
+    async listBoardSnapshot() {
+      const orm = queryOrm(db);
+
+      // (1) Every rankable row with a real per100ml. No closure JOIN: the
+      //     snapshot has no node scope, so membership is resolved client-side
+      //     from `categorySlugs` + `categoryNodes`. `productId` rides along only
+      //     to stitch (2) on; it is not part of the wire row.
+      //     ORDER BY (per100ml, unit_price.id); clients preserve this order while
+      //     filtering and slicing, and never re-sort it.
+      const rawRows = await buildBoardSnapshotQuery(orm);
+
+      // (2) product → its category slugs. Independent of (1) and (3): none of
+      //     the three feeds another, so they can be issued as one batch.
+      const edges = await orm
+        .select({ productId: productTag.productId, slug: tag.slug })
+        .from(productTag)
+        .innerJoin(tag, eq(tag.id, productTag.tagId))
+        .where(eq(tag.kind, "category"));
+
+      // (3) Flat category nodes. No per-node count (see the interface note), so
+      //     unlike listCategoryTree this stays a single query.
+      const nodes: CategoryTagRow[] = await orm
+        .select({
+          id: tag.id,
+          slug: tag.slug,
+          name: tag.name,
+          parentId: tag.parentId,
+          comparableUnit: tag.comparableUnit,
+        })
+        .from(tag)
+        .where(eq(tag.kind, "category"));
+
+      const slugsByProduct = new Map<string, string[]>();
+      for (const e of edges) {
+        const list = slugsByProduct.get(e.productId);
+        if (list == null) slugsByProduct.set(e.productId, [e.slug]);
+        else list.push(e.slug);
+      }
+
+      const excluded = new Map<ExclusionReason, number>();
+      const drop = (reason: ExclusionReason) =>
+        excluded.set(reason, (excluded.get(reason) ?? 0) + 1);
+
+      const rows: BoardSnapshotRow[] = [];
+      for (const row of rawRows) {
+        // A rankable row with no category edge should be unreachable (rankable
+        // is derived from tagging). If it happens anyway, drop and count it —
+        // never throw: this is the client's only endpoint.
+        const categorySlugs = slugsByProduct.get(row.productId);
+        if (categorySlugs == null || categorySlugs.length === 0) {
+          drop("rankable_without_category_edge");
+          continue;
+        }
+        // warnings is JSON-text. A corrupt blob is a single-row defect, so it
+        // costs that row, not the snapshot. `decodeJson` THROWS on malformed
+        // JSON (it is a bare `JSON.parse`), so the try is load-bearing —
+        // `safeParse` alone only covers "parsed but wrong shape" and would let
+        // the throw escape and take the whole endpoint down.
+        let warnings: string[];
+        try {
+          const decoded = WarningsSchema.safeParse(decodeJson(row.warnings));
+          if (!decoded.success) {
+            drop("warnings_wrong_shape");
+            continue;
+          }
+          warnings = decoded.data;
+        } catch {
+          drop("warnings_undecodable");
+          continue;
+        }
+        // `''` too, not just NULL: the column is nullable AND the wire schema
+        // requires non-empty, so an empty formula would otherwise escape to the
+        // admission gate and be reported as `row_shape_invalid` — the wrong name
+        // for an operator triaging by reason.
+        if (row.formula == null || row.formula === "") {
+          drop("formula_missing");
+          continue;
+        }
+        rows.push({
+          id: row.id,
+          per100ml: row.per100ml as number,
+          formula: row.formula,
+          confidence: row.confidence,
+          warnings,
+          title: row.title,
+          priceCents: row.priceCents,
+          capturedAt: row.capturedAt,
+          lowestPriceCents: row.lowestPriceCents,
+          store: row.store,
+          storeSku: row.storeSku,
+          sourceUrl: row.sourceUrl,
+          categorySlugs: [...categorySlugs].sort(),
         });
       }
-      return out;
+
+      const byId = new Map<string, CategoryTagRow>(nodes.map((n) => [n.id, n]));
+      const categoryNodes: BoardSnapshotCategoryNode[] = nodes.map((n) => {
+        const comparableUnit = resolveComparableUnitInMemory(n, byId);
+        return {
+          slug: n.slug,
+          name: n.name,
+          parentSlug: parentSlugInCategorySet(n, byId),
+          comparableUnit,
+          rankable: comparableUnit !== null,
+        };
+      });
+      // Deterministic serialization: the response must be byte-stable across
+      // requests for the same data, and node order out of SQLite is unspecified.
+      categoryNodes.sort((a, b) =>
+        a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0,
+      );
+
+      return {
+        rows,
+        categoryNodes,
+        excluded: [...excluded].map(([reason, count]) => ({ reason, count })),
+      };
     },
 
     async attachTag(input) {
@@ -1194,7 +1176,7 @@ export function createRepository(db: Db | null | undefined): Repository {
       if (t == null) {
         throw new Error(`attachTag: unknown tag slug "${slug}"`);
       }
-      if (t.kind === 'category') {
+      if (t.kind === "category") {
         const leafIds = await loadCategoryLeafTagIds(orm);
         if (!leafIds.has(t.id)) {
           throw new Error(
@@ -1279,7 +1261,7 @@ export function createRepository(db: Db | null | undefined): Repository {
           throw new Error(`setPendingCategory: unknown tag slug "${slug}"`);
         }
         const leafIds = await loadCategoryLeafTagIds(orm);
-        if (t.kind !== 'category' || leafIds.has(t.id)) {
+        if (t.kind !== "category" || leafIds.has(t.id)) {
           throw new Error(
             `setPendingCategory: "${slug}" must be a non-leaf category node`,
           );
@@ -1346,7 +1328,7 @@ export function createRepository(db: Db | null | undefined): Repository {
         const t = await loadTagBySlug(orm, slug);
         if (t == null)
           throw new Error(`reconcileCategory: unknown leaf slug "${slug}"`);
-        if (t.kind !== 'category' || !leafIds.has(t.id)) {
+        if (t.kind !== "category" || !leafIds.has(t.id)) {
           throw new Error(
             `reconcileCategory: leaf slug "${slug}" is not a category leaf`,
           );
@@ -1359,7 +1341,7 @@ export function createRepository(db: Db | null | undefined): Repository {
         const t = await loadTagBySlug(orm, slug);
         if (t == null)
           throw new Error(`reconcileCategory: unknown pending slug "${slug}"`);
-        if (t.kind !== 'category' || leafIds.has(t.id)) {
+        if (t.kind !== "category" || leafIds.has(t.id)) {
           throw new Error(
             `reconcileCategory: pending slug "${slug}" must be a non-leaf category node`,
           );
@@ -1368,7 +1350,7 @@ export function createRepository(db: Db | null | undefined): Repository {
       }
       if (leafTagId != null && pendingId != null) {
         throw new Error(
-          'reconcileCategory: cannot set both a leaf and a pending node',
+          "reconcileCategory: cannot set both a leaf and a pending node",
         );
       }
       const attrTagIds: string[] = [];
@@ -1376,8 +1358,10 @@ export function createRepository(db: Db | null | undefined): Repository {
         const slug = CategoryTagSlugGate.parse(s);
         const t = await loadTagBySlug(orm, slug);
         if (t == null)
-          throw new Error(`reconcileCategory: unknown attribute slug "${slug}"`);
-        if (t.kind === 'category') {
+          throw new Error(
+            `reconcileCategory: unknown attribute slug "${slug}"`,
+          );
+        if (t.kind === "category") {
           throw new Error(
             `reconcileCategory: attribute slug "${slug}" must not be a category tag`,
           );
@@ -1387,7 +1371,7 @@ export function createRepository(db: Db | null | undefined): Repository {
       const rankableInt = input.rankable ? 1 : 0;
       const leafIdsArr = [...leafIds];
 
-      if (db.kind === 'sqlite') {
+      if (db.kind === "sqlite") {
         return db.orm.transaction((tx) => {
           if (leafIdsArr.length > 0) {
             tx.delete(productTag)
@@ -1419,7 +1403,7 @@ export function createRepository(db: Db | null | undefined): Repository {
                 id: newId(),
                 productId,
                 tagId: aid,
-                source: 'rule',
+                source: "rule",
                 confidence: 1,
               })
               .onConflictDoNothing({
@@ -1437,12 +1421,14 @@ export function createRepository(db: Db | null | undefined): Repository {
       const stmts = [];
       if (leafIdsArr.length > 0) {
         stmts.push(
-          db.orm.delete(productTag).where(
-            and(
-              eq(productTag.productId, productId),
-              inArray(productTag.tagId, leafIdsArr),
+          db.orm
+            .delete(productTag)
+            .where(
+              and(
+                eq(productTag.productId, productId),
+                inArray(productTag.tagId, leafIdsArr),
+              ),
             ),
-          ),
         );
       }
       if (leafTagId != null) {
@@ -1469,7 +1455,7 @@ export function createRepository(db: Db | null | undefined): Repository {
               id: newId(),
               productId,
               tagId: aid,
-              source: 'rule',
+              source: "rule",
               confidence: 1,
             })
             .onConflictDoNothing({
@@ -1483,6 +1469,8 @@ export function createRepository(db: Db | null | undefined): Repository {
           .set({ pendingCategoryTagId: pendingId, rankable: rankableInt })
           .where(eq(product.id, productId)),
       );
+      // SAFETY: every entry above is a D1 batch-compatible Drizzle statement;
+      // the heterogeneous tuple length is dynamic, which TypeScript cannot model.
       await db.orm.batch(
         stmts as unknown as Parameters<typeof db.orm.batch>[0],
       );
@@ -1492,7 +1480,7 @@ export function createRepository(db: Db | null | undefined): Repository {
       const slug = CategoryTagSlugGate.parse(nodeSlug);
       const orm = queryOrm(db);
       let cursor = await loadTagBySlug(orm, slug);
-      if (cursor == null || cursor.kind !== 'category') return null;
+      if (cursor == null || cursor.kind !== "category") return null;
       // Walk parent_id up the is-a chain to the nearest non-null comparable_unit.
       // A bounded guard (tree depth is tiny) defends against a malformed cycle.
       let guard = 0;
@@ -1521,7 +1509,7 @@ export function createRepository(db: Db | null | undefined): Repository {
       const slug = CategoryTagSlugGate.parse(nodeSlug);
       const orm = queryOrm(db);
       const node = await loadTagBySlug(orm, slug);
-      if (node == null || node.kind !== 'category') return [];
+      if (node == null || node.kind !== "category") return [];
       // product_tag (leaf) → category_closure (leaf has node as an ancestor).
       // Closure rows exist only for category edges, so attribute/brand tags
       // never match here even though they live in the same product_tag table.
@@ -1589,7 +1577,7 @@ export function createRepository(db: Db | null | undefined): Repository {
       const leafIds = await loadCategoryLeafTagIds(orm);
       let categoryLeafSlug: string | null = null;
       const tags: ProductTagRow[] = tagRows.map((r) => {
-        if (r.kind === 'category' && leafIds.has(r.tagId)) {
+        if (r.kind === "category" && leafIds.has(r.tagId)) {
           categoryLeafSlug = r.slug;
         }
         return {
@@ -1614,12 +1602,12 @@ export function createRepository(db: Db | null | undefined): Repository {
 
       // Three-state: classified-leaf = has leaf ∧ pending null; pending = no
       // leaf ∧ pending non-null; manual = no leaf ∧ pending null. (Mechanical.)
-      const state: ProductAttribution['state'] =
-        categoryLeafSlug != null
-          ? 'classified-leaf'
-          : p.pendingCategoryTagId != null
-            ? 'pending'
-            : 'manual';
+      const state: ProductAttribution["state"] =
+        categoryLeafSlug == null
+          ? p.pendingCategoryTagId == null
+            ? "manual"
+            : "pending"
+          : "classified-leaf";
 
       return {
         productId: p.id,

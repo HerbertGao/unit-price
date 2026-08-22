@@ -4,9 +4,11 @@
 // Length boundaries are measured in Unicode CODE POINTS (`[...s]`), NOT UTF-16
 // `.length`: UTF-16 counts an emoji / rare CJK (`𠮷`) as 2, which would mis-trigger
 // the gate and split a surrogate pair on `.slice`. Same code-point discipline as the
-// server, so URL / board title / actual filter term stay consistent.
-export const SEARCH_MAX_CODEPOINTS = 64;
-export const SEARCH_MIN_CODEPOINTS = 2;
+// shared snapshot matcher, so navigation and filtering stay consistent.
+import {
+  SEARCH_MAX_CODEPOINTS,
+  SEARCH_MIN_CODEPOINTS,
+} from '@unit-price/api-client';
 
 export type SearchTermResult =
   | { kind: 'empty' } // trim → length 0: no intent, do nothing (no nav, no request)

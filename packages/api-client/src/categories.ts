@@ -4,8 +4,8 @@
 // every client depend on ONE schema. This module is pure: it defines the Zod
 // schema + inferred types ONLY; no network calls (fetch/Taro.request/
 // wx.request) and no dependency on any runtime/framework package.
-import { z } from 'zod';
-import { ComparableUnitSchema } from '@unit-price/core';
+import { z } from "zod";
+import { ComparableUnitSchema } from "@unit-price/core";
 
 /**
  * One node of the category is-a tree in the GET /categories response. The
@@ -27,28 +27,17 @@ import { ComparableUnitSchema } from '@unit-price/core';
  *    un-inherited column value.
  *  - `rankable`: whether the node ITSELF carries a (resolved) comparable unit
  *    (`comparableUnit !== null`) — equivalently, whether the node is a single
- *    comparable cohort that is clickable into a ranking board. Consumers MUST
- *    decide "is this node clickable into a ranking" by `node.rankable`, NOT by
- *    `rankableCount > 0`: the `alcohol` parent has `rankableCount > 0` (it has
- *    rankable 酒种 leaf descendants) but `rankable=false` and is NOT clickable —
- *    `GET /rankings?category=alcohol` returns `400` (cohort guard). `true` for
+ *    comparable cohort that is clickable into a ranking board. `true` for
  *    soft-drink / its leaves / dairy / its leaves / each alcohol leaf; `false`
- *    for root `beverage` and the `alcohol` parent.
- *  - `rankableCount`: count of rankable members under the node's closure
- *    (non-negative integer). For a `rankable=true` (clickable) node it equals the
- *    basis of `GET /rankings?category=<slug>` for that node. For a `rankable=false`
- *    node (root `beverage` / `alcohol` parent — both rejected by `/rankings` with
- *    `400`) it is an informational branch count of rankable descendants with NO
- *    corresponding board. Orthogonal to `rankable`: the `alcohol` parent is
- *    `rankable=false` yet `rankableCount > 0`.
+ *    for root `beverage` and the `alcohol` parent. Counts are deliberately not
+ *    part of this contract; clients that need one derive it from the snapshot.
  */
 export const CategoryTreeNodeSchema = z.object({
-  slug: z.string().min(1),
-  name: z.string().min(1),
-  parentSlug: z.string().min(1).nullable(),
-  comparableUnit: ComparableUnitSchema.nullable(),
-  rankable: z.boolean(),
-  rankableCount: z.number().int().min(0),
+ slug: z.string().min(1),
+ name: z.string().min(1),
+ parentSlug: z.string().min(1).nullable(),
+ comparableUnit: ComparableUnitSchema.nullable(),
+ rankable: z.boolean(),
 });
 
 export type CategoryTreeNode = z.infer<typeof CategoryTreeNodeSchema>;
@@ -60,7 +49,7 @@ export type CategoryTreeNode = z.infer<typeof CategoryTreeNodeSchema>;
  * error. Validated before send / after receive to keep the contract honest.
  */
 export const CategoryTreeResponseSchema = z.object({
-  nodes: z.array(CategoryTreeNodeSchema),
+ nodes: z.array(CategoryTreeNodeSchema),
 });
 
 export type CategoryTreeResponse = z.infer<typeof CategoryTreeResponseSchema>;

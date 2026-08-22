@@ -9,9 +9,8 @@
 //   - From the 10th row onward an insertion point sits AFTER every 12th row:
 //     after render rank 10, 22, 34, … (i.e. ranks ≡ 10 (mod 12) and ≥ 10).
 //
-// `rank` here is the 1-based RENDER position of a row in the flattened list
-// (matches RankingsItem.rank, which the server assigns as offset + index). The
-// rule is expressed on render position so it is stable across pages.
+// `rank` is the 1-based render position assigned by local pageOf slicing. The
+// rule is expressed on render position so it remains stable as slices reveal.
 
 const FIRST_AD_AFTER_RANK = 10; // no slot within ranks 1..10
 const AD_EVERY = 12; // then one slot after every 12th row

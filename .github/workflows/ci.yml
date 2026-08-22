@@ -33,14 +33,26 @@ jobs:
       - name: Build
         run: pnpm -r build
 
+      - name: Typecheck test sources
+        run: |
+          pnpm --filter @unit-price/api-client typecheck:test
+          pnpm --filter @unit-price/api typecheck:test
+
       - name: Test
         run: pnpm -r test
 
       # `pnpm -r build` skips apps/miniapp: it has no `build` script, only
-      # `build:weapp`. So the Taro/weapp bundling path — babel presets, the
-      # esbuild vendor step that keeps Zod's classes intact — had zero CI
-      # coverage, and a @babel/* major bump could go green here while breaking
-      # the bundle outright. Building it is the only thing that catches that.
+      # `build:weapp`, which is babel + esbuild and therefore ERASES types rather
+      # than checking them. The miniapp is also outside the root `tsc -b`
+      # reference graph, so before this step no command in the repo type-checked
+      # it at all — a type error there compiled clean and passed the suite.
+      - name: Typecheck miniapp
+        run: pnpm --filter miniapp typecheck
+
+      # The Taro/weapp bundling path — babel presets, the esbuild vendor step
+      # that keeps Zod's classes intact — had zero CI coverage, and a @babel/*
+      # major bump could go green here while breaking the bundle outright.
+      # Building it is the only thing that catches that.
       - name: Build weapp bundle
         run: pnpm --filter miniapp build:weapp
 

@@ -8,7 +8,6 @@ const node = (slug: string, parentSlug: string | null): CategoryTreeNode => ({
   parentSlug,
   comparableUnit: null,
   rankable: false,
-  rankableCount: 0,
 });
 
 describe('toRows', () => {

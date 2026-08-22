@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc -b",
     "test": "vitest run --passWithNoTests",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts"
   },

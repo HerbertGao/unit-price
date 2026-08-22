@@ -5,6 +5,8 @@
 // it. Copy is carried over verbatim from the existing read-only screen.
 import { View, Text } from '@tarojs/components';
 
+export { cohortRejectionCopy } from './cohortRejectionCopy';
+
 import './ListStates.css';
 
 /** First-screen loading — no list yet. */
@@ -17,14 +19,23 @@ export function ListLoading() {
 }
 
 /** Empty: a validated [] from /rankings → explicit empty, not blank/error. */
-export function ListEmpty() {
+export interface ListEmptyProps {
+  /** Override the default copy. A cohort that CANNOT produce a board (no single
+   *  comparable axis, or a slug the tree does not carry) must not be told to pull
+   *  to refresh — refreshing will never populate it. */
+  title?: string;
+  hint?: string;
+}
+
+export function ListEmpty({ title = '榜单暂无数据', hint = '下拉刷新试试' }: ListEmptyProps = {}) {
   return (
     <View className="lstate lstate--center">
-      <Text className="lstate__title">榜单暂无数据</Text>
-      <Text className="lstate__hint">下拉刷新试试</Text>
+      <Text className="lstate__title">{title}</Text>
+      <Text className="lstate__hint">{hint}</Text>
     </View>
   );
 }
+
 
 export interface FirstScreenErrorProps {
   /** Whole-screen retry handler — supplied by the page (maps to retryFirst). */

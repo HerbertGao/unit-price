@@ -55,26 +55,23 @@ jobs:
 
       # Push each URL independently (per-URL isolation + task-id), one bounded
       # retry per URL to absorb transient throttle/5xx. ObjectPath = full URL incl.
-      # query string IS the cache key heated into domestic POPs. The 15-slug set =
-      # packages/db/src/seed.ts rankable cohorts: 8 bind per_100ml directly + 7
-      # drill-down leaves that inherit (resolve up-tree). Do NOT regenerate from
-      # WHERE comparable_unit IS NOT NULL on the raw column — that drops the 7
-      # inherited leaves (their raw comparable_unit is null). Manually sync this
-      # list on any PAGE_SIZE / cohort change.
+      # query string IS the cache key heated into domestic POPs.
+      #
+      # Exactly two URLs, and the list is no longer derived from the cohort set:
+      # `/rankings` takes no parameters and returns the whole board, so a
+      # `?category=` / `?limit=` / `?offset=` variant is a SECOND cache object
+      # holding a byte-identical body. Warming those would re-create the 17-key
+      # fan-out this endpoint was reshaped to collapse — and each copy is now the
+      # full snapshot rather than one page.
       - name: Warm CDN URLs
         run: |
           set -euo pipefail
           BASE="https://unit-price.herbert-dev.cn"
-          PAGE_SIZE=20
-          SLUGS="soft-drink carbonated juice-plant coffee-tea drinking-water dairy milk yogurt lactic-drink baijiu wine spirits whisky beer sake-fruit-wine"
 
           URLS=(
-            "${BASE}/rankings?limit=${PAGE_SIZE}&offset=0"
+            "${BASE}/rankings"
             "${BASE}/categories"
           )
-          for slug in $SLUGS; do
-            URLS+=("${BASE}/rankings?limit=${PAGE_SIZE}&offset=0&category=${slug}")
-          done
 
           # `timeout 60` bounds EACH push: a hung CLI call → SIGTERM → non-zero →
           # caught by `if !` → retry/fail, so one stall can't block the rest of the

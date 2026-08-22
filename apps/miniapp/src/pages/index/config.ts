@@ -22,5 +22,22 @@ export const BASE = 'https://unit-price.herbert-dev.cn';
  */
 export const BASE_IS_PLACEHOLDER = BASE.includes('<待填');
 
-/** Page size for /rankings pagination (limit). */
+/** Rows revealed per local slice of the snapshot (reach-bottom reveals one more). */
 export const PAGE_SIZE = 20;
+
+/**
+ * The cohort the 榜单 Tab lands on when the caller names none.
+ *
+ * Named, not derived. "The shallowest single-axis node" sounds derivable and is
+ * not: `soft-drink` and `dairy` are both depth-1 children of `beverage` and both
+ * `per_100ml`, so the tree has no unique answer and any tie-break is an arbitrary
+ * rule the tree does not carry — slug order silently picks `dairy`.
+ *
+ * MUST agree with `ScopeBar`'s `SCOPE_TEXT`, which names this cohort in prose.
+ * The label was always a constant; deriving only the slug is what let the two
+ * disagree.
+ */
+export const LANDING_COHORT = 'soft-drink';
+
+/** Human label for the same landing cohort; ScopeBar imports this value. */
+export const LANDING_SCOPE_TEXT = '山姆软饮真实单价榜 · 元/100ml';
