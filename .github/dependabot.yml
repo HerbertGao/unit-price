@@ -29,6 +29,15 @@ updates:
       # babel-8-compatible preset, then drop this block.
       - dependency-name: "@babel/*"
         update-types: [version-update:semver-major]
+      # Taro 4.2.1 and react-reconciler 0.29 require React 18. Keep receiving
+      # React 18 patches, but do not open incompatible React 19 PRs. Remove
+      # these entries only when Taro's declared peer range supports React 19.
+      - dependency-name: "react"
+        update-types: [version-update:semver-major]
+      - dependency-name: "react-dom"
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/react"
+        update-types: [version-update:semver-major]
 
   # Actions used by .github/workflows/*.
   - package-ecosystem: github-actions

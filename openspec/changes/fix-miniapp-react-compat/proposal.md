@@ -6,6 +6,7 @@
 
 - 将 miniapp 的 `react` / `react-dom` 固定到 Taro 4.2.1 支持的 React 18 版本,并同步 React 类型与 lockfile。
 - 在 `build:weapp` / `dev:weapp` 前增加零依赖兼容检查:已安装 React major 必须满足 `@tarojs/react` 的 peer major,且 `react-dom` 必须与 React 同版本。
+- 配置 Dependabot 忽略 `react` / `react-dom` / `@types/react` 的 semver-major 更新,保留 React 18 内的 minor/patch 更新。
 - 重新运行 miniapp test、TypeScript 7 typecheck、weapp bundle,并在微信开发者工具稳定基础库下确认 app 注册和首页启动。
 
 ## Capabilities

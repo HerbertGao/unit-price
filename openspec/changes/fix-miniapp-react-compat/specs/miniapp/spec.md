@@ -16,6 +16,12 @@
 - **那么** `build:weapp` 与 `dev:weapp` 必须在进入 webpack/Taro 编译前非零退出
 - **那么** 错误信息必须同时指出 React 实际版本和 Taro 支持范围
 
+#### 场景:Dependabot 不发起超出 Taro peer 的 React major
+
+- **当** Dependabot 检查 `react` / `react-dom` / `@types/react` 更新
+- **那么** 必须忽略 semver-major 更新,不得创建 React 19 PR
+- **那么** React 18 范围内允许的 minor/patch 更新仍可正常提出
+
 #### 场景:React 与 react-dom 版本漂移在打包前失败
 
 - **当** `react` 与 `react-dom` 的实际安装版本不一致

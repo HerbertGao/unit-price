@@ -1,6 +1,7 @@
 ## 1. 依赖兼容(`apps/miniapp`)
 
 - [x] 1.1 将 `react` / `react-dom` 固定为 18.3.1、`@types/react` 固定为 18.3.31并更新 `pnpm-lock.yaml`;frozen install 与 `pnpm why` 验证无 React 19且 Taro/reconciler peer 满足
+- [x] 1.2 Dependabot 已忽略 `react` / `react-dom` / `@types/react` semver-major;YAML 与三条规则验证通过,React 18 minor/patch 分组保持不变
 
 ## 2. 构建前守卫(`apps/miniapp/scripts`)
 

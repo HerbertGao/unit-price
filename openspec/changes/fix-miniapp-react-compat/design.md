@@ -24,6 +24,8 @@
 
 **D3 — 运行时验收独立于编译验收。** 自动门禁覆盖依赖矩阵、test、typecheck 与 bundle;微信开发者工具稳定基础库启动和首页注册作为发布前人工验收,因为 Node/webpack 无法复现小程序 AppService 加载器。
 
+**D4 — Dependabot 忽略 React 生态 semver-major。** 对 `react` / `react-dom` / `@types/react` 只屏蔽 major,让 React 18 patch 仍可更新;Taro peer 支持 React 19 后再删除该策略。构建守卫继续保留,覆盖人工改包与其它自动化来源。
+
 ## Risks / Trade-offs
 
 - [React 18 缺少 React 19 新能力] → 当前 miniapp 未使用 React 19 专属 API,且稳定启动优先于未消费能力。
