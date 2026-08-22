@@ -272,6 +272,7 @@ describe('runLoad — the SWR rules', () => {
 
     await runLoad(OPTS, fx);
 
+    expect(seen.snapshot).toEqual([OK]);
     expect(seen.written).toEqual([OK]);
     expect(seen.phase).toEqual(['ready']);
   });

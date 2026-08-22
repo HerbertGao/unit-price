@@ -275,7 +275,8 @@ export type ExclusionReason =
   | "warnings_wrong_shape"
   | "formula_missing"
   | "row_shape_invalid"
-  | "node_shape_invalid";
+  | "node_shape_invalid"
+  | "row_references_invalid_node";
 
 export interface BoardSnapshot {
   /** All rankable rows with a non-null per100ml, ASC by (per100ml, id). */

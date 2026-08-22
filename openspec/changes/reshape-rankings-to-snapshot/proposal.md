@@ -14,7 +14,7 @@
 - taxonomy 与行**同体下发**(避免两个独立 TTL 对象版本错位)。
 - `packages/api-client` 新增快照契约与本地派生能力(cohort 过滤 / 分页 / 搜索),不含排序。
 - `apps/miniapp` 改为一次取快照 + 本地派生;两个错误位收敛为一个;端上缓存换单键。
-- `POST /compute` 的 cohort 定位改读同一份快照,与榜同总体、同祖先规则。
+- `POST /compute` 的 cohort 定位改用同一快照构造与祖先规则;同一数据库状态下与榜同总体,不承诺跨 CDN/端上缓存版本的请求逐字同步。
 - CDN 预热 URL 由 17 条收敛为 2 条,并配置边缘 query 归一化。
 
 ## Capabilities
@@ -39,7 +39,7 @@
 
 ## Impact
 
-- **发布单元**:服务端与 miniapp 在同一变更内落地。因小程序尚未发布且 API 未向第三方开放,不存在旧客户端审核窗口;但 CDN 可能仍缓存旧数组形状,故发布顺序仍为源站部署 → purge `/rankings*` → query 归一化 → 预热并验形 → 提交首版小程序。
+- **发布单元**:服务端与 miniapp 在同一变更内落地。因小程序尚未发布且 API 未向第三方开放,不存在旧客户端审核窗口;但 CDN 可能仍缓存旧响应形状,故发布顺序为源站部署 → purge `/rankings*` 与 `/categories` → query 归一化 → 预热并验形两个端点 → 提交首版小程序。
 - **API**:`/rankings` 改为快照对象、`/categories` 移除 `rankableCount`,均为破坏性变更;`/compute` 响应契约不变、cohort 数据源改变。
 - **缓存**:榜单相关键 17 → 1(`/categories` 仍在,合计 2 条预热)。
 - **规模**:389 行;实测 376 行快照约 130 KB 原始 / 20 KB gzip / 15 KB brotli,一次性下发无体积风险。失效阈值见 design。

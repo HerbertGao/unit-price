@@ -283,7 +283,7 @@ describe('board e2e — real DB → route → client derivation', () => {
     expect(snap.excluded).toEqual(
       expect.arrayContaining([
         { reason: 'node_shape_invalid', count: 1 },
-        { reason: 'row_shape_invalid', count: 1 },
+        { reason: 'row_references_invalid_node', count: 1 },
       ]),
     );
   });
@@ -309,7 +309,7 @@ describe('board e2e — real DB → route → client derivation', () => {
     expect(snap.excluded).toEqual(
       expect.arrayContaining([
         { reason: 'node_shape_invalid', count: 1 },
-        { reason: 'row_shape_invalid', count: 1 },
+        { reason: 'row_references_invalid_node', count: 1 },
       ]),
     );
   });

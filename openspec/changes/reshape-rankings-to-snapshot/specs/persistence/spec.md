@@ -27,7 +27,7 @@
 
 **单个成员缺陷不得升级为整查询失败**:不满足行不变量或 wire 必填字段的行、以及不满足节点字段 schema 的节点,必须被排除并按 reason 计数;引用被排除节点的行随之排除。正常的非成员(`rankable=0`、无可比轴)在 SQL 里就被滤掉,不计入排除计数。
 
-**reason 的生产与传输边界不同**:生产者必须用受类型约束的词表防止拼写错误,当前已知值为 `rankable_without_category_edge` / `warnings_undecodable` / `warnings_wrong_shape` / `formula_missing` / `row_shape_invalid` / `node_shape_invalid`。wire schema 只要求非空字符串,不得复制为封闭枚举;新增健康信号必须可被旧客户端安全忽略,不能否决整份载荷。
+**reason 的生产与传输边界不同**:生产者必须用受类型约束的词表防止拼写错误,当前已知值为 `rankable_without_category_edge` / `warnings_undecodable` / `warnings_wrong_shape` / `formula_missing` / `row_shape_invalid` / `node_shape_invalid` / `row_references_invalid_node`。wire schema 只要求非空字符串,不得复制为封闭枚举;新增健康信号必须可被旧客户端安全忽略,不能否决整份载荷。
 
 **排除集必须覆盖下发契约的全部必填字段**:数据库 `NOT NULL` 不排除空串,故准入必须以共享下发 schema 为最终判据。`/rankings` 与 `/compute` 必须看到同一个准入后集合,否则被榜剔除的成员仍会计入比价的 `rank` 与 `total`。
 
@@ -37,7 +37,7 @@
 
 **排序**:`per100ml` 升序、`unit_price.id` 升序。下发即全序,客户端只过滤与切片、不重排。
 
-**节点集不带 `rankableCount`**:`/rankings.categoryNodes` 与 `/categories.nodes` 使用同一无计数投影。需要数量的客户端从快照派生。
+**节点集不带 `rankableCount`**:`/rankings.categoryNodes` 与 `GET /categories` 响应的 `nodes` 使用同一无计数投影。需要数量的客户端从快照派生。
 
 **查询计划口径**:本查询无 `LIMIT`、含 slug 聚合,必须有自己的计划契约,不得沿用已删除节点分页查询的基线。
 
@@ -61,7 +61,7 @@
 #### 场景:不合规节点被排除且不使查询失败
 
 - **当** 某 category 节点不满足共享节点 schema
-- **那么** 该节点及引用它的行被排除并计入 `node_shape_invalid`,其余快照照常返回
+- **那么** 该节点计入 `node_shape_invalid`;引用它且自身形状合法的行计入 `row_references_invalid_node`,其余快照照常返回
 
 #### 场景:排除计数不包含正常的非成员
 

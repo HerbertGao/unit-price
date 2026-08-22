@@ -6,9 +6,9 @@
 // derive from the same object.
 //
 // KEPT against the new shape: fail-closed read on corrupt/stale data, tolerant
-// storage failures, and a write failure costing only the cache. Jitless is a
-// permanent unit guard below: a Function-constructor probe proves the parser
-// creates none, so this no longer depends on devtools-only testing.
+// storage failures, and a write failure costing only the cache. The permanent
+// Function-constructor guard for jitless parsing lives in api-client's
+// snapshot.test.ts; this file only verifies cache behavior.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const store = new Map<string, unknown>();

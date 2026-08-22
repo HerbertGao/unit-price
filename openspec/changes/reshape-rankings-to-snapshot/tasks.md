@@ -33,7 +33,7 @@
 
 - [x] 3.1 `GET /rankings` 忽略全部参数并返回经共享 schema 整体校验的快照;参数逐字同响应、缓存头与治理豁免测试通过
 - [x] 3.2 `POST /compute` 读取同一快照、使用同一 cohort 派生、取消截断上限并保持 no-store;定位总体 e2e 通过
-- [x] 3.3 行与节点先经共享 schema 准入,坏成员分别计入 `row_shape_invalid` / `node_shape_invalid`,且 `/rankings` 与 `/compute` 共用准入后集合;变异测试通过
+- [x] 3.3 行与节点先经共享 schema 准入,坏行/坏节点/引用坏节点的合法行分别计入 `row_shape_invalid` / `node_shape_invalid` / `row_references_invalid_node`,且 `/rankings` 与 `/compute` 共用准入后集合;测试通过
 - [x] 3.4 真迁移 + 真 seed + 真 repository + 真路由 + 真客户端派生的 `board-e2e.test.ts` 覆盖总体一致、祖先等价与坏成员排除
 - [x] 3.5 `GET /categories` 移除 `rankableCount`,与同一状态下快照 `categoryNodes` 逐字同形;真库 e2e 同时请求两个端点并比较节点数组
 - [x] 3.6 `/compute` 测试钉住静态合法但快照缺节点映射为 `200` 空总体,以及 `neighbors[].rank` 为完整 cohort 的 1-based 位次
@@ -56,7 +56,7 @@
 - [x] 5.1 proposal、design 与 7 份 delta specs 已同步:移除服务端节点计数、明确 compute 空总体/rank、开放 wire reason 与首版迁移边界
 - [x] 5.2 `.github/workflows/cdn-warm.yml` 的预热目标收敛为 `/rankings` 与 `/categories` 两条,不再枚举 cohort URL
 - [x] 5.3 已同步 `docs/architecture.md`、`docs/taxonomy-and-tagging.md`、`docs/backfill-runbook.md` 的全量快照、无计数节点与 CDN 顺序说明
-- [x] 5.4 已更新 api-client、rankings-api、miniapp、deployment 主 spec Purpose;归档副本不再以旧分页数组描述用途
+- [ ] 5.4 实际归档时再更新 api-client、rankings-api、miniapp 主 spec Purpose;活跃变更期间主 spec 保持 pre-archive 基线,避免 Purpose 与尚未合并的需求正文冲突
 - [x] 5.5 运行 `openspec-cn validate reshape-rankings-to-snapshot --strict` 与 `git diff --check`,两者均为零错误
 - [x] 5.6 临时副本 archive 试跑成功;7 个 touched specs 严格校验通过且旧计数/分页正向契约未残留
 - [x] 5.7 workspace build、778 个测试、两套测试源码 typecheck、miniapp typecheck 与 weapp bundle 构建全部通过
@@ -67,6 +67,6 @@
 - [ ] 6.2 用人工发布凭据 purge `/rankings*` 全部历史对象与 `/categories`;若 Directory 不覆盖带参对象,按 deployment spec 的 16 条历史路径逐条 File purge
 - [ ] 6.3 purge 完成后启用 `/rankings` query-string 归一化,从国内视角确认裸 URL 与带参 URL 命中同一边缘对象
 - [ ] 6.4 用 `PushObjectCache` 预热 `/rankings` 与 `/categories`,逐条记录 task id,全部失败时停止发布
-- [ ] 6.5 从国内视角验形:`/rankings` 为快照对象、`/categories.nodes` 不含 `rankableCount`、两端点均命中 CDN;任一不符则停止提交小程序
+- [ ] 6.5 从国内视角验形:`/rankings` 为快照对象、`GET /categories` 的 `nodes` 不含 `rankableCount`、两端点均命中 CDN;任一不符则停止提交小程序
 - [ ] 6.6 核对生产两门候选数满足 `rows.length = candidateCount - Σexcluded`,按 reason 排查非零排除但不把其本身判为发布失败
 - [ ] 6.7 完成小程序 test/typecheck/build 与真机关键流验证后提交首版审核;服务端自此不得单独回滚为旧数组形状

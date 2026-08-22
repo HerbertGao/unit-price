@@ -30,7 +30,7 @@
 
 #### 场景:品类树与快照节点契约完全同形
 
-- **当** 分别解析 `/categories.nodes` 与 `/rankings.categoryNodes`
+- **当** 分别解析 `GET /categories` 响应的 `nodes` 与 `/rankings.categoryNodes`
 - **那么** 两者必须使用同一节点 schema,字段中不得定义 `rankableCount`
 
 #### 场景:新增健康信号不使旧客户端拒绝整份快照

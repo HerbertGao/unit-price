@@ -1,8 +1,9 @@
 # api-client 规范
 
 ## 目的
+待定 - 由变更 add-miniapp-skeleton 创建。归档后请更新目的。
 
-`packages/api-client`（`@unit-price/api-client`）提供服务端与薄客户端共享的传输无关契约：Zod schema、推导类型、纯 URL 构造和响应解析，以及从全量榜单快照派生 cohort、搜索与分页的纯函数。它不发网络请求，并作为 `/rankings`、`/categories`、`/compute` 契约的单一事实源。
+`packages/api-client`（`@unit-price/api-client`）是四个客户端与 `apps/api` 共享的 API 契约包，传输无关——只导出 schema/类型与纯函数（`buildRankingsUrl` / `parseRankingsResponse`），不含任何网络调用。本期承载 `/rankings` 契约，`RankingsResponseSchema` 为契约单一事实源、由 app 与客户端共依赖同一份。
 ## 需求
 ### 需求:api-client 必须提供传输无关的 rankings 契约
 

@@ -572,7 +572,13 @@ function toWireRow(row: BoardRow): SnapshotRow {
 function admitSnapshotRows(
   rows: BoardRow[],
   categoryNodes: BoardNode[],
-): { rows: BoardRow[]; nodes: BoardNode[]; shapeInvalid: number; nodeInvalid: number } {
+): {
+  rows: BoardRow[];
+  nodes: BoardNode[];
+  shapeInvalid: number;
+  nodeInvalid: number;
+  nodeOrphaned: number;
+} {
   // Nodes need the same gate rows got. `tag.name` / `tag.slug` are NOT NULL with
   // no non-empty CHECK, so `''` is storable — verbatim the reasoning that
   // motivated the row gate. Without this, one bad node fails whole-body
@@ -600,18 +606,20 @@ function admitSnapshotRows(
   }
   const admitted: BoardRow[] = [];
   let shapeInvalid = 0;
+  let nodeOrphaned = 0;
   for (const row of rows) {
     const wire = toWireRow(row);
-    if (
-      SnapshotRowSchema.safeParse(wire).success &&
-      !wire.categorySlugs.some((c) => dropped.has(c))
-    ) {
-      admitted.push(row);
+    if (!SnapshotRowSchema.safeParse(wire).success) {
+      shapeInvalid += 1;
       continue;
     }
-    shapeInvalid += 1;
+    if (wire.categorySlugs.some((c) => dropped.has(c))) {
+      nodeOrphaned += 1;
+      continue;
+    }
+    admitted.push(row);
   }
-  return { rows: admitted, nodes, shapeInvalid, nodeInvalid };
+  return { rows: admitted, nodes, shapeInvalid, nodeInvalid, nodeOrphaned };
 }
 
 export function createApp(deps: AppDeps): Hono<AppEnv> {
@@ -679,6 +687,16 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     if (admitted.nodeInvalid > 0) {
       excluded.push({ reason: 'node_shape_invalid', count: admitted.nodeInvalid });
       console.warn(`[rankings] excluded ${admitted.nodeInvalid} category node(s): node_shape_invalid`);
+    }
+
+    if (admitted.nodeOrphaned > 0) {
+      excluded.push({
+        reason: 'row_references_invalid_node',
+        count: admitted.nodeOrphaned,
+      });
+      console.warn(
+        `[rankings] excluded ${admitted.nodeOrphaned} row(s): row_references_invalid_node`,
+      );
     }
 
     const body = {

@@ -1,8 +1,9 @@
 # miniapp 规范
 
 ## 目的
+待定 - 由变更 add-miniapp-skeleton 创建。归档后请更新目的。
 
-`apps/miniapp`（`@unit-price/miniapp`）是浏览优先的 Taro 微信小程序：读取一份榜单快照后在端上本地派生软饮榜、分类下钻、搜索和分页，并通过无状态 `/compute` 提供结构化即时比价。浏览路径不解析脏标题、不重算单价、不贡献或纠错入库。
+`apps/miniapp`（`@unit-price/miniapp`）是 Taro（React + TS）微信小程序工程，v1 定位只读榜单浏览：经 `@unit-price/api-client` 消费 `GET /rankings`，不在端上做解析或单价计算。本规范约束其只读边界、一屏分页与三态、以及列表内降级广告位的占位逻辑。
 ## 需求
 ### 需求:miniapp 必须是消费 /rankings 的只读榜单小程序骨架
 

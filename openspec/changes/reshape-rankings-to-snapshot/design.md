@@ -46,9 +46,9 @@
 
 但**也不由客户端从树上推导**。原设计写的是「最浅的单一可比轴节点」,读起来像可推导、实则无唯一解:`soft-drink` 与 `dairy` 同为 `beverage` 直子且同为 `per_100ml`,任何平局判据都是树不承载的额外规则。实测按字母序落到了**乳品**,而榜标题写着软饮。故落地 cohort 是**消费端的具名常量**(miniapp 的 `LANDING_COHORT`,见 `miniapp` spec),它必须与那一侧的榜标题文案同源——标题本来就是常量,只推导 slug 才是两者能对不上的原因。
 
-**D10 — `/compute` 与榜共用同一总体。** 定位改为读同一份快照、用同一个 `cohortSlugs` 切出 cohort。原先是两条路:这边节点作用域 SQL(走物化 `category_closure`)、那边快照(走 `parentSlug` 链),两条祖先来源只在「每次 re-parent 都重建闭包」时才一致,而没有任何机制保证这件事——症状会是一个**静默错的名次**,不是报错。顺带去掉了 `COMPUTE_COHORT_FETCH_MAX` 这个上限(其注释自陈越过它「would silently under-count」)。
+**D10 — `/compute` 与榜共用同一快照构造。** 两个端点在观察同一数据库状态时,都读取全量快照并用同一个 `cohortSlugs` 沿 `parentSlug` 切 cohort,从而消除旧物化闭包与实时父链的分叉。该保证限定在**同一数据版本**:客户端可能仍显示 CDN/端上缓存的较旧 `/rankings` 快照,而 `no-store` 的 `/compute` 读取较新状态,两次跨版本请求的行数或名次允许在 TTL 内不同;本变更不引入 snapshot revision 或跨端点缓存一致性。顺带去掉 `COMPUTE_COHORT_FETCH_MAX` 这个会静默低估总体的上限。
 
-**D11 — 所有服务端品类节点响应均移除 `rankableCount`。** 当前客户端已持有整份快照,可从与榜相同的行集合准确派生节点数量;仓内没有只消费 `/categories` 计数的调用方。保留参考值会允许「徽标 75、榜内 74」的误导,保证严格一致则要为一个无消费者字段引入闭包原子重建、统一准入和生产前检。故 `/rankings.categoryNodes` 与 `/categories.nodes` 都只保留 `rankable` 作为可进入榜单的闸口,不再下发服务端节点计数。
+**D11 — 所有服务端品类节点响应均移除 `rankableCount`。** 当前客户端已持有整份快照,可从与榜相同的行集合准确派生节点数量;仓内没有只消费 `/categories` 计数的调用方。保留参考值会允许「徽标 75、榜内 74」的误导,保证严格一致则要为一个无消费者字段引入闭包原子重建、统一准入和生产前检。故 `/rankings.categoryNodes` 与 `GET /categories` 响应的 `nodes` 都只保留 `rankable` 作为可进入榜单的闸口,不再下发服务端节点计数。
 
 ## 快照字段表(单一事实源)
 
@@ -93,10 +93,10 @@
 ## Migration Plan
 
 1. 合并并部署源站,此时小程序尚未发布、没有旧客户端兼容窗口。
-2. 立即 purge 历史 `/rankings*` 对象,再启用 query-string 归一化。
+2. 立即 purge 历史 `/rankings*` 与 `/categories` 对象,再启用 query-string 归一化。
 3. 预热 `/rankings` 与 `/categories`,从国内视角确认前者为快照对象、后者节点不含 `rankableCount`。
 4. 只有验形通过后才提交首版小程序。
-5. 若提交前发现问题,回滚源站后再次 purge + 预热;首版小程序发布后不得单独把服务端回滚为旧数组形状,只能前向修复或协调回滚客户端。
+5. 若提交前发现问题,回滚源站后再次 purge + 预热 `/rankings` 与 `/categories`;首版小程序发布后不得单独把服务端回滚为旧数组形状,只能前向修复或协调回滚客户端。
 
 ## 已知残留
 

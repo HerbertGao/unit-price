@@ -8,7 +8,7 @@
 
 **响应形状**:对象 `{ rows, categoryNodes, excluded }`。
 
-- `categoryNodes` 是全部 `kind=category` 节点(`slug`/`name`/`parentSlug`/`comparableUnit`/`rankable`),继承解析在内存完成。该节点数组与 `GET /categories.nodes` 逐字同形,两者均不带 `rankableCount`;客户端需要数量时从快照派生。
+- `categoryNodes` 是全部 `kind=category` 节点(`slug`/`name`/`parentSlug`/`comparableUnit`/`rankable`),继承解析在内存完成。该节点数组与 `GET /categories` 响应的 `nodes` 逐字同形,两者均不带 `rankableCount`;客户端需要数量时从快照派生。
 - `excluded` 是被排除行或节点的 `{ reason, count }`,数据健康观测项,不作为失败判据。wire 侧 `reason` 只要求非空字符串,不得用封闭枚举让新增健康信号否决整份载荷。
 - **落地 cohort 不由服务端下发**:多发一个 slug 只会多一处要保持同步的地方。它也**不可从 `categoryNodes` 推导**——「最浅的单一可比轴节点」无唯一解(`soft-drink` 与 `dairy` 同深同轴),由消费端以具名常量承载,见 `miniapp` spec。
 
@@ -27,7 +27,7 @@
 
 **下发顺序**:按 `(per100ml, unit_price.id)` 升序,使服务端全序有可直接比对的地面真相。
 
-**单个行或节点的字段缺陷不得打掉整份快照**:快照是唯一数据源,一个坏成员不应使榜单、分类树、搜索、比价定位同时不可用。故不满足两门、行不变量或响应行必填字段的行必须被排除并计入 `row_shape_invalid` 等 reason;不满足节点字段 schema 的节点必须被排除并计入 `node_shape_invalid`,引用该节点的行随之排除。生产者 reason 使用受类型约束的已知词表防止拼写错误,但 wire schema 只要求非空字符串,新增 reason 不得使旧客户端拒绝载荷。
+**单个行或节点的字段缺陷不得打掉整份快照**:快照是唯一数据源,一个坏成员不应使榜单、分类树、搜索、比价定位同时不可用。故不满足行必填字段的行计入 `row_shape_invalid`;不满足节点 schema 的节点计入 `node_shape_invalid`;自身形状合法但引用被排除节点的行计入 `row_references_invalid_node`。生产者 reason 使用受类型约束的词表防止拼写错误,但 wire schema 只要求非空字符串,新增 reason 不得使旧客户端拒绝载荷。
 
 **装配一致性**:行、归属边、taxonomy 节点是三次读,其间的并发写会装配出「行引用了 `categoryNodes` 中不存在的节点」的对象并被缓存最长一个 TTL。三者互不依赖,故可一次性发出(D1 用 `batch()`——它拒绝显式 BEGIN/COMMIT;sqlite 用事务)。可恢复的单成员字段缺陷先按上文排除;准入后若仍违反对象级不变量(节点 slug 重复、父链悬空/成环、行引用未知节点),必须按服务端缺陷处理并返回 5xx,同时记录带校验上下文的错误日志。
 
@@ -111,7 +111,7 @@
 #### 场景:无效节点按 reason 排除而非打掉整份快照
 
 - **当** 某 category 节点不满足节点 schema
-- **那么** 该节点及引用它的行必须被排除,`excluded` 增加 `node_shape_invalid`,其余快照照常返回
+- **那么** 该节点计入 `node_shape_invalid`;引用它且自身形状合法的行计入 `row_references_invalid_node`,其余快照照常返回
 
 #### 场景:新增 exclusion reason 不否决载荷
 

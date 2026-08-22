@@ -14,9 +14,8 @@ import type {
  ComputeUnit,
 } from "@unit-price/api-client";
 
-/** The cohort axis the server resolves a category into. Mirrors core's
- *  ComparableUnit subset the structured form supports (volume / mass). */
-export type CohortAxis = "per_100ml" | "per_100g";
+/** The cohort axis vocabulary is owned by the shared compute contract. */
+export type CohortAxis = ComputeResult["axis"];
 
 /** One selectable leaf cohort in the 品类 picker — derived from /categories, NOT
  *  hardcoded (防漂移, decision D8). `axis` drives the unit constraint. */
