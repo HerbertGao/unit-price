@@ -12,7 +12,7 @@
 
 治理（鉴权/限频/用量）必须作为**可注入依赖**接入 app 工厂（与 LLM 端口同理），**禁止**在工厂内硬编码为必依赖 `GOVERNANCE_KV`/`API_KEYS` 的实现——使纯本地 dev（无 KV、无 allowlist）能注入一个**放行式 no-op 治理**，让 `/parse` 冒烟不被 `401`/`429` 阻断；生产入口注入真实治理实现。
 
-**生产 Worker 入口必须注入真实治理，禁注 no-op（公网裸奔防线）**：放行式 no-op 治理一旦误注入生产入口（`worker.ts`），公网 API 即**完全无鉴权/无限频**，且 `/health` 与带/不带 key 的 `/parse` 冒烟**都会通过**、无法察觉。因此必须有一条**可机械断言的护栏**——`worker.ts` 不得引用 no-op 治理符号（grep/类型标记可查），并以 miniflare/workerd 对 `worker.ts` 入口级集成测试断言「缺 key→401、合法 key→放行、超限→429」，**禁止**把这条生产主路径只压在 [手动验证] 上。
+**生产 Worker 入口必须注入真实治理，禁注 no-op（公网裸奔防线）**：放行式 no-op 治理一旦误注入生产入口（`worker.ts`），公网 API 即**完全无鉴权/无限频**，且 `/health` 与带/不带 key 的 `/parse` 冒烟**都会通过**、无法察觉。因此必须有一条**可机械断言的护栏**——`worker.ts` 不得引用 no-op 治理符号，并由入口级自动化测试直接调用实际 `worker.fetch(request, env, ctx)`，以受控 KV double 断言「缺 key→401、合法 key→放行、超限→429」。该护栏验证入口装配；D1 平台语义由独立 workerd 测试覆盖。
 
 #### 场景:同一应用工厂被两个入口复用
 - **当** 检查 `apps/api` 的源码组织
@@ -24,7 +24,7 @@
 
 #### 场景:生产入口注真实治理且有护栏
 - **当** 检查 `worker.ts`（生产入口）的治理装配 + 入口级集成测试
-- **那么** `worker.ts` **禁止**引用放行式 no-op 治理符号；必须有 miniflare/workerd 集成测试断言生产入口下「缺 key→`401`、合法 key→放行、超限→`429`」，使「误注 no-op 致全放行」可被自动检出
+- **那么** `worker.ts` **禁止**引用放行式 no-op 治理符号；必须有直接驱动实际 `worker.fetch` 的入口级自动化测试断言「缺 key→`401`、合法 key→放行、超限→`429`」，使「误注 no-op 致全放行」可被自动检出
 
 #### 场景:Workers 入口导出 fetch handler
 - **当** 部署目标为 Cloudflare Workers
@@ -56,15 +56,15 @@ LLM 配置（`OPENROUTER_API_KEY` 等）必须**经显式传入的 env 对象**�
 
 ### 需求:wrangler 配置必须声明绑定与环境分层
 
-`apps/api` 必须含 `wrangler.toml`，声明：生产 D1 数据库 binding（`DB`）、治理用的 KV namespace binding（`GOVERNANCE_KV`，承载限频计数 + 用量计数），以及 **production 与 preview 的环境分层**（各自独立的 D1/KV 资源 id）。`OPENROUTER_API_KEY` 与 `API_KEYS`（治理 allowlist）**禁止**写入 `wrangler.toml`，必须经 `wrangler secret put` 带外设为 runtime secret；`CLOUDFLARE_API_TOKEN`（部署凭据）经 CI Actions secret 注入。secret 必须 **production 与 preview 各配一份**——`OPENROUTER_API_KEY` 在 preview 同样需要配置，否则 preview 的 `/parse` 一旦触 tier2 行为未定义。`wrangler.toml` 引用的 binding 名必须与应用代码 `Bindings` 类型读取的名字（`DB` / `GOVERNANCE_KV`）一致。
+`apps/api` 必须含 `wrangler.toml`，声明：生产 D1 数据库 binding（`DB`）、治理用的 KV namespace binding（`GOVERNANCE_KV`，承载限频计数 + 用量计数），以及 **production 与 preview 的环境分层**（各自独立的 D1/KV 资源 id）。`OPENROUTER_API_KEY`、`API_KEYS`（公共治理 allowlist）、`ADMIN_API_KEYS`（admin allowlist）与 `AUDIT_LOG_HMAC_SECRET` **禁止**写入 `wrangler.toml`，必须经 `wrangler secret put` 带外设为 runtime secret；`CLOUDFLARE_API_TOKEN`（部署凭据）经 CI Actions secret 注入。`OPENROUTER_API_KEY`/`API_KEYS` 必须在 production 与 preview 各配一份；production 若要驱动 admin backfill，还必须配齐两个 admin secret，否则端点 fail-closed。`wrangler.toml` 引用的 binding 名必须与应用代码 `Bindings` 类型读取的名字（`DB` / `GOVERNANCE_KV`）一致。
 
 #### 场景:绑定与代码一致且不含明文密钥
 - **当** 检查 `apps/api/wrangler.toml`
-- **那么** 必须声明 `DB`（D1）与 `GOVERNANCE_KV`（KV）binding，且 production/preview 分别指向不同资源 id；文件中**禁止**出现任何 API key / token / `OPENROUTER_API_KEY` / `API_KEYS` 明文；声明的 binding 名与应用代码读取的名字一一对应
+- **那么** 必须声明 `DB`（D1）与 `GOVERNANCE_KV`（KV）binding，且 production/preview 分别指向不同资源 id；文件中**禁止**出现任何 API key / token / runtime secret 明文；声明的 binding 名与应用代码读取的名字一一对应
 
 #### 场景:preview 与 production 各配齐 secret
 - **当** 配置 preview 与 production 两套环境
-- **那么** `OPENROUTER_API_KEY` 与 `API_KEYS` 必须**各环境各配一份**（指向各自资源），**禁止**只配 production 而让 preview 的 tier2 / 鉴权处于未定义态
+- **那么** `OPENROUTER_API_KEY` 与 `API_KEYS` 必须**各环境各配一份**（指向各自资源），**禁止**只配 production 而让 preview 的 tier2 / 鉴权处于未定义态；production backfill 启用前还必须配置 `ADMIN_API_KEYS` 与 `AUDIT_LOG_HMAC_SECRET`
 
 ### 需求:生产 D1 迁移必须可复现执行
 
@@ -94,11 +94,11 @@ LLM 配置（`OPENROUTER_API_KEY` 等）必须**经显式传入的 env 对象**�
 
 #### 场景:回滚时已迁移 schema 对旧 Worker 向前兼容
 - **当** 部署流程为「先 migrate、后 deploy」，迁移成功但 `wrangler deploy` 失败、回滚到上一个 Worker 版本（迁移**不**随回滚撤销）
-- **那么** 已应用的迁移必须对旧 Worker 代码**向前兼容**（迁移为加表/加可空列等增量，旧代码不读新列即可正常运行），**禁止**让一次失败部署使生产 schema 与运行中的旧代码不兼容。注：向前兼容是对**未来**迁移的约束，其强制（禁 drop/rename 列）属后续 enforcement，本期唯一迁移 `0000`（建表）天然满足
+- **那么** 已应用的迁移必须对旧 Worker 代码**向前兼容**（迁移为加表/加可空列等增量，旧代码不读新列即可正常运行），**禁止**让一次失败部署使生产 schema 与运行中的旧代码不兼容。当前迁移集合均须遵守该向前兼容边界；任何 drop/rename 等破坏性迁移必须先提供可机械验证的兼容与回滚方案
 
 ### 需求:CI/CD 必须支持 push-to-deploy
 
-`.github/workflows` 必须在 push 到 `main` 时自动部署到 Cloudflare Workers 生产环境：步骤含构建、对生产 D1 应用迁移、`wrangler deploy`。CI **只需** `CLOUDFLARE_API_TOKEN`（Actions secret）来执行 deploy 与迁移；`OPENROUTER_API_KEY`/`API_KEYS` 是 **Worker runtime secret、经 `wrangler secret put` 带外设置、不随每次 deploy 重注**，**禁止**在 CI 步骤里注入它们。Pull Request 上**禁止**部署生产，只跑构建/测试与 wrangler dry-run（或 preview 部署）。任一步骤失败必须使工作流失败（不得静默放过）。
+`.github/workflows` 必须在 push 到 `main` 时自动部署到 Cloudflare Workers 生产环境：步骤含构建、对生产 D1 应用迁移、`wrangler deploy`。CI **只需** `CLOUDFLARE_API_TOKEN`（Actions secret）来执行 deploy 与迁移；四项 Worker runtime secret 均经 `wrangler secret put` 带外设置、不随每次 deploy 重注，**禁止**在 CI 步骤里注入它们。Pull Request 上**禁止**部署生产，只跑构建/测试与 wrangler dry-run（或 preview 部署）。任一步骤失败必须使工作流失败（不得静默放过）。
 
 #### 场景:main push 触发生产部署
 - **当** 提交合入 `main`

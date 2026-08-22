@@ -4,7 +4,7 @@
 // (secrets + D1 + KV). On the Node dev entry the entry layer packs `process.env`
 // into the same shape and injects it as `env`, so the app reads one path.
 //
-// All four are OPTIONAL at the type level (dev/no-op paths may lack them);
+// All bindings are OPTIONAL at the type level (dev/no-op paths may lack them);
 // required-ness is enforced at the injection entry at runtime, not by the type.
 import type { D1Database, KVNamespace } from '@cloudflare/workers-types';
 

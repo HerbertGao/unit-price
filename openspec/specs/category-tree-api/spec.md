@@ -1,7 +1,7 @@
 # category-tree-api 规范
 
 ## 目的
-待定 - 由归档变更 add-category-tree-rankings 创建。归档后请更新目的。
+定义公开只读品类树端点及其与 rankings 快照 `categoryNodes` 的同形约束，使客户端只凭 `rankable` 判断入口，并从同一快照派生节点行数而不维护第二计数源。
 
 ## 需求
 

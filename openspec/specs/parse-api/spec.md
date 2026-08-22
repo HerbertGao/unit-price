@@ -2,7 +2,7 @@
 
 ## 目的
 
-提供 `POST /parse` HTTP 接口，编排解析与计算链路并返回结构化结果，定义请求/响应 schema 与 HTTP 状态语义。本节为待定占位，详见各需求。
+定义 `POST /parse` 的请求/响应 schema、tier1→tier2→tier3 编排、运行时配置与 HTTP 错误语义，使无状态解析结果可验证且不把 LLM 传输失败伪装成信息不足。
 ## 需求
 ### 需求:POST /parse 接口
 

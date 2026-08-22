@@ -486,7 +486,7 @@ export type ArbitrationVerdict = z.infer<typeof ArbitrationVerdictSchema>;
 
 /**
  * Deterministic arbiter (1.4). `(tier1 leaf result, store-map result) → 终裁`.
- * Covers the full taxonomy §五 table over `tier1 ∈ {未命中, 命中叶, 多叶tie}` ×
+ * Covers the full arbitration matrix over `tier1 ∈ {未命中, 命中叶, 多叶tie}` ×
  * `store-map ∈ {未命中, 命中叶, 命中粗节点}` (tier1 is leaf-only, so it has no
  * "命中粗节点" state):
  *

@@ -2,11 +2,11 @@
 
 ## 目的
 
-以确定性纯函数从结构化规格计算每 100ml 单价，产出可回放的 canonical formula 留痕，并统一处理不可计算终态与规格一致性校验。本节为待定占位，详见各需求。
+定义从结构化规格确定性计算容量轴每 100ml 或重量轴每 100g 单价的纯函数，产出可回放 canonical formula，并统一处理轴互斥、不可计算终态与规格一致性校验。
 ## 需求
 ### 需求:每 100ml 单价的可计算条件与统一不可计算终态
 
-系统必须先按 `totalAmount`（缺则 `unitSize`）的单位判定**轴**：`unit ∈ {ml, L}` → **容量轴**（产出 `per100ml`）、`unit ∈ {g, kg}` → **重量轴**（产出 `per100g`）、其它/缺失 → 无轴。再判定「是否可计算」：判据 = 满足 `spec-parsing` 「字段分层定义」中的**计算必需集**（`totalAmount.unit` 落在某一轴的单位集内、换算到该轴基准单位后的总量 `> 0` 且 `price > 0`，或可由 `unitSize`+`quantity` 推出**同轴** `totalAmount`）**且**通过一致性 gate（见下「规格一致性校验」需求；一致性是计算必需集之上的独立 gate，不并入计算必需集本身的定义）。仅当两者都满足时，才在**该轴对应字段**产出非空单价（容量轴 `per100ml`、重量轴 `per100g`），**另一轴字段恒为 `null`**——一个商品至多一条轴可算（`per100ml` 与 `per100g` **恰一非空**，或两者皆 `null`），两轴**不互转、不互比**（密度换算 `g↔ml` 永不进行）。任一不满足（无轴/未知单位、总量缺失/≤0、price≤0、规格不一致）时，系统必须走**统一的不可计算终态**：`per100ml = per100g = null`、不产出 `formula`、产出对应 `warning`、置信度降为 `≤ 0.5`，且结果中禁止出现 `NaN`/`Infinity`。`UnitPrice` 的 Zod schema 必须显式允许 `per100ml`、`per100g` 与 `formula` 为 `null`。本次不引入 `comparable`/`excludedReason` 字段（属非目标）——所有不可计算情形仅通过 `单价 = null + warning + 低置信` 表达。
+系统必须先按 `totalAmount`（缺则 `unitSize`）的单位判定**轴**：`unit ∈ {ml, L}` → **容量轴**（产出 `per100ml`）、`unit ∈ {g, kg}` → **重量轴**（产出 `per100g`）、其它/缺失 → 无轴。再判定「是否可计算」：判据 = 满足 `spec-parsing` 「字段分层定义」中的**计算必需集**（`totalAmount.unit` 落在某一轴的单位集内、换算到该轴基准单位后的总量 `> 0` 且 `price > 0`，或可由 `unitSize`+`quantity` 推出**同轴** `totalAmount`）**且**通过一致性 gate（见下「规格一致性校验」需求；一致性是计算必需集之上的独立 gate，不并入计算必需集本身的定义）。仅当两者都满足时，才在**该轴对应字段**产出非空单价（容量轴 `per100ml`、重量轴 `per100g`），**另一轴字段恒为 `null`**——一个商品至多一条轴可算（`per100ml` 与 `per100g` **恰一非空**，或两者皆 `null`），两轴**不互转、不互比**（密度换算 `g↔ml` 永不进行）。任一不满足（无轴/未知单位、总量缺失/≤0、price≤0、规格不一致）时，系统必须走**统一的不可计算终态**：`per100ml = per100g = null`、不产出 `formula`、产出对应 `warning`、置信度降为 `≤ 0.5`，且结果中禁止出现 `NaN`/`Infinity`。`UnitPrice` 的 Zod schema 必须显式允许 `per100ml`、`per100g` 与 `formula` 为 `null`。当前模型没有 `comparable`/`excludedReason` 字段;所有不可计算情形通过 `单价 = null + warning + 低置信` 表达。
 
 #### 场景:重量单位走重量轴算 per100g
 

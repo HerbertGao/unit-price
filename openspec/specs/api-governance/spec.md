@@ -1,7 +1,7 @@
 # api-governance 规范
 
 ## 目的
-待定 - 由归档变更 public-deploy 创建。归档后请更新目的。
+定义公共解析/写入端点的 API key 鉴权、KV 固定窗口限频与用量记录，以及 admin backfill 的独立鉴权、fail-closed 配置和审计边界，确保治理失败不会进入业务或后台解析链路。
 ## 需求
 ### 需求:受保护端点必须做 API key 鉴权
 

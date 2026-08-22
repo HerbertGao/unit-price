@@ -1,7 +1,7 @@
 # contribute-ingest 规范
 
 ## 目的
-待定 - 由归档变更 add-contribute-ingest 创建。归档后请更新目的。
+定义中心库的同步贡献、单条异步 ingest 与批量异步 ingest 写入契约，包括 provenance、去重、持久化错误、后台解析和治理边界，并确保写入 handler 不内联读出或多商品对比能力。
 ## 需求
 ### 需求:POST /contribute 写入端点
 
@@ -105,19 +105,19 @@
 - **当** `upsertRaw` 或 `saveParsed` 在写入时抛错
 - **那么** 服务**必须**返回 `500 persistence-error`(而非 `config-error`/`internal`)
 
-### 需求:本能力不含读出与对比
+### 需求:写入能力不内联读出与对比
 
-`contribute-ingest`（写入路径能力）**仅做写入路径**。`/contribute`/`/ingest`/`/ingest/batch` 等写入端点**禁止**内联实现榜单读出、`/corrections`(人工纠错)、`/compare`(多商品对比)或任何 core `comparability` 能力——读出/对比不由写入路径承载。其中 `/rankings`(榜单读出)已由变更 `add-rankings-endpoint`（能力 `rankings-api`）作为**独立只读端点**提供：它不属写入路径、不由本能力实现，与本需求「写入端点不内联读出」并不冲突。`/corrections`/`/compare` 仍**不存在**，留给后续变更，待需求明确后再做。`product_raw`/`product`/`unit_price` 之外、由本能力**禁止**新建表或品类结构（榜单只读查询不新建表，见 `persistence` 的 `listRankings` 契约）。
+`/contribute`、`/ingest`、`/ingest/batch` 只承载写入路径，**禁止**在其 handler 内联实现榜单、品类树、即时比价、人工纠错或多商品对比。`/rankings`、`/categories`、`/compute` 与 `/admin/backfill` 是各自能力提供的独立路由，可与写入端点共存。当前仍没有 `/corrections` 或 `/compare`。
 
-#### 场景:写入端点不内联读出/对比，/rankings 由独立只读端点承载
-- **当** 应用本变更后检查 `apps/api` 路由
-- **那么** `apps/api` 路由的**完整集合**为 `{/health, /parse, /contribute, /ingest, /ingest/batch, /rankings}`：其中 `/contribute`/`/ingest`/`/ingest/batch` 为写入路径端点、**本身不内联**榜单读出/对比，`/rankings` 为**独立只读端点**（由 `rankings-api` 提供、公开只读、治理豁免），`/health`/`/parse` 为探活/解析端点；**不存在** `/corrections`/`/compare` 或任何其它读出/对比端点
+#### 场景:写入端点与独立能力分离
+- **当** 检查 `apps/api` 路由与 handler
+- **那么** `/contribute`、`/ingest`、`/ingest/batch` 必须只执行各自写入编排，不内联任何读出/对比能力；其它独立路由的存在不得改变这一边界
 
 ### 需求:POST /ingest 异步采集端点
 
-`apps/api` **必须**提供 `POST /ingest`,用于「只管快速上报、不需要实时解析结果」的众包采集(如 Surge 插件)。它**同步**落 `product_raw` 后**立即**返回,把 tier2 解析与单价计算移出请求路径(见「后台异步解析」需求)。`/contribute`(同步返回完整解析结果)**保持不变**,两端点**并存**、服务两类客户端。
+`apps/api` **必须**提供 `POST /ingest`,用于「只管快速上报、不需要实时解析结果」的众包/运营采集。它**同步**落 `product_raw` 后**立即**返回,把 tier2 解析与单价计算移出请求路径(见「后台异步解析」需求)。`/contribute`(同步返回完整解析结果)**保持不变**,两端点**并存**、服务两类客户端。
 
-请求体**必须**复用 `/contribute` 既有的 `ContributeRequestSchema`(同一份 Zod SOT,**不**新增重复 schema):领域 `title`/`price`(`finite`,负价/0 价合法)/`categoryHint?`,溯源 `store`/`storeSku`(均 `trim().min(1)`)/`source?`/`sourceUrl?`/`capturedAt?`(int epoch ms)。`/ingest` 为**单条**上报;**批量**上报由 `POST /ingest/batch` 提供(见「POST /ingest/batch 批量异步采集端点」需求),两者并存、复用同一单条 schema 与同一落地/后台解析 helper。
+请求体**必须**复用 `/contribute` 既有的 `ContributeRequestSchema`(同一份 Zod SOT,**不**新增重复 schema):领域 `title`/`price`(`finite`,负价/0 价合法)/`categoryHint?`,溯源 `store`/`storeSku`(均 `trim().min(1)`)/`nativeCategoryId?`/`source?`/`sourceUrl?`/`capturedAt?`(int epoch ms)。`/ingest` 为**单条**上报;**批量**上报由 `POST /ingest/batch` 提供(见「POST /ingest/batch 批量异步采集端点」需求),两者并存、复用同一单条 schema 与同一落地/后台解析 helper。
 
 编排顺序**必须**为:校验请求体 → 取 repository → `upsertRaw` 落 `product_raw` → **立即** `202` 返回 → 排程后台解析。`upsertRaw` 成功**即**返回 `202`,体为 `{ rawId }`(app 生成 TEXT id),过最小 `IngestResponseSchema`(`z.object({ rawId: z.string().min(1) })`)校验,失败 → `500 internal`。该端点**禁止**在 API 层重写任何解析或计算(tier 边界同 `/contribute`)。受 `api-governance` 治理(已纳入受保护端点集合)。
 

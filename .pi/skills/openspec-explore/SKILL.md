@@ -220,7 +220,7 @@ Capture the artifact(s) the user requested without asking them to invoke another
 
 **用户在实现中途卡住：**
 ```
-用户：/opsx:explore add-auth-system
+用户：/opsx-explore add-auth-system
       OAuth 集成比预期复杂
 
 你：[阅读变更产出物]

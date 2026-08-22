@@ -100,11 +100,11 @@
 - **当** 检查 miniapp 的广告形态
 - **那么** **禁止**使用插屏（interstitial）广告；v1 仅列表内原生降级位
 
-### 需求:榜单首页必须按 P0 设计基线呈现并落地共享设计 tokens
+### 需求:榜单首页必须遵循共享视觉 tokens
 
-榜单首页(榜单 Tab)**必须**按 P0 设计基线(`design/sams-zhibuzhi/`,主色山姆蓝 `#014B90`、「诚实验货单」概念)实现视觉。设计 tokens(色板、字阶、间距、圆角、阴影)**必须**集中落地于 `app.css`;**禁止**在页面 / 组件的 css 或内联 style 散写任何色板十六进制字面量(含**清理**既有 `pages/index/index.css` 的旧硬编码色),页面 / 组件只能引用 CSS 变量(`var(--…)`);复用的 UI(榜单行卡片 / 加载·空·错三态)**必须**抽成共享组件供后续端期(P3+)复用(原生 `tabBar` 是 `app.config` 配置 + PNG 图标资产,非 React 组件、不在此列)。
+榜单首页(榜单 Tab)**必须**遵循 [`apps/miniapp/DESIGN.md`](../../../apps/miniapp/DESIGN.md) 的视觉规则。设计 tokens(色板、字阶、间距、圆角、阴影)**必须**集中落地于 `app.css`;**禁止**在页面 / 组件的 css 或内联 style 散写色板字面量,页面 / 组件只能引用 CSS 变量(`var(--…)`);复用的榜单行与加载/空/错状态必须由共享组件承载(原生 `tabBar` 的配置与 PNG 图标不在 React 组件约束内)。
 
-榜单首页**必须**至少呈现以下元素:品牌头(`会员商店值不值`)、顶部搜索入口、**静态范围说明条**、以及榜单列表(每行含 rank 徽标、`per100ml` 大字、整件价)。**范围说明条本期为静态**:只声明榜单范围与单位口径(如「山姆软饮真实单价榜 · 元/100ml」;此为静态运营声明,不声称端上已做品类过滤——品类真实过滤属 P3;范围话术须与 `/rankings` v1 实际数据口径一致——v1 入榜 = `per100ml` 非空,即山姆软饮),**禁止**呈现动态件数 N 或「更新于 X月X日」采集日期——`/rankings` 现无件数 / 采集时间字段,真实新鲜度横幅属 P8、品类范围属 P3,本期提前展示动态值即伪诚实。本需求约束「呈现哪些元素 + tokens 集中化」,不约束像素级审美。
+榜单首页**必须**至少呈现品牌头(`会员商店值不值`)、顶部搜索入口、静态范围说明条和榜单列表(每行含 rank 徽标、`per100ml` 大字、整件价)。范围说明条只声明端上从全量快照本地派生出的软饮 cohort 与单位口径(如「山姆软饮真实单价榜 · 元/100ml」)。服务端没有快照级件数或统一更新时间,因此该条**禁止**声称动态件数 N 或「更新于 X月X日」;逐行 `capturedAt` 仅用于行级新鲜度。
 
 #### 场景:首页视觉元素齐全
 - **当** 进入榜单 Tab
@@ -112,7 +112,7 @@
 
 #### 场景:设计 tokens 集中(机械可验:页面 css 零颜色字面量)
 - **当** 对 `apps/miniapp/src` 的 **`pages/**` 与 `components/**` 下的 `.css` 与组件 JSX 内联 `style`**(**不扫 `app.css` 自身**——它是 token 定义处、允许出现色值)`grep` 任意颜色字面量(`#` 3/6/8 位 hex、`rgb()` / `rgba()`、`hsl()` / `hsla()`、具象命名色)
-- **那么** 页面 / 组件的 css 与内联 style **禁止出现任何**颜色字面量(hex / rgb(a) / hsl(a) / 具象命名色;**不含** `transparent` / `inherit` / `currentColor` 等功能性关键字)——一律改用 `var(--…)`(含**阴影走 `var(--shadow)`**,不得直写 `rgba(...)`);颜色字面量**只允许**出现在 `app.css` 的 token 定义处(既有 `index.css` 的旧硬编码色**必须**已清理为变量引用)。**例外(不在本 grep 范围)**:`app.config.ts` 与各页 `*.config.ts` 的原生配置色字段(`window.navigationBarBackgroundColor`、`tabBar` 的 `color` / `selectedColor` / `backgroundColor`)、以及 tabBar PNG 图标——小程序框架限制、不能引 CSS 变量,故豁免;其中 tabBar **`selectedColor`(及选中图标烧入色)必须 = `--blue`(`#014B90`)**,其余原生配色字段按 P0 设计取**对应** token 同值(如导航栏背景取 `--paper` 同值、tabBar 未选中 `color` 取 `--muted` 同值、tabBar `backgroundColor` 取 `--paper-card` 同值),**不强制全部 = 蓝**
+- **那么** 页面 / 组件的 css 与内联 style **禁止出现任何**颜色字面量(hex / rgb(a) / hsl(a) / 具象命名色;**不含** `transparent` / `inherit` / `currentColor` 等功能性关键字)——一律改用 `var(--…)`(含**阴影走 `var(--shadow)`**,不得直写 `rgba(...)`);颜色字面量**只允许**出现在 `app.css` 的 token 定义处(既有 `index.css` 的旧硬编码色**必须**已清理为变量引用)。**例外(不在本 grep 范围)**:`app.config.ts` 与各页 `*.config.ts` 的原生配置色字段(`window.navigationBarBackgroundColor`、`tabBar` 的 `color` / `selectedColor` / `backgroundColor`)、以及 tabBar PNG 图标——小程序框架限制、不能引 CSS 变量,故豁免;其中 tabBar **`selectedColor`(及选中图标烧入色)必须 = `--blue`(`#014B90`)**,其余原生配色字段按 DESIGN.md 取**对应** token 同值(如导航栏背景取 `--paper` 同值、tabBar 未选中 `color` 取 `--muted` 同值、tabBar `backgroundColor` 取 `--paper-card` 同值),**不强制全部 = 蓝**
 
 #### 场景:可比单价仍以 per100ml 呈现、不被整件价反推
 - **当** 渲染榜单行
@@ -223,7 +223,7 @@
 #### 场景:单位选项按所选品类的可比单位轴约束
 - **当** 用户在品类选择里选了一个 `per_100ml` cohort(如软饮)
 - **那么** 单位选项**必须**约束为容量轴(`ml`/`L`)、并提示该品类按每 100ml 比价——与服务端跨轴不可比 `400` 守卫同口径,端上预约束以减少被拒往返
-- **注**:本期 `toCohorts` **只派生 `per_100ml` cohort**(与服务端 per_100g→`400` 同口径),故 UI 本期不提供 `per_100g` 选项;待重量轴 backfill 解禁后,`per_100g` cohort 的单位选项再约束为 `g`/`kg`
+- **注**:当前 `toCohorts` **只派生 `per_100ml` cohort**(与服务端 per_100g→`400` 同口径),故 UI 不提供 `per_100g` 选项;快照未来扩出重量轴后,`per_100g` cohort 的单位选项再约束为 `g`/`kg`
 
 #### 场景:经 api-client 消费 /compute、不手写类型
 - **当** 比价表单页请求计算
@@ -242,7 +242,7 @@
 - **列出与回填**:`我的` **必须**按时间倒序列出历史(存储已最新在前,直接渲染、无需再排序;每项含可读摘要 + 时间),读取**禁止**发起网络请求;点击一项**必须** `Taro.navigateTo({ url: \`/pages/compute/index?h=${ts}\` })`(handle 用项的**稳定 `ts`**、**非数组索引**——索引对可变环形表会错指/错位;`ts` 由写端单调保证唯一),比价表单页据 `h` **回填**并可重算:`Number(h)` 解析 + **正整数**校验(`Number.isInteger(n) && n>0`,`ts` 必为正整数)→ `readHistory().find(x => x.ts === n)`,**找不到 / `h` 非法 → 不回填、维持空表单**(不崩)。
 - **回填水合**(request→表单,**必须在 cohorts 异步加载完成后**做):`loadCohorts` 当前 fire-and-forget 返回 `void`,**必须改为可消费形**(把消费放进其 `.then`,或令其 `return` promise 链——直接 `loadCohorts().then` 会 `undefined.then` 抛错);`useLoad((options)=>…)` 把 `h` 存入 `pendingH`,在 cohorts 落地的**同一 `.then` 内**用**该回调局部 `cs`(非 `cohorts` React state,`setState` 异步)**消费,且**排在默认 `setCohortIdx(0)`/`setUnit` 之后**(否则默认盖掉回填);`pendingH` 清除分三态:命中水合 / **加载成功但 `cs` 为空(终态空品类、无表单)→ 清**;`.catch` 失败 → **不清**(重试再触发)。映射(对局部 `cs`):`mode = input.unitSize != null ? 'unit':'total'`(`ComputeRequest` 无 `mode`,反推);`amount/unit` 取自 `input.unitSize ?? input.totalAmount`、数字转字符串;`cohortIdx = cs.findIndex(c => c.slug === input.category)`。容错:**⓪ `cs.length===0` → 跳过水合并清 `pendingH`(避免 `cs[0]` 解引用)**;① slug 已不在树中(`findIndex` 返回 -1)→ **降级**填价格/数量/量 + 退回默认品类 + 内联提示"原品类已变动,请重选",**禁止**置 -1 或崩;② `unit` 不在**最终(命中或①退回默认)** cohort 的轴上 → 用 `unitsForAxis(最终cohort.axis)[0]` 钳制(①退回默认时按默认 cohort 轴、不按失效原 cohort);③ `/categories` 加载失败 → 保留品类错误态、**本次不回填**(不崩),且 `h` 经 `pendingH` **不丢失**、重试加载成功时再触发。
 
-视觉**必须**复用 P0 设计 tokens(引用 `app.css` 的 `var(--…)`),**禁止**在该页 css / 内联 style 散写色板十六进制字面量。
+视觉**必须**复用 DESIGN.md 定义的 tokens(引用 `app.css` 的 `var(--…)`),**禁止**在该页 css / 内联 style 散写色板十六进制字面量。
 
 #### 场景:即时比价入口仅本地跳转
 
@@ -293,7 +293,7 @@
 
 `我的` Tab **必须**含「关于区」,全部为静态内容或微信原生能力,**禁止**发起应用网络请求、**禁止**构成纠错 / 贡献入口:
 
-- **数据来源与时效说明**:**必须**以静态文案说明数据来自**用户主动贡献的众包数据 + 运营整理校准**、价格可能过期、结论**不构成**购买建议。文案**必须**与架构合规分层(§7:中心库只收用户已在看商品的众包数据、**不做服务端主动爬取**)一致,**禁止**出现「抓取 / 爬取 / 自动采集 / 自抓」等暗示主动爬取的措辞。
+- **数据来源与时效说明**:**必须**以静态文案说明数据来自**用户主动贡献的众包数据 + 运营整理校准**、价格可能过期、结论**不构成**购买建议。文案**必须**与 `docs/architecture.md` 的合规边界(中心库只收用户或运营主动提交的数据、**不做服务端主动爬取**)一致,**禁止**出现「抓取 / 爬取 / 自动采集 / 自抓」等暗示主动爬取的措辞。
 - **意见反馈**:**必须**用微信原生 `<button open-type="feedback">` 提供反馈入口;该入口是通用反馈、**禁止**承载商品纠错 / 数据录入语义。
 
 #### 场景:数据来源说明为静态、合规口径
@@ -357,7 +357,7 @@
 - 置灰与历史低价标注**相互正交**:一行可同时失效且现价高于历史低点,两标注可并存。
 - **三价并存是可接受的呈现结果**:一行可同时展示 `per100ml`(排序大字)、`priceCents`(最新整件价)、`lowestPriceCents`(历史低)三个口径不同的价。徽标只对比 `priceCents` vs `lowestPriceCents`(同为整件分)、**不与 `per100ml` 混算**。`per100ml` 与 `priceCents` **同源于最近一次成功解析**(重报命中去重时派生值随之刷新,见 `persistence`/`rankings-api`),但仍有四类窗口可不同源、且并非都会自动自愈(见 `rankings-api`「口径漂移」;其中解析失败要靠再重报一次收敛,解析漂移遗留的旧行**不可修**、属已披露残留);UI 是否把「历史低」徽标与排序大字在视觉上分离由本需求交实现斟酌。**客户端禁止**据此做任何一致性校验或把不一致呈现为错误——三口径本就分母不同。
 - **标注随 `RankingRow` 组件生效于其所有渲染面**:`RankingRow` 除榜单列表外,还被即时比价页复用渲染 `neighbors`(邻居行)。邻居行是真实榜单行、带真实 `capturedAt`/`lowestPriceCents`(经 `projectNeighbor` 填充),故**同样**按上述规则置灰 / 标历史低——这是正确且期望的。但用户**自填的比价行**(非 `RankingsItem`、无 `capturedAt`/`lowestPriceCents`)**禁止**置灰或标注(走缺字段降级路径)。
-- 本需求约束逐行标注的呈现逻辑,**不**引入榜单顶部「全局新鲜度横幅 / 更新于 X月X日」——该全局横幅仍属 P8、非本期(与逐行置灰不同)。呈现所用颜色**必须**沿用 `app.css` 设计 tokens、**禁止**在页面/组件散写颜色字面量(遵既有「设计 tokens 集中」约束)。
+- 本需求约束逐行标注的呈现逻辑,**不**引入榜单顶部「全局新鲜度横幅 / 更新于 X月X日」——该全局横幅尚未实现,与逐行置灰是独立能力。呈现所用颜色**必须**沿用 `app.css` 设计 tokens、**禁止**在页面/组件散写颜色字面量(遵既有「设计 tokens 集中」约束)。
 
 #### 场景:>30 天未重报的行置灰但仍在榜
 - **当** 榜单某行 `capturedAt` 距当前已超过 `STALE_AFTER_MS`(30 天)

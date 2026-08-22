@@ -1,6 +1,22 @@
 # @unit-price/api
 
-无状态解析 API：把脏商品标题 + 价格经三段式解析（tier1 正则 → tier2 AI → tier3 确定性计算）算出可回放的单价。在解析之上提供 `POST /contribute` 众包写入端点，把上报商品落进中心库。应用是**运行时无关的 Hono fetch 工厂**，由两个薄入口复用：Cloudflare Workers（生产）与 Node（本地 dev）。两入口产出的 `/health`、`/parse`、`/contribute`、`/ingest` 行为一致，仅在入口层桥接运行时差异与治理装配。
+Hono API 同时承载无状态解析/即时比价、D1 写入、全量榜单快照、品类树和 admin backfill。应用是运行时无关的 fetch 工厂，由 Cloudflare Workers（生产）与 Node（本地 dev）两个薄入口复用。
+
+## 当前路由
+
+| 路由 | 用途 | 治理 |
+| --- | --- | --- |
+| `GET /health` | 探活 | 豁免 |
+| `GET /rankings` | 全量榜单快照 | 豁免、CDN 缓存 |
+| `GET /categories` | 无计数品类树 | 豁免、CDN 缓存 |
+| `POST /compute` | 结构化确定性即时比价 | 豁免、no-store |
+| `POST /parse` | tier1→tier2→tier3 解析 | 公共治理 |
+| `POST /contribute` | 同步写入并返回解析结果 | 公共治理 |
+| `POST /ingest` | 单条异步写入 | 公共治理 |
+| `POST /ingest/batch` | 批量异步写入 | 公共治理 |
+| `POST /admin/backfill` | taxonomy 存量回填 | 独立 admin 鉴权 |
+
+当前不存在 `/compare`、`/corrections`、`/products/:id` 或 `/search`。
 
 ## 入口
 
@@ -21,7 +37,7 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 
 ## POST /contribute
 
-众包写入端点：接收一条上报商品（领域字段 + 溯源字段），落进中心库（`product_raw` → `product` → `unit_price`），返回与 `/parse` 同形的解析结果**外加**三个持久化 id。编排为「先落 raw → orchestrate → 落 parse」——原始上报是最珍贵的众包资产，即便后续解析失败，已落地的 `product_raw` 行也保留不回滚。本端点不在 API 层重写任何解析或计算：tier1 正则、tier3 计算属 `packages/core`，tier2 属现有 orchestrate，价格/单位换算/可比判断仍由确定性程序决定。
+众包写入端点：接收一条上报商品（领域字段 + 溯源字段），落进中心库（`product_raw` → `product` → `unit_price`），返回与 `/parse` 同形的解析结果**外加**三个持久化 id。编排为「先落 raw → orchestrate → 落 parse」——原始上报是最珍贵的众包资产，即便后续解析失败，已落地的 `product_raw` 行也保留不回滚。本端点不在 API 层重写任何解析或计算：tier1 正则、tier3 计算属 `packages/core`，tier2 属现有 orchestrate，价格、单位换算与可计算终态仍由确定性程序决定。
 
 请求体字段（Zod 校验，与 `/parse` 同一份 schema 源）：
 
@@ -30,13 +46,14 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 | `title` | string（非空） | 是 | 商品标题 |
 | `price` | number（有限） | 是 | 价格；仅挡 `NaN`/`±Inf`。**负价/0 价合法**，照常落库、走 `200` + `unitPrice.per100ml=null` + warning |
 | `categoryHint` | string | 否 | 品类提示（领域字段，随 `raw` 落库） |
+| `nativeCategoryId` | string（空白按缺省） | 否 | 门店原生叶分类 id；独立 provenance，不与 categoryHint 混用 |
 | `store` | string（非空） | 是 | 去重键 `(store, storeSku)` 来源 |
 | `storeSku` | string（非空） | 是 | 去重键 `(store, storeSku)` 来源 |
 | `source` | string | 否 | 溯源：上报来源 |
 | `sourceUrl` | string | 否 | 溯源：来源 URL |
 | `capturedAt` | int（epoch ms） | 否 | 抓取时间戳；整数 epoch 毫秒，不接受 ISO 串 |
 
-同 `(store, storeSku)` 再次上报为 upsert：`price`/`title`/`capturedAt` 无条件覆盖为最近一次；`source`/`sourceUrl`/`categoryHint` 按 COALESCE 语义（重报提供新非空值则更新，省略则保留旧值、不被 null 覆盖）。客户端重试安全（经 upsert 幂等收敛到同一 raw 行），但会重新触发 tier2 LLM，其成本由治理限频兜底。
+同 `(store, storeSku)` 再次上报为 upsert：`price`/`title`/`capturedAt` 无条件覆盖为最近一次；`source`/`sourceUrl`/`categoryHint`/`nativeCategoryId` 按 COALESCE 语义（重报提供新非空值则更新，省略则保留旧值、不被 null 覆盖）。客户端重试安全（经 upsert 幂等收敛到同一 raw 行），但会重新触发 tier2 LLM，其成本由治理限频兜底。
 
 成功响应 `200`，体为 `/parse` 既有响应契约（`spec`/`unitPrice`/`confidence`/`warnings`）**附加** `rawId`/`productId`/`unitPriceId`（均为 app 生成 TEXT id）。响应返回前过 Zod 校验。
 
@@ -54,9 +71,9 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 
 ## POST /ingest
 
-异步众包采集端点：服务两类客户端中「只管快速上报、不需要实时解析结果」的一类（如 Surge 插件）。它同步落 `product_raw` 后**立即**返回 `202 { rawId }`，把 tier2 解析与单价计算移出请求路径、在后台异步完成。与 `/contribute`（同步返回完整解析结果）并存：`/contribute` 适合要实时结果的客户端，`/ingest` 适合「只快报、不要实时结果」的客户端。
+异步众包采集端点：服务运营采集等「只管快速上报、不需要实时解析结果」的客户端。它同步落 `product_raw` 后**立即**返回 `202 { rawId }`，把 tier2 解析与单价计算移出请求路径、在后台异步完成。与 `/contribute`（同步返回完整解析结果）并存：`/contribute` 适合要实时结果的客户端，`/ingest` 适合「只快报、不要实时结果」的客户端。
 
-请求体与 `/contribute` **完全相同**（复用同一份 `ContributeRequestSchema`，不新增重复 schema），字段见上「POST /contribute」请求体表：领域 `title`/`price`（有限，负价/0 价合法）/`categoryHint?`，溯源 `store`/`storeSku`（均 `trim().min(1)`）/`source?`/`sourceUrl?`/`capturedAt?`（int epoch ms）。**单条**上报，不批量。同 `(store, storeSku)` 再次上报为 upsert（语义同 `/contribute`），客户端重试安全。
+请求体与 `/contribute` **完全相同**（复用同一份 `ContributeRequestSchema`，不新增重复 schema），字段见上「POST /contribute」请求体表：领域 `title`/`price`（有限，负价/0 价合法）/`categoryHint?`，溯源 `store`/`storeSku`（均 `trim().min(1)`）/`nativeCategoryId?`/`source?`/`sourceUrl?`/`capturedAt?`（int epoch ms）。**单条**上报，不批量。同 `(store, storeSku)` 再次上报为 upsert（语义同 `/contribute`），客户端重试安全。
 
 成功响应 `202`，体为 `{ rawId }`（app 生成 TEXT id，仅作 raw 落地证明）——**不**返回 `spec`/`unitPrice`/`confidence`/`warnings`，因为解析尚未完成。响应返回前过最小 `IngestResponseSchema`（`z.object({ rawId: z.string().min(1) })`）校验。
 
@@ -80,6 +97,10 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 
 后台失败留下的「有 raw 无 product」中间态是有意接受的；`getProduct` 只查有 product 的行，不受影响。每条上报只触发一次后台解析（无轮询/重扫），总量由治理限频在入口兜住。
 
+## POST /ingest/batch
+
+请求体为 `{ items: ContributeRequest[] }`。每项独立落 raw，至少一项成功时返回 `202 { accepted, failed }`；`failed` 按原始 index 报告。全部落库失败返回 `500 persistence-error`，不以 `accepted:0` 伪装成功。后台解析汇聚为一个有界并发单元，用量按 accepted 数累计。
+
 ## 配置与 secret
 
 配置经**注入的 `env`**（而非全局 `process.env`）按请求读取：Workers 路径下来自 fetch handler 的 `env` binding，Node dev 路径下由入口层从 `process.env` 取值后注入。
@@ -88,11 +109,13 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 | --- | --- | --- |
 | `OPENROUTER_API_KEY` | runtime secret | `wrangler secret put`，production 与 preview **各配一份** |
 | `API_KEYS` | runtime secret（治理 allowlist，逗号分隔） | `wrangler secret put`，production 与 preview **各配一份** |
+| `ADMIN_API_KEYS` | runtime secret（admin allowlist） | production admin backfill 独立配置 |
+| `AUDIT_LOG_HMAC_SECRET` | runtime secret | admin 审计 key 的 HMAC 输入，与 admin key 不同源 |
 | `CLOUDFLARE_API_TOKEN` | CI 凭据 | GitHub Actions secret |
 | `DB` | D1 binding | `wrangler.toml` 声明 |
 | `GOVERNANCE_KV` | KV binding（限频 + 用量计数） | `wrangler.toml` 声明 |
 
-`wrangler.toml` 只放资源 id，**不含任何明文密钥**。`OPENROUTER_API_KEY`/`API_KEYS` 经 `wrangler secret put` 带外设置、不随每次 deploy 重注。preview 同样需配齐二者，否则 preview 的 tier2/鉴权处于未定义态。
+`wrangler.toml` 只放资源 id，**不含任何明文密钥**。四项 runtime secret 均经 `wrangler secret put` 带外设置、不随 deploy 重注。preview 至少需配齐 `OPENROUTER_API_KEY`/`API_KEYS`;production 若要驱动 backfill 还必须配齐两个 admin secret。
 
 `wrangler.toml` 声明的 binding 名（`DB`、`GOVERNANCE_KV`）与应用代码 `Bindings` 类型读取的名字一一对应。
 
@@ -101,13 +124,15 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 ```sh
 wrangler secret put OPENROUTER_API_KEY --env production --config apps/api/wrangler.toml
 wrangler secret put API_KEYS           --env production --config apps/api/wrangler.toml
+wrangler secret put ADMIN_API_KEYS      --env production --config apps/api/wrangler.toml
+wrangler secret put AUDIT_LOG_HMAC_SECRET --env production --config apps/api/wrangler.toml
 wrangler secret put OPENROUTER_API_KEY --env preview    --config apps/api/wrangler.toml
 wrangler secret put API_KEYS           --env preview    --config apps/api/wrangler.toml
 ```
 
 ## 治理
 
-受保护端点集合 `{/parse, /contribute, /ingest}` 同受治理链保护，按 **鉴权 → 限频 → 用量 → 业务** 顺序挂载；`/health` 豁免整条链。
+公共治理保护 `{/parse, /contribute, /ingest, /ingest/batch}`，按 **鉴权 → 限频 → 用量 → 业务** 顺序挂载。`/health`、`/rankings`、`/categories`、`/compute` 豁免公共治理；`/admin/backfill` 使用独立 `ADMIN_API_KEYS` 鉴权且不计公共限频/用量。
 
 - **鉴权**：从 `Authorization: Bearer <key>` 读 key。`Authorization` 存在即为**权威源、严格不回退**——非 Bearer 形态（如 `Basic …`）或空 Bearer 值（`Authorization: Bearer ` 无 key）直接判 `auth-malformed`，**不**回退去读 `X-API-Key`；仅当 `Authorization` **完全缺失**时才读 `X-API-Key`（其为空串/含非法字符同判 `auth-malformed`）。完全无鉴权头则 `auth-missing`。key 校验对 `API_KEYS` allowlist（不在其中判 `403 auth-forbidden`）。真实治理初始化时 `API_KEYS` 空/缺按配置错误处理（`500 config-error`），不静默把合法 key 全打成 `403`。
 - **限频**：挂在鉴权之后，`GOVERNANCE_KV` 固定窗口计数（`rl:<key>:<windowStart>`，TTL=窗口），超限返回 `429` + `Retry-After`，按 key 隔离。`GOVERNANCE_KV` 故障时 **fail-open**（放行 + 告警），不把 KV 抖动放大成全量 `429`/`5xx`。
@@ -135,7 +160,7 @@ wrangler secret put API_KEYS           --env preview    --config apps/api/wrangl
 ### 部署前置（首次，带外）
 
 1. **开通资源**：`wrangler d1 create`（production/preview/dev 各一）、`wrangler kv namespace create`（各环境一个、title 互不相同），把返回的 `database_id` / `id` 回填 `wrangler.toml` 对应块；binding 名保持 `DB` / `GOVERNANCE_KV` 不变。
-2. **配 runtime secret**：`OPENROUTER_API_KEY` 与 `API_KEYS`，production 与 preview 各一份（命令见上「配置与 secret」）。
+2. **配 runtime secret**：`OPENROUTER_API_KEY` 与 `API_KEYS` 在 production/preview 各一份；production backfill 另配 `ADMIN_API_KEYS` 与 `AUDIT_LOG_HMAC_SECRET`（命令见上）。
 3. **配 CI 凭据**：`CLOUDFLARE_API_TOKEN` 作为 GitHub repo 的 Actions secret（名字须正好为 `CLOUDFLARE_API_TOKEN`，与 `deploy.yml` 对应）。
 
 `CLOUDFLARE_API_TOKEN` 用 **Custom Scoped Token**（Cloudflare → My Profile → API Tokens → Create Custom Token），**不要用 Global API Key**。按本流水线「`wrangler deploy` + `d1 migrations apply --remote`」所需，权限为：
@@ -176,4 +201,4 @@ pnpm --filter @unit-price/api build   # tsc -b
 pnpm --filter @unit-price/api test    # vitest run
 ```
 
-`worker.ts` 入口级集成测试（miniflare/workerd）断言生产入口下「缺 key→`401`、合法 key→放行、超限→`429`」，并以 grep/类型断言确认 `worker.ts` 不引用 no-op 治理符号（防误注 no-op 致公网全放行）。
+`worker.ts` 入口级测试以 in-process `worker.fetch` + Map-backed fake KV 断言「缺 key→401、合法 key→放行、超限→429」，并确认生产入口不引用 no-op 治理符号。D1 平台语义另由 `packages/db` 的 workerd 测试覆盖。

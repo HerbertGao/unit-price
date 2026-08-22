@@ -2,7 +2,7 @@
 
 ## 目的
 
-定义 `@unit-price/db` 持久层：以 `@unit-price/core` 领域类型为单一事实源、用 SQLite↔Postgres 可移植类型落库原始上报（`product_raw`）、规范商品（`product`）、计算结果（`unit_price`）与人工纠错（`corrections`），并提供类型化 repository 契约、可复现迁移与不依赖外部数据库的本地测试基座。本节为待定占位，详见各需求。
+定义 `@unit-price/db` 的 D1/SQLite schema、迁移与 repository：保存原始上报、规范商品、单位价、纠错及 taxonomy 四表，复用 core Zod 领域类型，并以 SQLite↔Postgres 可移植类型和本地/workerd 测试保证行为。
 
 ## 需求
 
@@ -78,15 +78,15 @@
 
 ### 需求:product 必须存规范商品且预留品类扩展位
 
-`product` **必须**由 `ParsedSpec` 派生落库(`unit_size_value`/`unit_size_unit`、`quantity`、`multipliers`、`total_amount_*`、`package_unit`、`category`、`confidence`),并**必须**经 `raw_id` 外键关联到产生它的 `product_raw` 行。此处 `confidence` 为 **`ParsedSpec.confidence`(解析置信,中间值)**,与 `unit_price` 的最终权威置信(见下需求)是**两个不同的值**、语义不同。本次 `category` **必须**保持为现有的自由 string(恒 `beverage`)——品类真值改由 `category-tagging` 的 `product_tag` 承载,`spec-parsing` 的 `category` 恒常量约束本期不变;可空字段**必须**用 nullable 列,使部分 tier1 命中能落库。
+`product` **必须**由 `ParsedSpec` 派生落库(`unit_size_value`/`unit_size_unit`、`quantity`、`multipliers`、`total_amount_*`、`package_unit`、`category`、`confidence`),并**必须**经 `raw_id` 外键关联到产生它的 `product_raw` 行。此处 `confidence` 为 **`ParsedSpec.confidence`(解析置信,中间值)**,与 `unit_price` 的最终权威置信(见下需求)是**两个不同的值**、语义不同。`category` **保持**现有的自由 string(恒 `beverage`)——品类真值由 `product_tag` 承载;可空字段**必须**用 nullable 列,使部分 tier1 命中能落库。
 
-**本期(`category-tagging`)引入品类表与扩展列**:**必须**新增 `tag` / `product_tag` / `store_category_map` / `category_closure` 四表,并给 `product` 增 `pending_category_tag_id`(可空,「粗分类 / 待细化」非叶终态指针,引用 `tag`)与 `rankable`(派生)两列。这些表 / 列**必须**沿用本规范的可移植类型(app 生成 TEXT 主键、JSON-text、INTEGER、REAL;无 Postgres-only 类型)。`tag.comparable_unit` **必须可空**;`product_tag.confidence` 为 REAL、`product_tag.source` 为 TEXT 枚举(本期 `{rule, store-map, manual}`);`(product_id, tag_id)` 与 `(store, native_category_id)` 各为唯一键。
+**品类表与扩展列**:**必须**包含 `tag` / `product_tag` / `store_category_map` / `category_closure` 四表,并给 `product` 增 `pending_category_tag_id`(可空,「粗分类 / 待细化」非叶终态指针,引用 `tag`)与 `rankable`(派生)两列。这些表 / 列**必须**沿用本规范的可移植类型(app 生成 TEXT 主键、JSON-text、INTEGER、REAL;无 Postgres-only 类型)。`tag.comparable_unit` **必须可空**;`product_tag.confidence` 为 REAL、`product_tag.source` 为 TEXT 枚举 `{rule, store-map, manual}`;`(product_id, tag_id)` 与 `(store, native_category_id)` 各为唯一键。
 
-**非空旧库迁移安全(B1)**:`product.rankable` **必须**以 `INTEGER NOT NULL DEFAULT 0` 加列——生产 `product` 为非空表(现状约 445 行)、且 push main 自动 migrate,**SQLite 非空表加无 DEFAULT 的 `NOT NULL` 列会直接报错**(对齐既有「迁移可复现 / 非空旧库」纪律);加列即全 `0`,随后由 `category-tagging` backfill `UPDATE` 重算到正确值。`pending_category_tag_id` 加列为可空(无此问题)。
+**非空旧库迁移安全(B1)**:`product.rankable` **必须**以 `INTEGER NOT NULL DEFAULT 0` 加列——生产 `product` 为非空表、且 push main 自动 migrate,**SQLite 非空表加无 DEFAULT 的 `NOT NULL` 列会直接报错**(对齐既有「迁移可复现 / 非空旧库」纪律);加列即全 `0`,随后由 `category-tagging` backfill `UPDATE` 重算到正确值。`pending_category_tag_id` 加列为可空(无此问题)。
 
 **两新列不进去重键**:`pending_category_tag_id` / `rankable` 是**溯源 / 派生增列**(类同 `raw_id` / `dedupe_key`),**禁止**进入 `dedupe_key`、**不影响**既有 first-write-wins 去重收敛(与「键与价格无关、`confidence` 不进键」同口径)。
 
-其余语义与不变量(单归属 / `comparable_unit` 继承 / 闭包 / 仲裁 / `rankable` 派生 / 三态)由 `category-tagging` 能力定义。**仍禁止** `comparison_group` 表(对比组改动态查询,见 taxonomy §九)。
+其余语义与不变量(单归属 / `comparable_unit` 继承 / 闭包 / 仲裁 / `rankable` 派生 / 三态)由 `category-tagging` 能力定义。**仍禁止** `comparison_group` 表,对比组按 taxonomy 动态派生。
 
 #### 场景:部分规格命中也能落库
 - **当** 一个只命中 `unitSize`、`quantity` 为 null 的 `ParsedSpec` 落库

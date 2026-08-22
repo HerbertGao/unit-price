@@ -290,7 +290,7 @@ describe('tagTier1Attributes', () => {
 });
 
 // --------------------------------------------------------------------------
-// 1.4 deterministic arbitration — taxonomy §五 full table.
+// Deterministic arbitration matrix: every tier1 × store-map state.
 // --------------------------------------------------------------------------
 
 function tier1Leaf(slug: Tier1LeafResult['leaf']): Tier1LeafResult {
@@ -306,7 +306,7 @@ const smLeaf = (slug: 'carbonated' | 'juice-plant'): StoreMapResult => ({
 const smCoarse: StoreMapResult = { kind: 'coarse', coarseNodeSlug: 'soft-drink' };
 const smNone: StoreMapResult = { kind: 'none' };
 
-describe('arbitrate — taxonomy §五', () => {
+describe('arbitrate — deterministic matrix', () => {
   it('① granularity conflict: tier1 leaf vs store-map coarse → deeper leaf (tier1)', () => {
     const v = arbitrate(tier1Leaf('carbonated'), smCoarse);
     expect(v).toEqual({ verdict: 'leaf', leafSlug: 'carbonated', decidedBy: 'tier1' });
@@ -380,10 +380,10 @@ describe('arbitrate — taxonomy §五', () => {
 });
 
 // --------------------------------------------------------------------------
-// End-to-end working examples from taxonomy §二/§五.
+// End-to-end classification and arbitration examples.
 // --------------------------------------------------------------------------
 
-describe('working examples (taxonomy §二/§五)', () => {
+describe('classification working examples', () => {
   it('可口可乐 无糖 → carbonated + sugar-free', () => {
     const title = '可口可乐 无糖 330ml*24';
     const leaf = tagTier1Leaf({ title });

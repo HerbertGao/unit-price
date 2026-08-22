@@ -1,5 +1,7 @@
 # 派生数据回填与修正 运维 Runbook
 
+> 状态说明：native-id 回填和 2026-07 单价偏差修正已有完成记录；本文保留为生产重跑/排障手册，不代表这些步骤当前待执行。实时端点与数据模型以代码和 OpenSpec 主规范为准。
+
 ## 目的
 
 对**生产存量商品**跑派生数据的回填与修正:①打标签 backfill(经打标签管线产出品类归属、重算 `rankable`、补 `category_closure` 命中);②native-id 回填(给存量行补 `product_raw.native_category_id`);③单价偏差修正(重灌 + 逐行检测器,把冻结在旧价上的 `unit_price` 派生值追平)。三者的入口、机制与产物都不同,见下节。
@@ -172,7 +174,7 @@ native-id 已落后,按本文「驱动」节重跑 `POST /admin/backfill`(幂等
 wrangler d1 execute unit-price-prod --config apps/api/wrangler.toml --env production --remote --file scripts/census-drift.sql
 ```
 
-census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `product_raw.price`」,并把结果分成 `drifted_fixable_by_reingest`(可修)与 `drifted_ghost`(幽灵行,重报只会写新键、修不到旧行)。**核对按分相等、禁用浮点容差**——`|首项 − price/100| ≤ 0.01` 会把真正过期一分钱的行判绿。census **②b** 用同一谓词输出**可修偏差行的 `(store, store_sku)` 明细**,那是下面循环第 3 步要和 HAR 求交的清单。该谓词共三份(census ②、②b、`design.md` D3 摘录),**三处必须同改**。
+census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `product_raw.price`」,并把结果分成 `drifted_fixable_by_reingest`(可修)与 `drifted_ghost`(幽灵行,重报只会写新键、修不到旧行)。**核对按分相等、禁用浮点容差**——`|首项 − price/100| ≤ 0.01` 会把真正过期一分钱的行判绿。census **②b** 用同一谓词输出**可修偏差行的 `(store, store_sku)` 明细**,那是下面循环第 3 步要和 HAR 求交的清单。该谓词在 `scripts/census-drift.sql` 的 census ② 与 ②b 两处出现,**两处必须同改**。
 
 **覆盖面必须记牢,否则判据会撒谎**:
 
@@ -215,7 +217,7 @@ census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `pro
 
 ### 这是运维侧核对,不是系统自动校验
 
-`formula` 内嵌的元价与 `price` 列的整数分是**两套金额**,系统**各自独立留痕、不做跨表交叉校验**(见 `openspec/specs/persistence/spec.md` 的 `unit_price` 需求)——那条约束约束的是**系统**:写路径不读回、不比对、不因两者不一致而拒写。本节的检测是**人跑的只读普查**,与该约束不冲突,也**不**是可以指望系统自己发现偏差的理由。
+`formula` 内嵌的元价与 `price` 列的整数分是**两套金额**,系统**各自独立留痕、不做跨表交叉校验**——这是系统写路径的既有边界:写路径不读回、不比对、不因两者不一致而拒写。本节的检测是**人跑的只读普查**,与该约束不冲突,也**不**是可以指望系统自己发现偏差的理由。
 
 **收尾**:先按下节刷新 CDN + 预热,**再**开放 ingest 入口。
 

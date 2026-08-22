@@ -2,7 +2,7 @@
 
 商品库持久层：Drizzle schema（sqlite 方言）+ 类型化 repository + 迁移。把 `@unit-price/core` 产出的领域对象（`RawProduct` / `ParsedSpec` / `CalcResult`）落库，落库前后均过 core 的 Zod schema 校验。
 
-表：`product_raw` / `product` / `unit_price` / `corrections`。表清单与设计的 SOT 见 [`docs/architecture.md`](../../docs/architecture.md) §五；`comparison_group` 不物化（对比组改动态查询，见 [`docs/taxonomy-and-tagging.md`](../../docs/taxonomy-and-tagging.md) §九）。
+当前八张表：`product_raw` / `product` / `unit_price` / `corrections` / `tag` / `product_tag` / `store_category_map` / `category_closure`。表清单与设计 SOT 见 [`docs/architecture.md`](../../docs/architecture.md)；`comparison_group` 不物化，对比组按 taxonomy 动态派生。
 
 schema 只用 SQLite↔Postgres 可移植类型（TEXT id / JSON-text / 整数分 / REAL / epoch INTEGER；禁用原生数组、`jsonb`、`serial`、`numeric`），撑爆 D1 时可平滑迁 Postgres。
 
@@ -12,7 +12,7 @@ repository 不自取连接——`createDb()` 接受**注入连接**，缺失/打
 
 | 环境 | 连接 | 说明 |
 | --- | --- | --- |
-| 生产 | Cloudflare D1 binding | 由 Worker 注入（wrangler 的 binding 声明归 `public-deploy` 变更）；迁移经 wrangler 对 binding 应用 |
+| 生产 | Cloudflare D1 binding | 由 Worker/wrangler 注入；迁移经 wrangler 对 binding 应用 |
 | 本地开发 | SQLite 文件 | `drizzle-kit` 读 `DB_FILE` 环境变量，默认 `file:./.local/dev.sqlite`（gitignore，见 `.local/`） |
 | 测试 | in-memory SQLite | `better-sqlite3` 的 `:memory:` 库，测试基座自建（见下） |
 
