@@ -14,4 +14,4 @@
 
 ## 4. 微信运行时验收
 
-- [ ] 4.1 清理微信开发者工具项目缓存,以稳定基础库导入新 `dist`;确认无 `ReactCurrentBatchConfig` / `app.js` 启动异常,App 与 `pages/index/index` 完成注册并记录验收结果
+- [x] 4.1 已清理微信开发者工具缓存并以稳定基础库导入新 `dist`;确认无 `ReactCurrentBatchConfig` / `app.js` 启动异常,App 与 `pages/index/index` 正常注册
