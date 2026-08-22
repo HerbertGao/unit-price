@@ -1,10 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    // TS7 deprecates moduleResolution=node10; the Taro toolchain still needs it.
-    "ignoreDeprecations": "6.0",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "removeComments": false,
     "preserveConstEnums": true,
     "moduleDetection": "force",
@@ -22,7 +20,6 @@
     "strict": true,
     "strictNullChecks": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "rootDir": ".",
     "jsx": "react-jsx",
     "allowJs": true,
