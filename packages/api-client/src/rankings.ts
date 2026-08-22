@@ -59,13 +59,3 @@ export const RankingsItemSchema = z.object({
 });
 
 export type RankingsItem = z.infer<typeof RankingsItemSchema>;
-
-/**
- * GET /rankings response body: a bare array of ranking rows, already sorted by
- * `per100ml` ascending (cheapest real unit price first). An empty array is the
- * valid response for an empty library or an out-of-range `offset` (a 200, never
- * a 404). Validated before send to keep the contract honest.
- */
-export const RankingsResponseSchema = z.array(RankingsItemSchema);
-
-export type RankingsResponse = z.infer<typeof RankingsResponseSchema>;

@@ -6,6 +6,8 @@
   "scripts": {
     "build:weapp": "node scripts/vendor-api-client.mjs && taro build --type weapp",
     "dev:weapp": "node scripts/vendor-api-client.mjs && taro build --type weapp --watch",
+    "typecheck": "tsc --noEmit",
+    "pretest": "pnpm --filter @unit-price/api-client build",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

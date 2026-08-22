@@ -2,18 +2,14 @@
 // P0 design baseline (design/sams-zhibuzhi/index.html) in order: brand head →
 // search entry → static scope bar → ranking list.
 //
-// Consumes prod GET /rankings via @unit-price/api-client (buildRankingsUrl +
-// parseRankingsResponse, jitless) over Taro.request — wired through useRankings.
-// NO entry/scan/photo path, NO core tier1/calc on device: the list is
-// already-computed per100ml from /rankings. The search entry is a real input that,
-// on confirm, navigates to the board list page reused for search (GET /rankings?q=…,
-// still READ-ONLY); it NEVER computes or reorders the list on device.
+// Fetches one validated rankings snapshot through useRankings. No entry/scan/
+// photo path and no core tier1/calculation runs on device: per100ml is stored by
+// the server. Cohort drill-down, search, and pagination are local, order-preserving
+// views over that snapshot and send no additional rankings request.
 //
-// Data layer (the state machine + Taro lifecycle hooks) stays in the page (D4);
-// the components are pure presentation. Renders the spec's three states (loading
-// / empty / first-screen error) with the two error positions kept distinct
-// (whole-screen first-screen error vs list-preserving page error), pull-to-refresh
-// + reach-bottom pagination, and the degraded in-list ad slot (zero-height in v1).
+// Data layer (state machine + Taro lifecycle hooks) stays in the page; components
+// are pure presentation. It renders loading/empty/first-screen-error, supports
+// pull-to-refresh, and reveals additional local slices on reach-bottom.
 import { View, Text } from '@tarojs/components';
 import { useLoad, usePullDownRefresh, useReachBottom } from '@tarojs/taro';
 import Taro from '@tarojs/taro';
@@ -26,7 +22,12 @@ import SearchEntry from '../../components/SearchEntry';
 import ScopeBar from '../../components/ScopeBar';
 import RankingRow from '../../components/RankingRow';
 import ListFooter from '../../components/ListFooter';
-import { ListLoading, ListEmpty, FirstScreenError } from '../../components/ListStates';
+import {
+  ListLoading,
+  ListEmpty,
+  FirstScreenError,
+  cohortRejectionCopy,
+} from '../../components/ListStates';
 
 import './index.css';
 
@@ -39,9 +40,7 @@ function Header() {
           故排在搜索之前。 */}
       <BrandHead />
       <ScopeBar />
-      {/* Real input: on confirm it navigates to the board list page reused for
-          search (board?q=…). NO request fires here; the board page makes the
-          read-only GET /rankings?q=… call. See SearchEntry. */}
+      {/* Confirm navigates to board?q=…; that page filters the snapshot locally. */}
       <SearchEntry />
       {/* 比价辅入口(视觉次于搜索)。主入口是搜索无结果态的 ComputeCta;此处给
           「搜索前就知道没收录」的用户一个常驻 handle。→ pages/compute。 */}
@@ -74,8 +73,8 @@ export default function Index() {
     });
   });
 
-  // Reach-bottom: append the next page (no-op while loading / at end / in a
-  // first-screen error / when a page error is pending its local retry).
+  // Reach-bottom reveals the next local slice; no-op while loading, at end, or
+  // in a first-screen error.
   useReachBottom(() => {
     r.loadNext();
   });
@@ -102,11 +101,14 @@ export default function Index() {
   }
 
   // Empty state: a validated [] from /rankings → explicit empty, not blank/error.
+  // A REFUSED cohort is a different empty and says so — telling the user to pull
+  // to refresh a board that can never exist is the kind of dead retry affordance
+  // this page deleted from its footer.
   if (r.phase === 'ready' && r.items.length === 0) {
     return (
       <View className="screen">
         <Header />
-        <ListEmpty />
+        <ListEmpty {...(r.rejection ? cohortRejectionCopy(r.rejection.kind) : {})} />
       </View>
     );
   }
@@ -120,7 +122,7 @@ export default function Index() {
         {r.items.map((item) => {
           const showAdAfter = isAdSlotAfterRank(item.rank);
           return (
-            <Fragment key={`${item.store}:${item.storeSku}:${item.rank}`}>
+            <Fragment key={item.id}>
               <RankingRow item={item} />
               {showAdAfter ? <AdSlot id={`ad-slot-after-${item.rank}`} /> : null}
             </Fragment>
@@ -129,10 +131,7 @@ export default function Index() {
       </View>
 
       <ListFooter
-        pageLoading={r.pageLoading}
-        pageError={r.pageError}
         reachedEnd={r.reachedEnd}
-        onRetryNext={() => r.retryNext()}
       />
     </View>
   );

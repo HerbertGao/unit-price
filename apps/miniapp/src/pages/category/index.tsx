@@ -1,12 +1,11 @@
 // 分类 Tab — the store-agnostic category is-a tree. One GET /categories on load
 // (no pagination: the whole tree is a single small payload), flattened into a
 // pre-order indented list. Rankable nodes (a single comparable cohort) are
-// tappable → the category-scoped 分类榜 (/pages/board). Non-rankable nodes
-// (root 饮料 / 酒类 parent) are group headers, NOT clickable — tapping one would
-// hit the server's cohort 400, so the tree gates clickability by node.rankable.
+// tappable → the locally derived category board. Non-rankable nodes (root 饮料 /
+// 酒类 parent) are group headers and are gated solely by node.rankable.
 //
-// Read-only: NO on-device calc, NO write path. comparableUnit (is-a inherited)
-// and rankableCount are already resolved server-side; the page just draws them.
+// Read-only: no on-device calculation or write path. comparableUnit is already
+// inheritance-resolved; the response deliberately carries no server-side count.
 import { View, Text } from '@tarojs/components';
 import Taro, { useLoad } from '@tarojs/taro';
 import { useState } from 'react';
@@ -91,9 +90,6 @@ export default function Category() {
           onClick={() => open(node)}
         >
           <Text className="ctree__name">{node.name}</Text>
-          {node.rankableCount > 0 ? (
-            <Text className="ctree__count">{node.rankableCount}</Text>
-          ) : null}
           {node.rankable ? <Text className="ctree__chev">›</Text> : null}
         </View>
       ))}

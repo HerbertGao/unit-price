@@ -1,19 +1,19 @@
-// Rankings board list — the per100ml-ascending list reused by TWO entries:
-//   - 分类下钻: GET /rankings?category=<slug>, title = category's Chinese name.
-//   - 搜索:     GET /rankings?q=<term>,       title = `搜索：<decoded q>`.
-// Non-tab page (has a back button).
-//
-// Reuses the 榜单 Tab's tested data layer VERBATIM: useRankings(category, q) threads
-// the params into buildRankingsUrl → GET /rankings?category=…&q=…. Same three-state
-// render + pagination + page-error semantics; only the header chrome (brand / search
-// / scope / ads) is dropped — a board is just the list.
+// Per100ml-ascending board reused by category drill-down and search. Both views
+// call useRankings(category, q), which reads one snapshot and filters/slices it
+// locally while preserving server order. This non-tab page only changes title
+// chrome; it never issues category- or query-specific rankings requests.
 import { View } from '@tarojs/components';
 import Taro, { useRouter, useLoad, usePullDownRefresh, useReachBottom } from '@tarojs/taro';
 import { useRankings } from '../index/useRankings';
 import { readBoardParams } from './params';
 import RankingRow from '../../components/RankingRow';
 import ListFooter from '../../components/ListFooter';
-import { ListLoading, ListEmpty, FirstScreenError } from '../../components/ListStates';
+import {
+  ListLoading,
+  ListEmpty,
+  FirstScreenError,
+  cohortRejectionCopy,
+} from '../../components/ListStates';
 import ComputeCta from '../../components/ComputeCta';
 
 // Reuse the 榜单 Tab's .screen/.list rules — same list chrome, no second copy.
@@ -21,10 +21,8 @@ import '../index/index.css';
 
 export default function Board() {
   const router = useRouter();
-  // `category` is the cohort slug (undefined for a missing/blank hand-typed route →
-  // un-scoped list); `q` is the decoded search term (undefined for non-search); `name`
-  // is the title already derived by precedence (decoded non-empty q → `搜索：<q>`,
-  // else category name, else `分类榜`). See readBoardParams.
+  // Missing category falls back to the named landing cohort in useRankings; q is
+  // the decoded local-search term and name is the already-derived page title.
   const { category, q, name } = readBoardParams(router.params);
 
   const r = useRankings(category, q);
@@ -63,10 +61,18 @@ export default function Board() {
 
   // Empty: in SEARCH mode (q set) → the 比价 CTA (highest-intent "not found"
   // moment, primary entry to /compute); in category-drill mode → plain empty.
+  // A refused cohort outranks the search CTA: "no match for 元气森林" is the wrong
+  // story when the board itself could never be derived.
   if (r.phase === 'ready' && r.items.length === 0) {
     return (
       <View className="screen">
-        {q ? <ComputeCta term={q} /> : <ListEmpty />}
+        {r.rejection ? (
+          <ListEmpty {...cohortRejectionCopy(r.rejection.kind)} />
+        ) : q ? (
+          <ComputeCta term={q} />
+        ) : (
+          <ListEmpty />
+        )}
       </View>
     );
   }
@@ -75,14 +81,11 @@ export default function Board() {
     <View className="screen">
       <View className="list">
         {r.items.map((item) => (
-          <RankingRow key={`${item.store}:${item.storeSku}:${item.rank}`} item={item} />
+          <RankingRow key={item.id} item={item} />
         ))}
       </View>
       <ListFooter
-        pageLoading={r.pageLoading}
-        pageError={r.pageError}
         reachedEnd={r.reachedEnd}
-        onRetryNext={() => r.retryNext()}
       />
     </View>
   );

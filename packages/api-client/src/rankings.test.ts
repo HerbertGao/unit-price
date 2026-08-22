@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ZodError } from 'zod';
-import { RankingsResponseSchema, type RankingsItem } from './rankings.js';
-import { parseRankingsResponse } from './client.js';
+import { RankingsItemSchema, type RankingsItem } from './rankings.js';
 import { ComputeResultSchema, type ComputeResult } from './compute.js';
 
 // A full valid ranking row WITH the two new optional fields present (the shape
@@ -39,37 +38,32 @@ const validResult: ComputeResult = {
 
 describe('RankingsItem capturedAt/lowestPriceCents optionality', () => {
   it('parses a row WITH both fields present (online response)', () => {
-    expect(RankingsResponseSchema.parse([fullItem])).toEqual([fullItem]);
+    expect([RankingsItemSchema.parse(fullItem)]).toEqual([fullItem]);
   });
 
   it('parses a row MISSING both fields (old server / CDN old cache → no ZodError)', () => {
-    expect(RankingsResponseSchema.parse([legacyItem])).toEqual([legacyItem]);
+    expect([RankingsItemSchema.parse(legacyItem)]).toEqual([legacyItem]);
   });
 
-  it('parseRankingsResponse (jitless) also tolerates the missing-fields row', () => {
-    expect(parseRankingsResponse([legacyItem])).toEqual([legacyItem]);
-  });
 
   it('rejects a string capturedAt (present ⇒ must be integer epoch ms)', () => {
     const bad: unknown = [{ ...fullItem, capturedAt: '1700000000000' }];
-    expect(() => RankingsResponseSchema.parse(bad)).toThrow(ZodError);
-    expect(() => parseRankingsResponse(bad)).toThrow(ZodError);
+    expect(() => RankingsItemSchema.parse((bad as unknown[])[0])).toThrow(ZodError);
   });
 
   it('rejects a decimal capturedAt (present ⇒ must be integer)', () => {
     const bad: unknown = [{ ...fullItem, capturedAt: 1_700_000_000_000.5 }];
-    expect(() => RankingsResponseSchema.parse(bad)).toThrow(ZodError);
+    expect(() => RankingsItemSchema.parse((bad as unknown[])[0])).toThrow(ZodError);
   });
 
   it('rejects a string lowestPriceCents (present ⇒ must be integer cents)', () => {
     const bad: unknown = [{ ...fullItem, lowestPriceCents: '3900' }];
-    expect(() => RankingsResponseSchema.parse(bad)).toThrow(ZodError);
-    expect(() => parseRankingsResponse(bad)).toThrow(ZodError);
+    expect(() => RankingsItemSchema.parse((bad as unknown[])[0])).toThrow(ZodError);
   });
 
   it('rejects a decimal lowestPriceCents (present ⇒ must be integer)', () => {
     const bad: unknown = [{ ...fullItem, lowestPriceCents: 39.5 }];
-    expect(() => RankingsResponseSchema.parse(bad)).toThrow(ZodError);
+    expect(() => RankingsItemSchema.parse((bad as unknown[])[0])).toThrow(ZodError);
   });
 });
 

@@ -1,69 +1,76 @@
-// On-device SWR cache for the rankings 首页 — a per-cohort snapshot in Taro local
-// storage, fail-closed on read. Mirrors `compute/history.ts`: `getStorageSync`/
-// `setStorageSync` wrapped in try/catch, an `Array.isArray` guard, and read-time
-// re-validation so a corrupt / stale-schema store NEVER renders unvalidated data.
+// On-device snapshot cache (stale-while-revalidate).
 //
-// Boundary: the snapshot body REUSES the rankings contract — read re-validation
-// runs through `parseRankingsResponse(raw)` (the SINGLE authoritative jitless
-// validator for the rankings body; `jitless` is hardcoded inside it, so we pass
-// `raw` as the ONLY argument — unlike history.ts which safeParses a bare schema).
-// On ANY failure (throw / non-array / stale schema / dirty field) read → `null`,
-// treated as a cache miss; we never fabricate a second validation path.
+// ONE key, ONE object. The board, the category tree, search and drill-down are
+// all derived from the same snapshot, so the retired per-cohort page cache
+// stored the same rows several times over and let the copies expire to
+// different revisions.
+//
+// The key carries `v1` because the stored SHAPE changed — a bare row array
+// became a snapshot object. Bumping the name is what makes that safe: the new
+// read path only ever looks at this key, so a legacy value is unreachable
+// whether or not it is deleted. Deleting them (below) is about reclaiming
+// quota, NOT about correctness.
+//
+// Fail-closed on read, mirroring `compute/history.ts`: a stored value is
+// re-validated through the same schema the network response goes through, so a
+// value written by an older build or a truncated write is a miss, never
+// rendered.
 import Taro from '@tarojs/taro';
-import { parseRankingsResponse, type RankingsItem } from '@unit-price/api-client';
+import { parseRankingsSnapshot, type RankingsSnapshot } from '@unit-price/api-client';
+
+/** Storage key for the whole board snapshot. `v1` = this stored shape. */
+export const SNAPSHOT_CACHE_KEY = 'rankings:snapshot:v1';
+
+/** Prefix of the retired per-cohort page cache. */
+const LEGACY_KEY_PREFIX = 'rankings:board:';
 
 /**
- * Cohort sentinel for the default (落地) board, where `useRankings()` passes no
- * `category` (`category === undefined`) and the server self-defaults to
- * `'soft-drink'`. The client neither has nor mirrors that server slug — the cache
- * key is the client's OWN `category` input, with `undefined` normalized to this
- * literal so the key is stable per board mount.
- */
-export const DEFAULT_COHORT_KEY = '__default__';
-
-/** Map the client's own `category` input to a stable cohort cache key. */
-export function cohortKeyFor(category?: string): string {
-  return category ?? DEFAULT_COHORT_KEY;
-}
-
-/** Storage key for one cohort's first-page snapshot (one key per cohort, overwrite). */
-function storageKey(cohortKey: string): string {
-  return `rankings:board:${cohortKey}`;
-}
-
-/**
- * Read the on-device first-page snapshot for a cohort, or `null` on a miss.
+ * Read + re-validate the cached snapshot, or `null` on any miss/defect.
  *
- * Fail-closed: ① `getStorageSync` wrapped in try/catch (storage unavailable →
- * `null`); ② `Array.isArray` guard (a corrupt / never-written value → `null`,
- * never feed a non-array to the validator); ③ re-validate through
- * `parseRankingsResponse(raw)` (single param — jitless is internal) so a stale
- * schema / dirty field throws → `null`. NEVER returns unvalidated data.
+ * Never throws: a corrupt cache must not stop the app from fetching a fresh
+ * one. `parseRankingsSnapshot` also runs the cross-field invariants, so a
+ * partially-written object is a miss rather than a board quietly missing rows.
  */
-export function readBoard(cohortKey: string): RankingsItem[] | null {
+export function readSnapshot(): RankingsSnapshot | null {
   let raw: unknown;
   try {
-    raw = Taro.getStorageSync(storageKey(cohortKey));
+    raw = Taro.getStorageSync(SNAPSHOT_CACHE_KEY);
   } catch {
     return null;
   }
-  if (!Array.isArray(raw)) return null;
+  if (raw === '' || raw == null) return null;
   try {
-    return parseRankingsResponse(raw);
+    return parseRankingsSnapshot(raw);
   } catch {
     return null;
   }
 }
 
 /**
- * Overwrite one cohort's first-page snapshot. `setStorageSync` wrapped in
- * try/catch — a write failure (quota full / storage unavailable) only loses this
- * cache entry; it never bubbles or blocks rendering (same as history.ts).
+ * Cache a validated snapshot. A write failure (quota full, storage unavailable)
+ * is swallowed on purpose: losing the cache costs one network round-trip on the
+ * next cold start, while throwing here would take down a board that has already
+ * rendered.
  */
-export function writeBoard(cohortKey: string, items: RankingsItem[]): void {
+export function writeSnapshot(snapshot: RankingsSnapshot): void {
   try {
-    Taro.setStorageSync(storageKey(cohortKey), items);
+    Taro.setStorageSync(SNAPSHOT_CACHE_KEY, snapshot);
   } catch {
     // 写失败仅丢缓存、不阻断渲染。
+  }
+}
+
+/**
+ * Drop the retired per-cohort keys. Best-effort quota reclamation; correctness
+ * comes from the key rename, so a failure here is harmless.
+ */
+export function clearLegacyBoardCache(): void {
+  try {
+    const { keys } = Taro.getStorageInfoSync();
+    for (const key of keys) {
+      if (key.startsWith(LEGACY_KEY_PREFIX)) Taro.removeStorageSync(key);
+    }
+  } catch {
+    // Never block startup on cleanup.
   }
 }

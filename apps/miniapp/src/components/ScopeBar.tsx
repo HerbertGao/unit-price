@@ -5,11 +5,15 @@
 // P8, real category filtering is P3. Pure presentational, no props.
 import { View, Text } from '@tarojs/components';
 
+import { LANDING_SCOPE_TEXT } from '../pages/index/config';
 import './ScopeBar.css';
 
 /** Static scope wording, aligned with /rankings v1 data (in-ranking = per100ml
- *  non-null, i.e. Sam's soft drinks) and the per100ml unit. NO dynamic values. */
-export const SCOPE_TEXT = '山姆软饮真实单价榜 · 元/100ml';
+ *  non-null, i.e. Sam's soft drinks) and the per100ml unit. NO dynamic values.
+ *
+ *  Names the cohort `LANDING_COHORT` (pages/index/config.ts) selects — change
+ *  one and the board renders under a header describing a different cohort. */
+export const SCOPE_TEXT = LANDING_SCOPE_TEXT;
 
 export default function ScopeBar() {
   return (
