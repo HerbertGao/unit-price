@@ -12,4 +12,4 @@
 ## 3. 验证与交付
 
 - [x] 3.1 运行 `openspec-cn validate fix-cdn-content-encoding-negotiation --type change --strict`、workflow YAML/格式检查与 `git diff --check`，确认全部通过
-- [ ] 3.2 手动 dispatch `CDN Warm` workflow，验证编码探针在 GitHub runner 上通过且生产 `/rankings` 真机兼容，再提交 feature 分支 PR 供 review
+- [x] 3.2 手动 dispatch `CDN Warm` workflow，验证编码探针在 GitHub runner 上通过且生产 `/rankings` 真机兼容，再提交 feature 分支 PR 供 review
