@@ -225,26 +225,70 @@ census ② 的偏差谓词是「`formula` 首项(元)按分四舍五入 ≠ `pro
 
 公共读端点 `/rankings`、`/categories` 的 `Cache-Control` 是 **`public, max-age=86400`(1 天)**(`apps/api/src/routes.ts` 的 `PUBLIC_CACHE_CONTROL`)。长 TTL 是为了让国内访问命中阿里云 POP、绕开跨境回源——代价是**任何改了 prod 数据的操作(`/ingest` 新批次、临时优惠、本文的 backfill / native-id 回填)生效前,边缘还会按旧缓存服务,最多 1 天**。
 
-数据变更后**主动刷新阿里云 CDN**让其立即生效(否则只能等 TTL 自然过期)。发布快照新形状时顺序固定:
+### 回源内容编码配置(生产必需)
 
-1. 源站部署完成后,先 purge `/rankings*` 历史对象与精确 `/categories` 对象。
-2. 实测 Directory/wildcard purge 是否覆盖一个预先加热的旧带参对象;若不覆盖,按 OpenSpec deployment 规范列出的 16 条历史 rankings URL 逐条 `ObjectType=File` 刷新。
-3. purge 完成后再启用 `/rankings` query-string 归一化;先归一化会把旧数组对象钉在唯一键上。
-4. 最后预热并从国内视角验形,通过后才发布客户端。
+Cloudflare 会按回源请求的 `Accept-Encoding` 压缩 JSON,而阿里云对裸 URL 只维护一个缓存对象。若压缩体进入该对象,CDN 可能把 zstd/br 响应发给未声明支持它的微信真机。生产域名因此必须用 v2 `origin_request_header` 将回源 `Accept-Encoding` 固定为 `identity`。
 
-`/categories` 的精确刷新命令为:
-`aliyun cdn RefreshObjectCaches --ObjectPath 'https://unit-price.herbert-dev.cn/categories' --ObjectType File`。
+变更前先把相关配置保存到仓库外的 0600 文件(输出不得提交):
 
-**刷新后预热(建议,且必须预热客户端真实请求的精确 URL)**:单次回源跨境要 ~3–7s(实测 TTFB,POP→海外 CF/D1),purge 后**第一个真实用户会吃满这一跳**。归一化后客户端只请求裸榜单 URL。
+```sh
+umask 077
+aliyun cdn DescribeCdnDomainConfigs \
+  --DomainName unit-price.herbert-dev.cn \
+  --FunctionNames 'origin_request_header,gzip,brotli' \
+  > "/tmp/unit-price-cdn-config-$(date -u +%Y%m%dT%H%M%SZ).json"
+```
 
-`/rankings` 已改为**无参全量快照**,客户端只会请求裸路径,故预热清单恰为两条:
+仅在查询确认没有同名冲突配置后创建,并记录响应的 `ConfigId` 作为回滚 handle:
 
-- 榜单快照:`https://unit-price.herbert-dev.cn/rankings`
-- 品类树:`https://unit-price.herbert-dev.cn/categories`
+```sh
+aliyun cdn BatchSetCdnDomainConfig \
+  --DomainNames unit-price.herbert-dev.cn \
+  --Functions '[{"functionName":"origin_request_header","functionArgs":[{"argName":"header_operation_type","argValue":"add"},{"argName":"header_name","argValue":"Accept-Encoding"},{"argName":"header_value","argValue":"identity"},{"argName":"duplicate","argValue":"off"}]}]'
 
-**不要**预热任何 `?limit=` / `?offset=` / `?category=` 变体:源站对它们返回逐字相同的响应,但 CDN 会按 query 串各存一个对象——预热它们等于把改造前那 17 个键重新灌回国内 POP,而客户端唯一会命中的裸键一次都没热。品类下钻与搜索现在都是端上在这份快照里本地派生,不发请求。
+aliyun cdn DescribeCdnDomainConfigs \
+  --DomainName unit-price.herbert-dev.cn \
+  --FunctionNames origin_request_header
+```
 
-命中后 total 降到 ~50ms。
+必须等目标配置 `status=success` 后再刷新。回滚时删除**本次记录的**配置 ID,随后同样刷新、预热并验收:
+
+```sh
+aliyun cdn DeleteSpecificConfig \
+  --DomainName unit-price.herbert-dev.cn \
+  --ConfigId '<config-id>'
+```
+
+### 刷新、预热与验收
+
+客户端只请求两个裸 URL。数据或编码配置变更后的固定顺序为:
+
+1. 源站/回源配置完成并确认 active。
+2. 分别对 `/rankings`、`/categories` 执行 `RefreshObjectCaches --ObjectType File`,用 `DescribeRefreshTaskById` 等到 `Complete`。
+3. 分别执行 `PushObjectCache --WithHeader '{"Accept-Encoding":[" "]}'`,显式移除预热默认携带的 gzip 头,同样等任务 `Complete`。
+4. 对两 URL 各跑 identity 与 gzip-only 探针;四组都能解析 JSON 后才宣告完成。
+
+```sh
+BASE='https://unit-price.herbert-dev.cn'
+for pass in 1 2; do                    # 连续两遍确认填充后仍保持兼容
+  for path in rankings categories; do
+    for requested in identity gzip; do
+      headers=$(mktemp); body=$(mktemp)
+      curl -fsS --compressed -H "Accept-Encoding: $requested" \
+        -D "$headers" -o "$body" "$BASE/$path"
+      actual=$(awk 'tolower($1)=="content-encoding:" {gsub("\r",""); v=tolower($2)} END{print v}' "$headers")
+      case "$requested:${actual:-identity}" in
+        identity:identity|gzip:identity|gzip:gzip) ;;
+        *) echo "unsupported encoding: $path requested=$requested actual=${actual:-identity}"; exit 1 ;;
+      esac
+      python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); keys=("rows","categoryNodes","excluded") if sys.argv[2]=="rankings" else ("nodes",); assert isinstance(x,dict) and all(isinstance(x.get(k),list) for k in keys)' "$body" "$path"
+      rm -f "$headers" "$body"
+    done
+  done
+done
+```
+
+**不要**刷新或预热 `?limit=` / `?offset=` / `?category=` 变体。品类下钻与搜索都从同一快照在端上派生,query 变体只会制造无用缓存对象。命中后 total 通常降到约 50ms。
 
 **遵循源站(部署/依赖前必复验)**:长 TTL 生效的前置是阿里云 CDN **遵循源站 `Cache-Control`**(不以自有 TTL 规则覆盖)。当前实测满足(无自定义 TTL 规则;二次请求 `X-Cache: HIT`),但这是**控制台活配置、仓库管不住**——任何人加一条自定义 TTL/忽略源站规则就会静默让 86400 失效。故**不是一次性"已确认无需配置"**:每次依赖长 TTL 前、以及改动该域名 CDN 配置后,`curl -D - 'https://unit-price.herbert-dev.cn/rankings'` 看二次请求 `X-Cache` 是否 `HIT` 且 `Cache-Control` 透传为 `max-age=86400`,不满足说明源站头被覆盖、需到控制台修。`no-store`(`/compute`)不受影响、永不被缓存;搜索已改为端上本地筛选、不再发请求。
 

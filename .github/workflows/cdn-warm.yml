@@ -81,9 +81,11 @@ jobs:
           for u in "${URLS[@]}"; do
             total=$((total+1))
             echo "push: $u"
-            if ! timeout 60 aliyun cdn PushObjectCache --ObjectPath "$u"; then
+            if ! timeout 60 aliyun cdn PushObjectCache --ObjectPath "$u" \
+              --WithHeader '{"Accept-Encoding":[" "]}'; then
               sleep 2
-              if ! timeout 60 aliyun cdn PushObjectCache --ObjectPath "$u"; then
+              if ! timeout 60 aliyun cdn PushObjectCache --ObjectPath "$u" \
+                --WithHeader '{"Accept-Encoding":[" "]}'; then
                 echo "WARN push failed: $u"; fail=$((fail+1)); continue
               fi
             fi
@@ -92,3 +94,66 @@ jobs:
           # All failed -> red (AK expired / RAM revoked / CLI changed must not go
           # silently green). Partial failure stays green + warns (per-URL self-heal).
           if [ "$fail" -eq "$total" ]; then echo "ALL pushes failed"; exit 1; fi
+
+      # A successful push only proves that Aliyun accepted a task. It does not
+      # prove that a cached representation is decodable by WeChat. In particular,
+      # a zstd-capable first client once filled the single URL key with zstd and
+      # Aliyun served that object even to identity/gzip-only clients.
+      - name: Verify CDN content encoding
+        run: |
+          set -euo pipefail
+          BASE="https://unit-price.herbert-dev.cn"
+
+          probe() {
+            local url="$1" requested="$2" headers body code actual content_type cache
+            headers=$(mktemp); body=$(mktemp)
+            if ! code=$(curl -sS --compressed --connect-timeout 10 --max-time 20 \
+              -H "Accept-Encoding: ${requested}" -D "$headers" -o "$body" \
+              -w '%{http_code}' "$url"); then
+              echo "FAIL url=$url requested=$requested curl-error"
+              rm -f "$headers" "$body"
+              return 1
+            fi
+
+            actual=$(awk 'tolower($1)=="content-encoding:" { gsub("\r",""); v=tolower($2) } END { print v }' "$headers")
+            content_type=$(awk 'tolower($1)=="content-type:" { gsub("\r",""); v=tolower($2) } END { print v }' "$headers")
+            cache=$(awk 'tolower($1)=="x-cache:" { gsub("\r",""); v=$2 " " $3 } END { print v }' "$headers")
+
+            if [ "$code" != 200 ] || [[ "$content_type" != application/json* ]]; then
+              echo "FAIL url=$url requested=$requested status=$code type=${content_type:-missing}"
+              rm -f "$headers" "$body"
+              return 1
+            fi
+            case "${requested}:${actual}" in
+              identity:|identity:identity|gzip:|gzip:identity|gzip:gzip) ;;
+              *)
+                echo "FAIL url=$url requested=$requested actual=${actual:-identity} cache=${cache:-none}"
+                rm -f "$headers" "$body"
+                return 1
+                ;;
+            esac
+            if ! python3 -c 'import json,sys; x=json.load(open(sys.argv[1])); keys=("rows","categoryNodes","excluded") if sys.argv[2].endswith("/rankings") else ("nodes",); assert isinstance(x,dict) and all(isinstance(x.get(k),list) for k in keys)' "$body" "$url"; then
+              echo "FAIL url=$url requested=$requested invalid-envelope"
+              rm -f "$headers" "$body"
+              return 1
+            fi
+
+            echo "PASS url=$url requested=$requested actual=${actual:-identity} cache=${cache:-none}"
+            rm -f "$headers" "$body"
+          }
+
+          # PushObjectCache is asynchronous. Retry the complete four-probe set for
+          # at most 60s, then fail red instead of accepting a silently bad cache.
+          for attempt in {1..6}; do
+            failed=0
+            for path in rankings categories; do
+              for encoding in identity gzip; do
+                probe "${BASE}/${path}" "$encoding" || failed=1
+              done
+            done
+            if [ "$failed" -eq 0 ]; then exit 0; fi
+            echo "encoding probes not ready attempt=$attempt/6"
+            sleep 10
+          done
+          echo "CDN content-encoding verification failed"
+          exit 1
