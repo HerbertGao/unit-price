@@ -23,9 +23,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260819.1",
+    "@cloudflare/workers-types": "^5.20260904.1",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.1",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2"
   }
