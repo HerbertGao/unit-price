@@ -152,22 +152,22 @@ native-id 已落后,按本文「驱动」节重跑 `POST /admin/backfill`(幂等
 
 这些是**某次普查的快照、不是常量**:每轮修正**前**先跑一次检测取当轮基线,否则末尾的「变化」无从归因。(上文「三类回填」② 里的「存量 ~376 行」记的是 native-id 回填当时的口径,不随此表更新。)
 
-### 存量口径补充(2026-10-27 Asia/Shanghai 普查快照)
+### 存量口径补充(2026-10-27 Asia/Shanghai 刷榜后普查快照)
 
-只读跑 `scripts/census-drift.sql` 对生产 D1 `unit-price-prod`(`rows_written = 0`)。相对 2026-07-28 修正后基线:
+只读跑 `scripts/census-drift.sql` 对生产 D1 `unit-price-prod`(`rows_written = 0`)。时点约 **2026-10-27 13:01 Asia/Shanghai**,在当日 Surge/HAR ingest 刷榜之后。相对 2026-07-28 修正后基线:
 
-| 项 | 2026-07-28(修正后) | **2026-10-27** |
+| 项 | 2026-07-28(修正后) | **2026-10-27 post-ingest (~13:01 Asia/Shanghai)** |
 |---|---|---|
-| `product` / `product_raw` / `rankable=1` | 1197 / 1297 / 507 | **1633 / 1765 / 560** |
-| `drifted_total` / `drifted_rankable` / `drifted_fixable_by_reingest` / `drifted_ghost` | 0 / 0 / 0 / 0 | **0 / 0 / 0 / 0**(仍干净) |
+| `product` / `product_raw` / `rankable=1` | 1197 / 1297 / 507 | **1725 / 1939 / 560** |
+| `drifted_total` / `drifted_rankable` / `drifted_fixable_by_reingest` / `drifted_ghost` | 0 / 0 / 0 / 0 | **1 / 1 / 0 / 1**(唯一 drift 在幽灵行;②b 可修明细为空) |
 | census ④ `products_without_unit_price` | 0 | **0** |
-| census ④b `formula IS NULL AND price > 0` | 227 | **325**(复核清单,非失败门) |
-| 幽灵行(同一 `raw_id` 多条 `product`) | 4 组 8 条 | **21 组 42 条**(其中 rankable=1 共 16 行;`per100ml` 非空 6 行) |
-| census ⑤ `raws_stale_30d` / `raws_total` | (当时未记此列) | **1388 / 1765**(≈78.6%) |
-| 榜单门(`rankable=1` ∧ `per100ml IS NOT NULL`) | per100ml 非空全库 440 | **389 行在榜**;≤7d **6**;≤30d **33**;>30d **356**(≈91.5%);`数量按单件推断为 1` **258** |
-| `price ≤ 0` 的 raw | 26 | **12** |
+| census ④b `formula IS NULL AND price > 0` | 227 | **346**(复核清单,非失败门) |
+| 幽灵行(同一 `raw_id` 多条 `product`) | 4 组 8 条 | **22 组 44 条**(其中 rankable=1 共 17 行;`per100ml` 非空 7 行) |
+| census ⑤ `raws_stale_30d` / `raws_total` | (当时未记此列) | **1150 / 1939**(≈59.3%) |
+| 榜单门(`rankable=1` ∧ `per100ml IS NOT NULL`) | per100ml 非空全库 440 | **389 行在榜**;≤7d **168**;≤30d **179**;>30d **210**(≈54.0%);`数量按单件推断为 1` **258** |
+| newest `capturedAt` | — | **2026-10-27 13:00:19 Asia/Shanghai** |
 
-**结论(运维)**: 单价偏差门仍满足(`drifted_fixable_by_reingest = 0`、无缺失 `unit_price`)。当前主风险不是 drift,而是**新鲜度**(榜单 ~91.5% 置灰)与**幽灵行增长**(4→21 组;需确认是否解析漂移留下的旧键)。不因本轮 census 自动开重灌循环;若要压置灰,继续走仓外 Surge 主动上报,勿服务端爬取。
+**结论(运维)**: 单价偏差门对重灌循环仍满足(`drifted_fixable_by_reingest = 0`、无缺失 `unit_price`)。唯一一条 drift 落在幽灵行,②b 可修明细为空。当日 HAR→ingest 刷榜后**新鲜度明显改善**(榜单 ≤7d 6→**168**、>30d 356→**210**;`raws_stale_30d` 占比下降)。榜单仍是 **389** 行、`rankable=1` 仍是 **560**,这次主要是刷新已有行的时间戳与价格。幽灵行自七月 **4→22** 组(今早 21 组,刷榜后 22 组)。仍不因本轮 census 自动开重灌循环;压置灰继续走仓外 Surge 主动上报,勿服务端爬取。
 
 跑法(未改):
 
@@ -175,7 +175,7 @@ native-id 已落后,按本文「驱动」节重跑 `POST /admin/backfill`(幂等
 wrangler d1 execute unit-price-prod --config apps/api/wrangler.toml --env production --remote --file scripts/census-drift.sql
 ```
 
-完整 JSON 落盘:`/workspace/unit-price-census-drift-2026-10-27.json`(含 ②b 空集与 ③ 幽灵明细)。
+完整 JSON 落盘:`/workspace/unit-price-census-drift-2026-10-27-post-ingest.json`(含 ②b 空集与 ③ 幽灵明细);榜单新鲜度旁路:`/workspace/unit-price-rankings-freshness-2026-10-27-post-ingest.json`。
 
 ### 窗口边界(必须先立)
 
