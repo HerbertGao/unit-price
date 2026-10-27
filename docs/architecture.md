@@ -64,7 +64,7 @@ openspec             # 主 specs 与归档记录
 
 ## 六、apps/miniapp
 
-当前客户端为 React 18.3.1 + Taro 4.2.1。它一次读取榜单快照并在本地派生 cohort/search/page，结构化即时比价由 API 计算；端上不运行 core，也不写中心库。具体页面、已实现状态与后续路线只在 [`miniapp-roadmap.md`](miniapp-roadmap.md) 维护。
+当前客户端为 React 18.3.1 + Taro 4.3.1。它一次读取榜单快照并在本地派生 cohort/search/page，结构化即时比价由 API 计算；端上不运行 core，也不写中心库。具体页面、已实现状态与后续路线只在 [`miniapp-roadmap.md`](miniapp-roadmap.md) 维护。
 
 ## 七、持久层与 taxonomy
 
