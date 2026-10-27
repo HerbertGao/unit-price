@@ -18,4 +18,4 @@
 
 ## 4. 验证
 
-- [ ] 4.1 跑 `openspec-cn validate add-product-trust-page --strict` 与 `pnpm -r test`。本变更不改 `packages/core`，无新的脏标题样本。
+- [x] 4.1 跑 `openspec-cn validate add-product-trust-page --strict` 与 `pnpm -r test`。本变更不改 `packages/core`，无新的脏标题样本。

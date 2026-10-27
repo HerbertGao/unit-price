@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import type { ParsedSpec } from '@unit-price/core';
 import { parseProductTrust } from '@unit-price/api-client';
@@ -196,27 +198,32 @@ describe('GET /products/:id', () => {
     const down = trustApp(BOARD, { snapshotThrows: true });
     const readFail = await down.app.request('/products/ml-1');
     expect(readFail.status).toBe(500);
-    expect((await readFail.json()).error).toBe('persistence-error');
+    expect(((await readFail.json()) as { error: string }).error).toBe('persistence-error');
     expect(readFail.headers.get('cache-control')).toBeNull();
 
     const missingSpec = trustApp(BOARD, { spec: null });
     const specRes = await missingSpec.app.request('/products/ml-1');
     expect(specRes.status).toBe(500);
-    expect(await specRes.json()).toMatchObject({ error: 'persistence-error', message: 'stored spec missing' });
+    expect((await specRes.json()) as { error: string; message: string }).toMatchObject({
+      error: 'persistence-error',
+      message: 'stored spec missing',
+    });
 
     const corrupt = trustApp(BOARD, { specThrows: true });
     const corruptRes = await corrupt.app.request('/products/ml-1');
     expect(corruptRes.status).toBe(500);
-    expect((await corruptRes.json()).error).toBe('persistence-error');
+    expect(((await corruptRes.json()) as { error: string }).error).toBe('persistence-error');
   });
 
   it('does not add specs or per100g to /rankings', async () => {
     const { app } = trustApp(BOARD);
     const res = await app.request('/rankings');
-    const body = await res.json();
-    expect(body.rows[0].per100ml).toBe(0.505);
-    expect(body.rows[0].specs).toBeUndefined();
-    expect(body.rows[0].per100g).toBeUndefined();
+    const body = (await res.json()) as {
+      rows: Array<{ per100ml: number; specs?: unknown; per100g?: unknown }>;
+    };
+    expect(body.rows[0]?.per100ml).toBe(0.505);
+    expect(body.rows[0]?.specs).toBeUndefined();
+    expect(body.rows[0]?.per100g).toBeUndefined();
   });
 
   it('is governance-exempt and does not open /parse', async () => {
@@ -260,11 +267,14 @@ describe('GET /products/:id', () => {
       env,
     );
     expect(parse.status).toBe(401);
-    expect((await parse.json()).error).toBe('auth-missing');
+    expect(((await parse.json()) as { error: string }).error).toBe('auth-missing');
   });
 
   it('leaves the CDN warm list on /rankings and /categories', () => {
-    const yml = readFileSync(new URL('../../../.github/workflows/cdn-warm.yml', import.meta.url), 'utf8');
+    const yml = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), '../../../.github/workflows/cdn-warm.yml'),
+      'utf8',
+    );
     expect(yml).toContain('"${BASE}/rankings"');
     expect(yml).toContain('"${BASE}/categories"');
     expect(yml).not.toContain('/products');
