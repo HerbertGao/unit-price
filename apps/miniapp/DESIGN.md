@@ -41,6 +41,7 @@
 - **小票头 BrandHead**:居中。店名行(`SAM'S CLUB · 软饮`,mono 宽字距)→ 大字标题 → scope 行(`真实单价榜 · 元/100ml · 越低越抵`)→ 底部 2px `dashed --line-dash`。
 - **搜索 SearchEntry**:`--paper-card` 底 + `1.5px solid --ink` 硬边框(小票框感,非胶囊),放大镜用 currentColor 描边。
 - **账本行 RankingRow**:一行 = `#rank`(mono `--muted`)+ 商品名 + 「大数字 per100ml / 整件价右对齐」+ 警示 chip;**无卡片、无每行阴影**,行间靠 `1.5px dashed --line-dash` 分隔。rank1:极淡蓝渐变底 + rank 转蓝 + 右上蓝色 `验讫·最抵` 旋转章。
+- **信任页分区眉批 `.trust__h`**:规格 / 怎么算的 / 同类 用 mono `--fs-xs` `--muted`、字距约 `.12em`,上方 `dashed --line-dash`。这是信任页的小票分区约定,不是新的卡片层级。分区里的单价大字仍走 `--per100ml-size` / `--per100ml-weight` / `--per100ml-tracking`;邻居名次列宽与榜单相同(72rpx,`#01` 零填)。
 - **撕纸边**:列表底部用 radial-gradient 扇形缺口模拟撕纸(`--paper` 缺口)。
 - **验讫章**:`2px solid --blue` + `--blue` 字 + `rotate(-11deg)` + mono + 字距 `.08em`,`opacity:.92`。它是记忆点,别滥用——每屏至多一枚。
 - **比价表单/我的卡**:少数保留卡片(需 z 轴层级),`--r-card` 圆角 + 轻 `--shadow`,内部分隔用实 `--line`。

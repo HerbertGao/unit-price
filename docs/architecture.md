@@ -26,6 +26,7 @@ RawProduct(title, price, optional hints)
 
 写入路径 → D1/Drizzle → product_raw/product/unit_price + taxonomy
 读路径   → /rankings 全量快照 → miniapp 本地 cohort/search/page
+         → GET /products/:id 信任页（规格、存储 formula、cohort；不重算）
 即时比价 → /compute（结构化输入、无 AI、不写库）
 ```
 
@@ -65,13 +66,13 @@ openspec             # 主 specs 与归档记录
 
 ## 六、apps/miniapp
 
-当前客户端为 React 18.3.1 + Taro 4.3.1。它一次读取榜单快照并在本地派生 cohort/search/page，结构化即时比价由 API 计算；端上不运行 core，也不写中心库。具体页面、已实现状态与后续路线只在 [`miniapp-roadmap.md`](miniapp-roadmap.md) 维护。
+当前客户端为 React 18.3.1 + Taro 4.3.1。它一次读取榜单快照并在本地派生 cohort/search/page，信任页另读 `GET /products/:id`，结构化即时比价由 API 计算；端上不运行 core，也不写中心库，不从标价和规格重算单价。具体页面、已实现状态与后续路线只在 [`miniapp-roadmap.md`](miniapp-roadmap.md) 维护。
 
 ## 七、持久层与 taxonomy
 
 D1/SQLite 的表、迁移和运行时差异以 [`packages/db/README.md`](../packages/db/README.md) 为准；品类树、闭包、store-map 与打标签仲裁由共享 schema、repository 和回归测试共同锁定。
 
-跨层关键边界只有一条：core 与持久层已支持重量轴，但当前 rankings 快照只传输 `rankable=true ∧ per100ml IS NOT NULL` 的容量轴行。
+跨层关键边界只有一条：core 与持久层已支持重量轴，但当前 rankings 快照只传输 `rankable=true ∧ per100ml IS NOT NULL` 的容量轴行。信任页只解释这些已入榜的行，不另下发 `per100g`。
 
 ## 八、缓存与发布
 

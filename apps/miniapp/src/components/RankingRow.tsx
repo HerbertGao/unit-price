@@ -29,7 +29,7 @@ function formatYuan(cents: number): string {
 /** 失效判定(纯派生、可单测):以客户端当前时钟 `now` 与 `capturedAt` 比较;
  *  `capturedAt` 为 undefined(旧缓存 / 跨版本响应缺字段)时判为**非失效**——缺字段
  *  降级为不置灰,不崩。默认 `now=Date.now()` 保留组件「以当前时钟判定」的原行为。 */
-export function isStale(item: RankingsItem, now: number = Date.now()): boolean {
+export function isStale(item: { capturedAt?: number }, now: number = Date.now()): boolean {
   return item.capturedAt !== undefined && now - item.capturedAt > STALE_AFTER_MS;
 }
 
@@ -37,7 +37,10 @@ export function isStale(item: RankingsItem, now: number = Date.now()): boolean {
  *  `¥X.XX` 的数字部分(两位小数);`lowestPriceCents` 为 undefined(缺字段降级)或
  *  现价即历史低点时返回 null(不呈现,免噪)。只比 priceCents vs lowestPriceCents
  *  (同为整件分)、不与 per100ml 大字混算(见 spec「三价并存」)。 */
-export function historicalLowYuan(item: RankingsItem): string | null {
+export function historicalLowYuan(item: {
+  priceCents: number;
+  lowestPriceCents?: number;
+}): string | null {
   const lowest = item.lowestPriceCents;
   return lowest !== undefined && item.priceCents > lowest ? formatYuan(lowest) : null;
 }
@@ -49,14 +52,21 @@ function formatPer100ml(per100ml: number): string {
 }
 
 /** Zero-pad the rank to 2 digits to match the mono "#01 / #02 …" ledger mark. */
-function formatRank(rank: number): string {
+export function formatRank(rank: number): string {
   return rank < 10 ? `0${rank}` : String(rank);
 }
 
 /** 单条榜单行:`#rank` 徽标 + 商品名 + `per100ml` 大字(可比真值)+ 整件参考价;
  *  `>30` 天未重报整行置灰(仍留榜)、现价高于历史低点时标「历史低 ¥X」,缺字段优雅降级。
  *  同一组件亦复用于即时比价页的邻居行。 */
-export default function RankingRow({ item }: { item: RankingsItem }) {
+export default function RankingRow({
+  item,
+  onOpen,
+}: {
+  item: RankingsItem;
+  /** When set, the row opens the trust page. Omitted on compute neighbors. */
+  onOpen?: () => void;
+}) {
   // rank 1 is the cheapest real unit price → 「值」highlight + blue 验讫 stamp.
   const isTop = item.rank === 1;
   const warnings = item.warnings ?? [];
@@ -70,12 +80,12 @@ export default function RankingRow({ item }: { item: RankingsItem }) {
   const lowestYuan = historicalLowYuan(item);
 
   // rrow--top / rrow--stale 两修饰正交、可并存(同一行既灰又带徽标)。
-  const rowClass = ['rrow', isTop && 'rrow--top', stale && 'rrow--stale']
+  const rowClass = ['rrow', isTop && 'rrow--top', stale && 'rrow--stale', onOpen && 'rrow--open']
     .filter(Boolean)
     .join(' ');
 
   return (
-    <View className={rowClass}>
+    <View className={rowClass} {...(onOpen ? { onClick: onOpen } : {})}>
       <Text className="rrow__rank">#{formatRank(item.rank)}</Text>
       <View className="rrow__body">
         <Text className="rrow__title">{item.title}</Text>
@@ -98,6 +108,7 @@ export default function RankingRow({ item }: { item: RankingsItem }) {
             ))}
           </View>
         ) : null}
+        {onOpen ? <Text className="rrow__open">看依据 ›</Text> : null}
       </View>
       {/* 验讫·最抵 — the one deliberate brand intrusion on the raw receipt; rank 1 only. */}
       {isTop ? (

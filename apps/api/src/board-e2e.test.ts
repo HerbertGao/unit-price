@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   cohortSlugs,
   parseCategoryTreeResponse,
+  parseProductTrust,
   parseRankingsSnapshot,
   rowsInCohort,
   type RankingsSnapshot,
@@ -342,5 +343,57 @@ describe('board e2e — real DB → route → client derivation', () => {
     const snap = await fetchSnapshot(app);
 
     expect(snap).toEqual({ rows: [], categoryNodes: [], excluded: [] });
+  });
+
+  it('GET /products/:id matches the snapshot row and does not recompute', async () => {
+    seedProduct(ctx.handle, {
+      suffix: 'a',
+      per100ml: 0.505,
+      categories: ['carbonated'],
+      title: '可乐',
+    });
+    seedProduct(ctx.handle, { suffix: 'b', per100ml: 2, categories: ['juice-plant'] });
+    ctx.handle
+      .prepare(
+        `UPDATE product
+         SET unit_size_value = 330, unit_size_unit = 'ml', quantity = 24, confidence = 0.2
+         WHERE id = 'prod-a'`,
+      )
+      .run();
+    ctx.handle
+      .prepare(
+        `UPDATE unit_price SET formula = '40 / (330 * 24 * 1) * 100', confidence = 0.95 WHERE id = 'up-a'`,
+      )
+      .run();
+
+    const snap = await fetchSnapshot(ctx.app);
+    const soft = rowsInCohort(snap, 'soft-drink');
+    expect(soft.ok).toBe(true);
+
+    const res = await ctx.app.request('/products/up-a?cohort=soft-drink');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body = parseProductTrust(await res.json());
+    const snapRow = snap.rows.find((r) => r.id === 'up-a');
+    expect(snapRow).toBeDefined();
+    expect(body.per100ml).toBe(snapRow!.per100ml);
+    expect(body.formula).toBe(snapRow!.formula);
+    expect(body.confidence).toBe(snapRow!.confidence);
+    expect(body.confidence).toBe(0.95);
+    expect(body.specs).toMatchObject({
+      unitSize: { value: 330, unit: 'ml' },
+      quantity: 24,
+      totalAmount: null,
+    });
+    expect(body).not.toHaveProperty('per100g');
+    if (soft.ok) {
+      expect(body.cohort.rank).toBe(soft.rows.findIndex((r) => r.id === 'up-a') + 1);
+    }
+    const recomputed = (1000 / 100) / (330 * 24) * 100;
+    expect(body.per100ml).not.toBeCloseTo(recomputed);
+
+    const missing = await ctx.app.request('/products/missing');
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get('cache-control')).toBeNull();
   });
 });

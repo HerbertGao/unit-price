@@ -40,14 +40,20 @@ export function ListEmpty({ title = '榜单暂无数据', hint = '下拉刷新�
 export interface FirstScreenErrorProps {
   /** Whole-screen retry handler — supplied by the page (maps to retryFirst). */
   onRetry: () => void;
+  title?: string;
+  hint?: string;
 }
 
 /** First-screen error: whole-screen error + retry. Never a white screen. */
-export function FirstScreenError({ onRetry }: FirstScreenErrorProps) {
+export function FirstScreenError({
+  onRetry,
+  title = '榜单加载失败',
+  hint = '请检查网络后重试',
+}: FirstScreenErrorProps) {
   return (
     <View className="lstate lstate--center">
-      <Text className="lstate__title">榜单加载失败</Text>
-      <Text className="lstate__hint">请检查网络后重试</Text>
+      <Text className="lstate__title">{title}</Text>
+      <Text className="lstate__hint">{hint}</Text>
       <View className="lstate__btn" onClick={onRetry}>
         <Text className="lstate__btn-text">重试</Text>
       </View>

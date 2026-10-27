@@ -129,6 +129,19 @@
   color: var(--pricey);
 }
 
+.rrow__open {
+  display: block;
+  margin-top: var(--sp-2);
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
+  color: var(--blue);
+}
+
+.rrow--open:active {
+  opacity: 0.6;
+}
+
 /* 验讫·最抵 — blue inspection stamp, rank 1 only; the single memory point. */
 .rrow__stamp {
   position: absolute;

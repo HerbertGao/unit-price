@@ -401,6 +401,14 @@ export interface Repository {
    */
   listBoardSnapshot(): Promise<BoardSnapshot>;
 
+  /**
+   * Read the stored `ParsedSpec` for a rankings row (`unit_price.id`).
+   * Returns null when that id does not exist. Does not calculate a unit
+   * price and does not write. A half-null measurement or a spec that fails
+   * `ParsedSpecSchema` throws — callers must not invent the missing half.
+   */
+  getStoredSpecByUnitPriceId(unitPriceId: string): Promise<ParsedSpec | null>;
+
   // --- category-tagging primitives (atomic writes / closure & inheritance
   // queries). The three-state reconcile ORCHESTRATION lives in apps/api; these
   // are the callable atoms it composes. None touches `product.category` (kept
@@ -977,6 +985,39 @@ export function createRepository(db: Db | null | undefined): Repository {
         warnings: decodeJson(up.warnings),
       });
       return { productId: p.id, rawId: p.rawId, spec, calc };
+    },
+
+    async getStoredSpecByUnitPriceId(unitPriceId) {
+      const id = IdGate.parse(unitPriceId);
+      const rows = await queryOrm(db)
+        .select({
+          unitSizeValue: product.unitSizeValue,
+          unitSizeUnit: product.unitSizeUnit,
+          quantity: product.quantity,
+          multipliers: product.multipliers,
+          totalAmountValue: product.totalAmountValue,
+          totalAmountUnit: product.totalAmountUnit,
+          packageUnit: product.packageUnit,
+          category: product.category,
+          confidence: product.confidence,
+        })
+        .from(unitPrice)
+        .innerJoin(product, eq(product.id, unitPrice.productId))
+        .where(eq(unitPrice.id, id))
+        .limit(1);
+      const p = rows[0];
+      if (!p) return null;
+      // Same decode as getProduct. Throws on a half-null measurement or bad
+      // JSON. No price is read, so this cannot recompute per100ml.
+      return ParsedSpecSchema.parse({
+        unitSize: decodeMeasurement(p.unitSizeValue, p.unitSizeUnit),
+        quantity: p.quantity,
+        multipliers: decodeJson(p.multipliers),
+        totalAmount: decodeMeasurement(p.totalAmountValue, p.totalAmountUnit),
+        packageUnit: p.packageUnit,
+        category: p.category,
+        confidence: p.confidence,
+      });
     },
 
     async saveCorrection(input) {

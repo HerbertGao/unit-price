@@ -10,13 +10,20 @@ Hono API 同时承载无状态解析/即时比价、D1 写入、全量榜单快�
 | `GET /rankings` | 全量榜单快照 | 豁免、CDN 缓存 |
 | `GET /categories` | 无计数品类树 | 豁免、CDN 缓存 |
 | `POST /compute` | 结构化确定性即时比价 | 豁免、no-store |
+| `GET /products/:id` | 单行信任载荷（规格、formula、cohort） | 豁免、no-store |
 | `POST /parse` | tier1→tier2→tier3 解析 | 公共治理 |
 | `POST /contribute` | 同步写入并返回解析结果 | 公共治理 |
 | `POST /ingest` | 单条异步写入 | 公共治理 |
 | `POST /ingest/batch` | 批量异步写入 | 公共治理 |
 | `POST /admin/backfill` | taxonomy 存量回填 | 独立 admin 鉴权 |
 
-当前不存在 `/compare`、`/corrections`、`/products/:id` 或 `/search`。
+当前不存在 `/compare`、`/corrections` 或 `/search`。
+
+## GET /products/:id
+
+公开只读。`:id` 是榜单行的 `unit_price.id`（快照 `id`）。响应给出已存规格、存储的 `per100ml` / `formula` / `confidence` / `warnings`，以及一小段 cohort。读路径不调用 `calculate`，响应不含 `per100g`。可选查询 `cohort` 指定名次所在的榜；不带时，仅当该行恰好挂在一个容量轴品类上才给名次，否则 `partial` 或 `empty`，不编造数字。
+
+未知或不在榜上的 id 返回 404。成功响应 `Cache-Control: no-store`，不进 CDN 长 TTL 预热。不写库、不调 LLM、不需要 API key。
 
 ## 入口
 

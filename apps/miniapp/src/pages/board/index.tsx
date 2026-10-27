@@ -7,6 +7,7 @@ import Taro, { useRouter, useLoad, usePullDownRefresh, useReachBottom } from '@t
 import { useRankings } from '../index/useRankings';
 import { readBoardParams } from './params';
 import RankingRow from '../../components/RankingRow';
+import { trustCohortSlug, trustPageUrl } from '../trust/params';
 import ListFooter from '../../components/ListFooter';
 import {
   ListLoading,
@@ -24,6 +25,7 @@ export default function Board() {
   // Missing category falls back to the named landing cohort in useRankings; q is
   // the decoded local-search term and name is the already-derived page title.
   const { category, q, name } = readBoardParams(router.params);
+  const cohort = trustCohortSlug(category);
 
   const r = useRankings(category, q);
 
@@ -81,7 +83,13 @@ export default function Board() {
     <View className="screen">
       <View className="list">
         {r.items.map((item) => (
-          <RankingRow key={item.id} item={item} />
+          <RankingRow
+            key={item.id}
+            item={item}
+            onOpen={() => {
+              void Taro.navigateTo({ url: trustPageUrl(item.id, cohort) });
+            }}
+          />
         ))}
       </View>
       <ListFooter
