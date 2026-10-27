@@ -30,6 +30,7 @@ import {
   type RankingsItem,
 } from '@unit-price/api-client';
 import { CATEGORY_NODES, type Db, type RankingRow, type Repository } from '@unit-price/db';
+import type { SpecGuard } from './clef.js';
 import { orchestrate } from './orchestrate.js';
 import type { SpecParserLLM } from './llm.js';
 import type { AppEnv, Bindings } from './bindings.js';
@@ -274,6 +275,12 @@ export interface AppDeps {
    * bleed: each request resolves config from its OWN `c.env`.
    */
   makeLlm: (env: Bindings) => SpecParserLLM;
+  /**
+   * Optional Clef guard from the same per-request env as `makeLlm`. When
+   * omitted, orchestration does not call Clef. Production wires it; tests that
+   * inject a fixed LLM port leave it unset.
+   */
+  makeGuard?: (env: Bindings) => SpecGuard;
   /**
    * Injectable access governance (auth / rate-limit / usage). Production injects
    * the real implementation; dev injects a pass-through no-op. Mounted as a
@@ -994,8 +1001,9 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     const input: RawProduct = parsedReq.data;
     // Build the LLM port from THIS request's injected env (no cross-request
     // bleed). The factory's lazy parser only resolves config if tier2 is reached.
+    // The guard is the same env; clean titles never call either.
     const llm = deps.makeLlm(c.env);
-    const outcome = await orchestrate(input, llm);
+    const outcome = await orchestrate(input, llm, deps.makeGuard?.(c.env));
 
     if (outcome.kind === 'config-error') {
       // Distinguishable 5xx: runtime configuration error (no confidence body).
@@ -1044,7 +1052,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     //    (which re-triggers tier2 LLM — abuse cost is bounded by api-governance
     //    rate limiting).
     const input: RawProduct = { title: req.title, price: req.price, categoryHint: req.categoryHint };
-    const outcome = await orchestrate(input, deps.makeLlm(c.env));
+    const outcome = await orchestrate(input, deps.makeLlm(c.env), deps.makeGuard?.(c.env));
 
     if (outcome.kind === 'config-error') {
       return c.json({ error: 'config-error', message: outcome.message, rawId }, 500);
@@ -1121,7 +1129,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     const input: RawProduct = { title: req.title, price: req.price, categoryHint: req.categoryHint };
     const run = async (): Promise<void> => {
       try {
-        const outcome = await orchestrate(input, deps.makeLlm(env));
+        const outcome = await orchestrate(input, deps.makeLlm(env), deps.makeGuard?.(env));
         if (outcome.kind === 'insufficient') {
           // tier2 transport failed + tier1 had no shape (e.g. a spec-less title):
           // log structured (rawId/store/sku) and stop — leaves the intentionally
@@ -1252,7 +1260,7 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
         const { rawId, req } = unit;
         try {
           const input: RawProduct = { title: req.title, price: req.price, categoryHint: req.categoryHint };
-          const outcome = await orchestrate(input, deps.makeLlm(env));
+          const outcome = await orchestrate(input, deps.makeLlm(env), deps.makeGuard?.(env));
           if (outcome.kind === 'insufficient') {
             console.warn('[ingest/batch] background parse insufficient', {
               rawId,

@@ -1,16 +1,29 @@
 // Runtime-agnostic shape contract for `c.env` (the injected binding set).
 //
 // On Cloudflare Workers these come from the fetch handler's `env` argument
-// (secrets + D1 + KV). On the Node dev entry the entry layer packs `process.env`
-// into the same shape and injects it as `env`, so the app reads one path.
+// (bindings + secrets + D1 + KV). On the Node dev entry the entry layer packs
+// `process.env` into the same shape and injects it as `env`, so the app reads
+// one path.
 //
 // All bindings are OPTIONAL at the type level (dev/no-op paths may lack them);
 // required-ness is enforced at the injection entry at runtime, not by the type.
 import type { D1Database, KVNamespace } from '@cloudflare/workers-types';
 
+import type { WorkersAiBinding } from './config.js';
+
 export interface Bindings {
-  /** OpenRouter LLM key (secret). Used only by the stateless tier2 path. */
-  OPENROUTER_API_KEY?: string;
+  /**
+   * Workers AI binding (`[ai] binding = "AI"`). Production tier2 uses `run`
+   * and does not need an API token. Typed as the methods this app calls so a
+   * test double and the platform binding share one shape.
+   */
+  AI?: WorkersAiBinding;
+  /**
+   * Out-of-Worker Workers AI credentials (Node dev / eval). Ignored when `AI`
+   * is bound. Not a production Worker secret.
+   */
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_API_TOKEN?: string;
   /** Governance allowlist (secret, comma-separated). Consumed by governance. */
   API_KEYS?: string;
   /** 独立 admin 白名单(逗号分隔,secret)。仅 /admin/* tier 用,与公共 API_KEYS 分离。 */

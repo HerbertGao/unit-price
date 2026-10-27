@@ -1,5 +1,5 @@
 // Scoring harness — run the corpus through @unit-price/core tier1 + tier3 (and
-// optionally tier1+tier2 when OPENROUTER_API_KEY is set), then compute the
+// optionally tier1+tier2 when Workers AI REST credentials are set), then compute the
 // calibration metrics defined in spec "打分跑批器".
 //
 // Hard invariants (see spec):
@@ -11,7 +11,8 @@
 //  - per100ml has NO external truth → it is NOT subject to an accuracy assertion;
 //    "computability rate" (tier3 producing a non-null per100ml or per100g) is the
 //    metric we consume from tier3.
-//  - No key → tier1-only is evaluated; the report flags "tier2 未评(无 key)" and
+//  - No Workers AI config → tier1-only is evaluated; the report flags
+//    "tier2 未评(无 Workers AI 配置)" and
 //    the harness must not error out. tier2 is reached via a dynamic import of
 //    `@unit-price/api` so apps/api is never a resident dependency; if it cannot
 //    be loaded the tier2 lane is honestly skipped (recorded in issues).
@@ -230,10 +231,19 @@ function scoreTier1(sample: CorpusSample): ScoredSample {
   };
 }
 
+/** Workers AI REST credentials for the eval tier2 lane. Both must be set. */
+export interface WorkersAiCredentials {
+  accountId: string;
+  apiToken: string;
+}
+
 /** Options for {@link scoreCorpus}. */
 export interface ScoreOptions {
-  /** OPENROUTER_API_KEY value (absence → tier1-only). */
-  apiKey?: string;
+  /**
+   * Workers AI account id + API token (absence of either → tier1-only).
+   * The eval lane calls the generative parser only; it does not run Clef.
+   */
+  workersAi?: WorkersAiCredentials;
   /**
    * Override the tier2 orchestrator loader (for tests). Returns a function that
    * scores one sample's merged tier1+tier2 spec, or null when unavailable.
@@ -249,9 +259,9 @@ export type Tier2Scorer = (sample: CorpusSample) => Promise<ScoredSample>;
  * dependency) and adapt its orchestration to a {@link Tier2Scorer}. Returns null
  * if the port cannot be imported, so the tier2 lane is honestly skipped.
  */
-async function defaultLoadTier2(apiKey: string): Promise<Tier2Scorer | null> {
+async function defaultLoadTier2(workersAi: WorkersAiCredentials): Promise<Tier2Scorer | null> {
   try {
-    // Dynamic import by package name — only reached when a key is present.
+    // Dynamic import by package name — only reached when credentials are present.
     // `@unit-price/api` is intentionally NOT a resident dependency of this
     // package; the specifier is built as a variable so the compiler does not
     // try to resolve it at build time (it is resolved at runtime only).
@@ -270,12 +280,20 @@ async function defaultLoadTier2(apiKey: string): Promise<Tier2Scorer | null> {
           unitPrice: { per100ml: number | null; per100g?: number | null };
         };
       }>;
-      loadLlmConfig?: () => unknown;
+      loadLlmConfig?: (env: {
+        CLOUDFLARE_ACCOUNT_ID?: string;
+        CLOUDFLARE_API_TOKEN?: string;
+      }) => unknown;
     };
     if (!api.AiSdkSpecParser || !api.orchestrate || !api.loadLlmConfig) {
       return null;
     }
-    const llm = new api.AiSdkSpecParser(api.loadLlmConfig());
+    const llm = new api.AiSdkSpecParser(
+      api.loadLlmConfig({
+        CLOUDFLARE_ACCOUNT_ID: workersAi.accountId,
+        CLOUDFLARE_API_TOKEN: workersAi.apiToken,
+      }),
+    );
     const orchestrate = api.orchestrate;
     return async (sample: CorpusSample): Promise<ScoredSample> => {
       const input = toRawProduct(sample);
@@ -307,14 +325,15 @@ async function defaultLoadTier2(apiKey: string): Promise<Tier2Scorer | null> {
 
 /**
  * Score a corpus, producing the full metrics snapshot. Always evaluates the
- * tier1-only lane. Evaluates the tier1+tier2 lane only when a key is present
- * AND the tier2 port could be loaded; otherwise records an honest note + issue.
+ * tier1-only lane. Evaluates the tier1+tier2 lane only when Workers AI REST
+ * credentials are present AND the tier2 port could be loaded; otherwise
+ * records an honest note + issue. Clef is not part of this lane.
  */
 export async function scoreCorpus(
   samples: CorpusSample[],
   options: ScoreOptions = {},
 ): Promise<Metrics> {
-  const apiKey = options.apiKey;
+  const workersAi = options.workersAi;
   const issues: string[] = [];
 
   // tier1-only lane — always runs, never depends on a key.
@@ -328,13 +347,17 @@ export async function scoreCorpus(
     issues,
   };
 
-  if (!apiKey) {
-    metrics.tier2Note = 'tier2 未评(无 key)';
+  if (
+    workersAi === undefined ||
+    workersAi.accountId.trim() === '' ||
+    workersAi.apiToken.trim() === ''
+  ) {
+    metrics.tier2Note = 'tier2 未评(无 Workers AI 配置)';
     return metrics;
   }
 
-  // Key present → attempt the tier2 lane via dynamic import.
-  const loader = options.loadTier2 ?? (() => defaultLoadTier2(apiKey));
+  // Credentials present → attempt the generative tier2 lane via dynamic import.
+  const loader = options.loadTier2 ?? (() => defaultLoadTier2(workersAi));
   let scorer: Tier2Scorer | null = null;
   try {
     scorer = await loader();

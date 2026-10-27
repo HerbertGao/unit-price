@@ -33,7 +33,7 @@ Hono API 同时承载无状态解析/即时比价、D1 写入、全量榜单快�
 pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT 可覆盖）
 ```
 
-本地 dev 注入放行式 no-op 治理：无 KV、无 `API_KEYS` 时 `/parse` 冒烟不被 `401`/`429` 阻断。`OPENROUTER_API_KEY` 经环境变量传入，仅当请求进入 tier2 时才需要——干净标题（tier1 即可算）缺 key 也返回 `200`。
+本地 dev 注入放行式 no-op 治理：无 KV、无 `API_KEYS` 时 `/parse` 冒烟不被 `401`/`429` 阻断。Node 没有 `AI` binding，tier2 使用环境变量 `CLOUDFLARE_ACCOUNT_ID` 与 `CLOUDFLARE_API_TOKEN`（两者都要）。干净标题（tier1 即可算）不调用模型，缺配置也返回 `200`。
 
 ## POST /contribute
 
@@ -62,7 +62,7 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 | code | HTTP | 来源 | rawId |
 | --- | --- | --- | --- |
 | `invalid-request` | 400 | 请求体非法（`title` 空、`price` 非有限、`store`/`storeSku` 空/缺失）；未写任何行、不进 orchestrate | — |
-| `config-error` | 500 | LLM 运行期配置错误（如缺 `OPENROUTER_API_KEY`）；raw 已落地 | 含 |
+| `config-error` | 500 | LLM 运行期配置错误（如缺 Workers AI binding）；raw 已落地 | 含 |
 | `insufficient-information` | 503 | 信息不足无法判定；raw 已落地 | 含 |
 | `persistence-error` | 500 | DB binding 缺失/不可用，或落库（`upsertRaw`/`saveParsed`）写失败 | `saveParsed` 失败（raw 已落）含；DB 不可用/`upsertRaw` 失败不含 |
 | `internal` | 500 | 响应体未过校验 | — |
@@ -107,28 +107,45 @@ pnpm --filter @unit-price/api dev    # tsx src/server.ts，监听 :8787（PORT �
 
 | 名称 | 类型 | 注入方式 |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | runtime secret | `wrangler secret put`，production 与 preview **各配一份** |
+| `AI` | Workers AI binding | `wrangler.toml` 的 `[ai]`，production 与 preview **各声明一次**（具名环境不继承顶层 binding） |
 | `API_KEYS` | runtime secret（治理 allowlist，逗号分隔） | `wrangler secret put`，production 与 preview **各配一份** |
 | `ADMIN_API_KEYS` | runtime secret（admin allowlist） | production admin backfill 独立配置 |
 | `AUDIT_LOG_HMAC_SECRET` | runtime secret | admin 审计 key 的 HMAC 输入，与 admin key 不同源 |
-| `CLOUDFLARE_API_TOKEN` | CI 凭据 | GitHub Actions secret |
+| `CLOUDFLARE_API_TOKEN` | CI 部署凭据 | GitHub Actions secret。Node dev / eval 若要走 REST，还要配合同名环境变量加 `CLOUDFLARE_ACCOUNT_ID`；生产 Worker 有 `AI` binding 时忽略这两项 |
 | `DB` | D1 binding | `wrangler.toml` 声明 |
 | `GOVERNANCE_KV` | KV binding（限频 + 用量计数） | `wrangler.toml` 声明 |
 
-`wrangler.toml` 只放资源 id，**不含任何明文密钥**。四项 runtime secret 均经 `wrangler secret put` 带外设置、不随 deploy 重注。preview 至少需配齐 `OPENROUTER_API_KEY`/`API_KEYS`;production 若要驱动 backfill 还必须配齐两个 admin secret。
+`wrangler.toml` 只放资源 id 与 binding 名，**不含任何明文密钥**。三项 runtime secret 均经 `wrangler secret put` 带外设置、不随 deploy 重注。preview 需配 `API_KEYS`；production 若要驱动 backfill 还必须配齐两个 admin secret。生产 tier2 不再需要 `OPENROUTER_API_KEY`。部署后删除残留 secret：
 
-`wrangler.toml` 声明的 binding 名（`DB`、`GOVERNANCE_KV`）与应用代码 `Bindings` 类型读取的名字一一对应。
+```sh
+wrangler secret delete OPENROUTER_API_KEY --env production --config apps/api/wrangler.toml
+wrangler secret delete OPENROUTER_API_KEY --env preview    --config apps/api/wrangler.toml
+```
+
+模型调用走同一 `AI` binding，账单在 Cloudflare（Workers Paid 或 AI Gateway 预付额度）。生成式模型与 Clef 共享账号额度；preview 与 production 也共享。默认生成式模型约 20 rpm（预付额度下约 50）。
+
+`wrangler.toml` 声明的 binding 名（`AI`、`DB`、`GOVERNANCE_KV`）与应用代码 `Bindings` 类型读取的名字一一对应。
 
 设置 secret 示例（须显式 `--config`，理由见「wrangler 调用基准」）：
 
 ```sh
-wrangler secret put OPENROUTER_API_KEY --env production --config apps/api/wrangler.toml
-wrangler secret put API_KEYS           --env production --config apps/api/wrangler.toml
-wrangler secret put ADMIN_API_KEYS      --env production --config apps/api/wrangler.toml
+wrangler secret put API_KEYS             --env production --config apps/api/wrangler.toml
+wrangler secret put ADMIN_API_KEYS       --env production --config apps/api/wrangler.toml
 wrangler secret put AUDIT_LOG_HMAC_SECRET --env production --config apps/api/wrangler.toml
-wrangler secret put OPENROUTER_API_KEY --env preview    --config apps/api/wrangler.toml
-wrangler secret put API_KEYS           --env preview    --config apps/api/wrangler.toml
+wrangler secret put API_KEYS             --env preview    --config apps/api/wrangler.toml
 ```
+
+### 何时调用 Clef，何时调用 generateObject
+
+tier1 已经能给出确定结论（完整规格、`price ≤ 0`、重量轴、非正总量）时，两条模型路径都不走。
+
+其余标题：
+
+1. **Clef-flash**（`@cf/cloudflare/clef-flash`，noul）先回答「标题里有没有可抽取规格」。P(yes) < 0.35 时跳过生成式解析，附 warning `标题未见可抽取规格，已跳过生成式解析`，再用 tier1 做 tier3。概率缺失或 Clef 失败则不跳过。
+2. **generateObject** 仍是唯一填写 `ParsedSpec` 的路径，模型 `@cf/deepseek-ai/deepseek-v4.1-flash-1017`，`reasoning_effort` 为字符串 `none`（不是 `null`；`null` 会被 provider 丢掉，模型默认 `high`）。
+3. 生成式合并成功后，**Clef 再问两个 noul**：数量是否与标题不符、标题是否像两件商品拼在一起。P ≥ 0.75 才追加 warning，不改 `quantity` / `unitSize`。数量为 null 时不报数量告警。复核失败则忽略。
+
+缺 `AI` binding（且没有成对的 REST 凭据）时，Clef 返回 unavailable / 空告警，生成式端口仍返回 `config-error`（HTTP 500），不会被闸门改成 200。失败分类不变：transport / config / invalid。
 
 ## 治理
 
@@ -147,11 +164,11 @@ wrangler secret put API_KEYS           --env preview    --config apps/api/wrangl
 | `auth-forbidden` | 403 | 治理 · key 未登记 |
 | `rate-limited` | 429 | 治理 · 超限（带 `Retry-After`） |
 | `invalid-request` | 400 | parse-api · 请求体非法 |
-| `config-error` | 500 | parse-api/治理 · 缺 `OPENROUTER_API_KEY`/`API_KEYS` |
+| `config-error` | 500 | parse-api/治理 · 缺 Workers AI 配置 / `API_KEYS` |
 | `insufficient-information` | 503 | parse-api · 信息不足、需 tier2 但无法补全 |
 | `internal` | 500 | parse-api · 响应校验失败 |
 
-`config-error` 与 `internal` 同为 500，靠 error code 区分。鉴权前置遮蔽 config-error：缺 `OPENROUTER_API_KEY` + 缺客户端 key 时先返回 `401`。
+`config-error` 与 `internal` 同为 500，靠 error code 区分。鉴权前置遮蔽 config-error：缺 Workers AI 配置 + 缺客户端 key 时先返回 `401`。
 
 ## 部署
 
@@ -160,7 +177,7 @@ wrangler secret put API_KEYS           --env preview    --config apps/api/wrangl
 ### 部署前置（首次，带外）
 
 1. **开通资源**：`wrangler d1 create`（production/preview/dev 各一）、`wrangler kv namespace create`（各环境一个、title 互不相同），把返回的 `database_id` / `id` 回填 `wrangler.toml` 对应块；binding 名保持 `DB` / `GOVERNANCE_KV` 不变。
-2. **配 runtime secret**：`OPENROUTER_API_KEY` 与 `API_KEYS` 在 production/preview 各一份；production backfill 另配 `ADMIN_API_KEYS` 与 `AUDIT_LOG_HMAC_SECRET`（命令见上）。
+2. **配 runtime secret**：`API_KEYS` 在 production/preview 各一份；production backfill 另配 `ADMIN_API_KEYS` 与 `AUDIT_LOG_HMAC_SECRET`（命令见上）。确认账号已开通 Workers Paid 或 AI Gateway 额度，否则 `AI` binding 上的付费模型会失败。部署后删除残留的 `OPENROUTER_API_KEY`。
 3. **配 CI 凭据**：`CLOUDFLARE_API_TOKEN` 作为 GitHub repo 的 Actions secret（名字须正好为 `CLOUDFLARE_API_TOKEN`，与 `deploy.yml` 对应）。
 
 `CLOUDFLARE_API_TOKEN` 用 **Custom Scoped Token**（Cloudflare → My Profile → API Tokens → Create Custom Token），**不要用 Global API Key**。按本流水线「`wrangler deploy` + `d1 migrations apply --remote`」所需，权限为：

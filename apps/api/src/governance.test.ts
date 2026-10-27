@@ -340,9 +340,9 @@ describe('governance — middleware order (auth before rate/usage)', () => {
     expect(rlPuts).toHaveLength(0);
   });
 
-  it('auth precedes config-error: missing OPENROUTER_API_KEY + missing client key -> 401 first', async () => {
-    // Env has no OPENROUTER_API_KEY (would be a business config-error on a
-    // dirty title) AND the client sends no API key. Auth fires first -> 401,
+  it('auth precedes config-error: missing Workers AI config + missing client key -> 401 first', async () => {
+    // Env has no AI binding (would be a business config-error on a dirty
+    // title) AND the client sends no API key. Auth fires first -> 401,
     // the parse-api config-error branch is never evaluated.
     const { kv } = makeFakeKV();
     const dirtyBody = JSON.stringify({ title: '农夫山泉', price: 5 });

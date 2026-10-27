@@ -55,7 +55,7 @@ const transportFailPort: SpecParserLLM = {
 /** Reports a runtime config error (drives `config-error`). */
 const configFailPort: SpecParserLLM = {
   async parse(): Promise<ParseResult> {
-    return { ok: false, kind: 'config', message: 'missing OPENROUTER_API_KEY' };
+    return { ok: false, kind: 'config', message: 'missing Workers AI binding' };
   },
 };
 
@@ -474,7 +474,7 @@ describe('POST /contribute — error codes pairwise distinct (5.7)', () => {
     // api-governance codes. NOTE: governance ALSO emits `config-error` (when
     // API_KEYS is missing) — `config-error` is a SAME-CODE, DUAL-SOURCE item:
     // governance-side (missing API_KEYS) and business-side (missing
-    // OPENROUTER_API_KEY) both produce 500 config-error. They are NOT
+    // Workers AI config) both produce 500 config-error. They are NOT
     // distinguished by error code but by MIDDLEWARE ORDER (auth runs before
     // business: a keyless client gets 401 first, so the governance config-error
     // is not masked while the business one is). So the governance subset listed

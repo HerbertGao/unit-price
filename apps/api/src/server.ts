@@ -12,17 +12,18 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './routes.js';
 import { createNoopGovernance } from './governance.js';
-import { defaultMakeLlm } from './index.js';
+import { defaultMakeGuard, defaultMakeLlm } from './index.js';
 import type { Bindings } from './bindings.js';
 
 const port = Number(process.env.PORT ?? 8787);
 
 // Pack the relevant process.env values into the Bindings shape so the app reads
 // one path. KV / API_KEYS / DB are intentionally absent in local dev: the no-op
-// governance does not need them, and the lazy LLM port only needs the key if a
-// request reaches tier2.
+// governance does not need them. Node has no AI binding; tier2 uses the
+// Cloudflare REST credentials when both are set. Clean titles never need them.
 const bindings: Bindings = {
-  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+  CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
+  CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN,
 };
 
 // `makeRepo` is intentionally NOT injected here: local Node dev has no D1
@@ -30,6 +31,7 @@ const bindings: Bindings = {
 // (distinct from the LLM config-error), while `/parse` keeps working keylessly.
 const app = createApp({
   makeLlm: defaultMakeLlm,
+  makeGuard: defaultMakeGuard,
   governance: createNoopGovernance(),
 });
 

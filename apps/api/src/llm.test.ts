@@ -1,26 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LoadAPIKeyError } from 'ai';
-import { ConfigError, DEFAULT_MODEL, OPENROUTER_BASE_URL, configPresent, loadLlmConfig } from './config.js';
+import { ConfigError, DEFAULT_MODEL, configPresent, loadLlmConfig, runWorkersAi } from './config.js';
 import { AiSdkSpecParser } from './llm.js';
 import { ParsedSpecSchema, type RawProduct } from '@unit-price/core';
 
 // Mock only `generateObject`; keep the real `LoadAPIKeyError` so classifyError's
-// `instanceof` check stays meaningful. The provider factory is a no-op stub
-// (its return value is only fed to generateObject, which is mocked).
+// `instanceof` check stays meaningful. Provider construction still runs.
 const generateObjectMock = vi.fn();
 vi.mock('ai', async (importActual) => {
   const actual = await importActual<typeof import('ai')>();
   return { ...actual, generateObject: (...args: unknown[]) => generateObjectMock(...args) };
 });
-vi.mock('@ai-sdk/openai-compatible', () => ({
-  createOpenAICompatible: () => ({ chatModel: () => ({}) }),
-}));
 
 const RAW: RawProduct = { title: '可乐 330ml*24', price: 40 };
-const TEST_CFG = { baseURL: OPENROUTER_BASE_URL, apiKey: 'k', model: DEFAULT_MODEL };
+const TEST_CFG = { accountId: 'acct', apiToken: 'tok', model: DEFAULT_MODEL };
 
-describe('config boundary (missing key vs transport)', () => {
-  it('loadLlmConfig throws a distinguishable ConfigError when key is absent', () => {
+describe('config boundary (missing Workers AI vs transport)', () => {
+  it('loadLlmConfig throws a distinguishable ConfigError when nothing is configured', () => {
     expect(() => loadLlmConfig({}, DEFAULT_MODEL)).toThrowError(ConfigError);
     try {
       loadLlmConfig({}, DEFAULT_MODEL);
@@ -30,31 +26,93 @@ describe('config boundary (missing key vs transport)', () => {
     }
   });
 
-  it('loadLlmConfig returns config when key present; model from constant', () => {
-    const cfg = loadLlmConfig({ OPENROUTER_API_KEY: 'sk-test' });
-    expect(cfg.apiKey).toBe('sk-test');
+  it('REST credentials yield account id + token; model from the constant', () => {
+    const cfg = loadLlmConfig({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'tok' });
+    expect(cfg.accountId).toBe('acct');
+    expect(cfg.apiToken).toBe('tok');
+    expect(cfg.binding).toBeUndefined();
     expect(cfg.model).toBe(DEFAULT_MODEL);
-    expect(cfg.baseURL).toBe(OPENROUTER_BASE_URL);
+    expect(DEFAULT_MODEL).toBe('@cf/deepseek-ai/deepseek-v4.1-flash-1017');
   });
 
-  it('empty/whitespace key is treated as absent', () => {
-    expect(() => loadLlmConfig({ OPENROUTER_API_KEY: '  ' })).toThrowError(ConfigError);
-    expect(configPresent({ OPENROUTER_API_KEY: '  ' })).toBe(false);
-    expect(configPresent({ OPENROUTER_API_KEY: 'sk' })).toBe(true);
+  it('the AI binding wins over REST credentials', () => {
+    const binding = { run: vi.fn() };
+    const cfg = loadLlmConfig({
+      AI: binding,
+      CLOUDFLARE_ACCOUNT_ID: 'acct',
+      CLOUDFLARE_API_TOKEN: 'tok',
+    });
+    expect(cfg.binding).toBe(binding);
+    expect(cfg.accountId).toBeUndefined();
+    expect(cfg.apiToken).toBeUndefined();
+  });
+
+  it('a binding without run, or only one REST credential, is absent', () => {
+    expect(() => loadLlmConfig({ AI: {} as never })).toThrowError(ConfigError);
+    expect(() => loadLlmConfig({ CLOUDFLARE_ACCOUNT_ID: 'acct' })).toThrowError(ConfigError);
+    expect(() => loadLlmConfig({ CLOUDFLARE_API_TOKEN: 'tok' })).toThrowError(ConfigError);
+    expect(configPresent({ AI: {} as never })).toBe(false);
+    expect(configPresent({ CLOUDFLARE_ACCOUNT_ID: 'acct' })).toBe(false);
+  });
+
+  it('empty/whitespace credentials are treated as absent', () => {
+    expect(() =>
+      loadLlmConfig({ CLOUDFLARE_ACCOUNT_ID: '  ', CLOUDFLARE_API_TOKEN: 'tok' }),
+    ).toThrowError(ConfigError);
+    expect(configPresent({ CLOUDFLARE_ACCOUNT_ID: '  ', CLOUDFLARE_API_TOKEN: ' tok ' })).toBe(false);
+    expect(configPresent({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'tok' })).toBe(true);
+    expect(configPresent({ AI: { run: vi.fn() } })).toBe(true);
   });
 
   it('a non-default model id is honored (config-driven model switch)', () => {
-    const cfg = loadLlmConfig({ OPENROUTER_API_KEY: 'k' }, 'qwen/qwen-2.5');
-    expect(cfg.model).toBe('qwen/qwen-2.5');
+    const cfg = loadLlmConfig(
+      { CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'tok' },
+      '@cf/other/model',
+    );
+    expect(cfg.model).toBe('@cf/other/model');
   });
 });
 
-describe('AiSdkSpecParser — upgrade slot is shape-only this change', () => {
-  it('accepts an optional tier option without changing behavior (type-level)', async () => {
-    // Construct with an explicit config so no network/key is needed at build.
-    const parser = new AiSdkSpecParser({ baseURL: OPENROUTER_BASE_URL, apiKey: 'k', model: DEFAULT_MODEL });
-    // We do not invoke parse() here (would hit the network). The point is that
-    // both `parse(input)` and `parse(input, { tier })` are legal call shapes.
+describe('runWorkersAi', () => {
+  it('returns the binding result unchanged', async () => {
+    const binding = { run: vi.fn(async () => ({ answers: { extractable: { noul: 0.9 } } })) };
+    const raw = await runWorkersAi({ model: DEFAULT_MODEL, binding }, '@cf/cloudflare/clef-flash', {
+      model: 'clef-flash',
+    });
+    expect(binding.run).toHaveBeenCalledWith('@cf/cloudflare/clef-flash', { model: 'clef-flash' });
+    expect(raw).toEqual({ answers: { extractable: { noul: 0.9 } } });
+  });
+
+  it('unwraps the REST { success, result } envelope', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, result: { answers: { a: 1 } } }), { status: 200 }),
+    );
+    const raw = await runWorkersAi(
+      { model: DEFAULT_MODEL, accountId: 'acct', apiToken: 'tok' },
+      '@cf/cloudflare/clef-flash',
+      { model: 'clef-flash' },
+    );
+    expect(raw).toEqual({ answers: { a: 1 } });
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toBe(
+      'https://api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef-flash',
+    );
+    expect((init?.headers as Record<string, string>).authorization).toBe('Bearer tok');
+    fetchMock.mockRestore();
+  });
+
+  it('marks a non-OK REST response with statusCode', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('nope', { status: 401 }));
+    await expect(
+      runWorkersAi({ model: DEFAULT_MODEL, accountId: 'acct', apiToken: 'tok' }, '@cf/x', {}),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    vi.restoreAllMocks();
+  });
+});
+
+describe('AiSdkSpecParser — upgrade slot is shape-only', () => {
+  it('accepts an optional tier option without changing behavior (type-level)', () => {
+    const parser = new AiSdkSpecParser(TEST_CFG);
     expect(typeof parser.parse).toBe('function');
   });
 });
@@ -72,6 +130,15 @@ describe('AiSdkSpecParser.parse — failure classification (mocked generateObjec
     expect(res).toMatchObject({ ok: false, kind: 'config' });
   });
 
+  it('config: HTTP 401/402/403 -> { ok:false, kind:"config" }', async () => {
+    const err = new Error('payment required');
+    (err as Error & { statusCode: number }).statusCode = 402;
+    generateObjectMock.mockRejectedValueOnce(err);
+    const parser = new AiSdkSpecParser(TEST_CFG);
+    const res = await parser.parse(RAW);
+    expect(res).toMatchObject({ ok: false, kind: 'config', message: 'payment required' });
+  });
+
   it('transport: a plain Error -> { ok:false, kind:"transport" }', async () => {
     generateObjectMock.mockRejectedValueOnce(new Error('timeout'));
     const parser = new AiSdkSpecParser(TEST_CFG);
@@ -84,7 +151,6 @@ describe('AiSdkSpecParser.parse — failure classification (mocked generateObjec
     const parser = new AiSdkSpecParser(TEST_CFG);
     const res = await parser.parse(RAW);
     expect(res).toMatchObject({ ok: false, kind: 'invalid' });
-    // The rejected path must not smuggle a spec into the result.
     expect((res as { spec?: unknown }).spec).toBeUndefined();
   });
 

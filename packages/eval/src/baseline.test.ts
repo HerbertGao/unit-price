@@ -20,7 +20,7 @@ function metrics(t1: LaneMetrics): Metrics {
     corpusSize: t1.total,
     tier1: t1,
     tier2Evaluated: false,
-    tier2Note: 'tier2 未评(无 key)',
+    tier2Note: 'tier2 未评(无 Workers AI 配置)',
     issues: [],
   };
 }

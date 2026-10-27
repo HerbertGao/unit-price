@@ -17,7 +17,8 @@
 ```text
 RawProduct(title, price, optional hints)
   ├─ tier1 规则解析（packages/core）
-  ├─ tier2 LLM 补全（仅 apps/api，OpenRouter）
+  ├─ tier2 生成式补全（仅 apps/api，Workers AI）
+  │    非确定标题可经 Clef-flash 决定是否调用生成式解析，并在成功后附加告警；Clef 不填写规格字段
   └─ tier3 确定性计算（packages/core）
        ├─ per100ml 或 per100g
        ├─ formula
@@ -58,7 +59,7 @@ openspec             # 主 specs 与归档记录
 
 ## 五、apps/api
 
-框架：Hono；生产运行时：Cloudflare Workers；数据库：D1(SQLite)+Drizzle；LLM：OpenRouter。当前没有解析缓存。
+框架：Hono；生产运行时：Cloudflare Workers；数据库：D1(SQLite)+Drizzle；LLM：Workers AI。生成式解析默认 `@cf/deepseek-ai/deepseek-v4.1-flash-1017`，`reasoning_effort` 固定为 `none`。决策补全为 `@cf/cloudflare/clef-flash`，只影响是否调用生成式解析以及 warnings。生产经 `AI` binding 计费，不使用 OpenRouter。当前没有解析缓存。
 
 架构上把端点分成四类：可缓存公共读、无状态即时计算、受公共治理的解析/写入、独立鉴权的 admin 运维。完整路由、错误码、治理、secret 与部署命令只在 [`apps/api/README.md`](../apps/api/README.md) 维护。
 

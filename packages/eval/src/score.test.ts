@@ -33,12 +33,12 @@ const corpus: CorpusSample[] = [
   },
 ];
 
-describe('scoreCorpus — tier1-only (no key)', () => {
+describe('scoreCorpus — tier1-only (no Workers AI config)', () => {
   it('computes recall, quantity accuracy, computability, per-unit error correctly', async () => {
-    const m = await scoreCorpus(corpus, { apiKey: undefined });
+    const m = await scoreCorpus(corpus);
 
     expect(m.tier2Evaluated).toBe(false);
-    expect(m.tier2Note).toContain('无 key');
+    expect(m.tier2Note).toContain('无 Workers AI 配置');
     expect(m.corpusSize).toBe(3);
 
     const t = m.tier1;
@@ -66,11 +66,11 @@ describe('scoreCorpus — tier1-only (no key)', () => {
   });
 
   it('renderReport never emits NaN and flags per100ml has no external truth', async () => {
-    const m = await scoreCorpus(corpus, { apiKey: undefined });
+    const m = await scoreCorpus(corpus);
     const report = renderReport(m);
     expect(report).not.toMatch(/NaN/);
     expect(report).toContain('per100ml 无外部真值');
-    expect(report).toContain('tier2 未评(无 key)');
+    expect(report).toContain('tier2 未评(无 Workers AI 配置)');
   });
 });
 
@@ -86,7 +86,7 @@ describe('scoreCorpus — per-unit error guards against divide-by-zero', () => {
         samUnitPrice: 1.67,
       },
     ];
-    const m = await scoreCorpus(guarded, { apiKey: undefined });
+    const m = await scoreCorpus(guarded);
     // No qualifying per-unit sample → n/a, not NaN.
     expect(m.tier1.perUnitError).toBe('n/a');
     // quantity 0 != samPkgNum 6 → wrong.
@@ -108,7 +108,7 @@ describe('scoreCorpus — negative priceCents is excluded symmetrically', () => 
         samUnitPrice: 18.32,
       },
     ];
-    const m = await scoreCorpus(negative, { apiKey: undefined });
+    const m = await scoreCorpus(negative);
     // Only sample has a negative price → no usable price → computability n/a.
     expect(m.tier1.computability).toBe('n/a');
     // Per-unit error excludes the negative-price sample → n/a, never ~1.54.
@@ -119,7 +119,7 @@ describe('scoreCorpus — negative priceCents is excluded symmetrically', () => 
 
 describe('scoreCorpus — empty / zero-eligible corpus → n/a not divide-by-zero', () => {
   it('empty corpus yields n/a for every metric', async () => {
-    const m = await scoreCorpus([], { apiKey: undefined });
+    const m = await scoreCorpus([]);
     expect(m.corpusSize).toBe(0);
     expect(m.tier1.recall.unitSize).toBe('n/a');
     expect(m.tier1.recall.quantity).toBe('n/a');
@@ -134,7 +134,7 @@ describe('scoreCorpus — empty / zero-eligible corpus → n/a not divide-by-zer
     const noTruth: CorpusSample[] = [
       { title: '可乐 330ml*6', source: 'manual' }, // no price, no sam*
     ];
-    const m = await scoreCorpus(noTruth, { apiKey: undefined });
+    const m = await scoreCorpus(noTruth);
     // recall still measurable.
     expect(m.tier1.recall.unitSize).toBe(1);
     // no usable price → computability n/a (denominator 0).
@@ -147,9 +147,9 @@ describe('scoreCorpus — empty / zero-eligible corpus → n/a not divide-by-zer
 });
 
 describe('scoreCorpus — tier2 lane', () => {
-  it('honestly skips tier2 when the port cannot be loaded (key present)', async () => {
+  it('honestly skips tier2 when the port cannot be loaded (credentials present)', async () => {
     const m = await scoreCorpus(corpus, {
-      apiKey: 'fake-key',
+      workersAi: { accountId: 'acct', apiToken: 'tok' },
       loadTier2: async () => null,
     });
     expect(m.tier2Evaluated).toBe(false);
@@ -162,7 +162,7 @@ describe('scoreCorpus — tier2 lane', () => {
 
   it('produces a tier1+tier2 lane when a scorer is provided', async () => {
     const m = await scoreCorpus(corpus, {
-      apiKey: 'fake-key',
+      workersAi: { accountId: 'acct', apiToken: 'tok' },
       // Stub: pretend tier2 resolved quantity for every sample to its samPkgNum.
       loadTier2: async () => async (sample: CorpusSample) => ({
         hitUnitSize: true,

@@ -65,7 +65,7 @@ const transportFailPort: SpecParserLLM = {
 /** Reports a runtime config error (drives `config-error`). */
 const configFailPort: SpecParserLLM = {
   async parse(): Promise<ParseResult> {
-    return { ok: false, kind: 'config', message: 'missing OPENROUTER_API_KEY' };
+    return { ok: false, kind: 'config', message: 'missing Workers AI binding' };
   },
 };
 
