@@ -16,6 +16,7 @@ import {
   type RawProduct,
   type UnitPrice,
 } from '@unit-price/core';
+import type { SpecGuard } from './clef.js';
 import type { ParseResult, SpecParserLLM } from './llm.js';
 
 export interface ParseResponse {
@@ -33,6 +34,7 @@ export type OrchestrationOutcome =
 
 const WARN_NO_LLM_REVIEW = '未经 LLM 复核';
 const WARN_LLM_REJECTED = 'LLM 解析结果未通过校验，已忽略';
+const WARN_SKIP_GENERATIVE = '标题未见可抽取规格，已跳过生成式解析';
 
 /** Is a field "present" (non-null, non-undefined)? */
 function present<T>(v: T | null | undefined): v is T {
@@ -133,49 +135,79 @@ function tier1YieldsDeterminate(spec: ParsedSpec, price: number): boolean {
 /**
  * Orchestrate one parse. `price` is taken separately so the calculator price
  * guard (price <= 0 -> uncomputable, 200) is exercised even for valid numbers.
+ *
+ * `guard`, when present, may skip the generative call or append warnings.
+ * It never writes spec fields. Omitting it keeps the tier1 → generateObject
+ * path unchanged. A determinate tier1 result calls neither.
  */
-export async function orchestrate(input: RawProduct, llm: SpecParserLLM): Promise<OrchestrationOutcome> {
+export async function orchestrate(
+  input: RawProduct,
+  llm: SpecParserLLM,
+  guard?: SpecGuard,
+): Promise<OrchestrationOutcome> {
   const tier1 = parseTier1(input);
   const extraWarnings: string[] = [];
 
   let spec = tier1.spec;
 
   // Only call tier2 if tier1 didn't already yield a determinate verdict
-  // (clean titles, price<=0, and non-volume units skip the LLM entirely —
-  // never touches the network/key).
+  // (clean titles, price<=0, and weight units skip every model —
+  // never touches the network).
   const tier1Determinate = tier1YieldsDeterminate(tier1.spec, input.price);
 
   if (!tier1Determinate) {
-    let llmResult: ParseResult;
-    try {
-      llmResult = await llm.parse(input);
-    } catch (err) {
-      // Defensive: a throwing port is treated as a transport failure.
-      llmResult = { ok: false, kind: 'transport', message: err instanceof Error ? err.message : String(err) };
+    let gate: 'parse' | 'skip' | 'unavailable' = 'parse';
+    if (guard) {
+      try {
+        gate = await guard.shouldParse(input);
+      } catch {
+        // A guard failure must not hide the generative path or its config error.
+        gate = 'unavailable';
+      }
     }
 
-    if (llmResult.ok) {
-      // Merge: tier1 authoritative, LLM fills gaps; re-validate via Zod.
-      const merged = mergeSpecs(tier1.spec, llmResult.spec);
-      const reparsed = ParsedSpecSchema.safeParse(merged);
-      // mergeSpecs only recombines already-valid fields, so this should hold;
-      // if it ever fails we keep tier1's spec rather than fabricate.
-      spec = reparsed.success ? reparsed.data : tier1.spec;
-    } else if (llmResult.kind === 'config') {
-      // Runtime config error — distinguishable 5xx (different from insufficient).
-      return { kind: 'config-error', message: llmResult.message };
-    } else if (llmResult.kind === 'transport') {
-      // tier2 transport failure. If tier1 has no shape to even judge
-      // computability, this is "information insufficient" -> 5xx. Otherwise
-      // fall through to tier3 on tier1 alone with a "no LLM review" warning.
-      if (!hasAnyShapeForJudgement(tier1.spec)) {
-        return { kind: 'insufficient', message: llmResult.message };
-      }
-      extraWarnings.push(WARN_NO_LLM_REVIEW);
+    if (gate === 'skip') {
+      extraWarnings.push(WARN_SKIP_GENERATIVE);
     } else {
-      // kind === 'invalid': LLM output rejected. Do not adopt; proceed on tier1.
-      // The calculator's final banding will reflect tier1's (lower) quality.
-      extraWarnings.push(WARN_LLM_REJECTED);
+      let llmResult: ParseResult;
+      try {
+        llmResult = await llm.parse(input);
+      } catch (err) {
+        // Defensive: a throwing port is treated as a transport failure.
+        llmResult = { ok: false, kind: 'transport', message: err instanceof Error ? err.message : String(err) };
+      }
+
+      if (llmResult.ok) {
+        // Merge: tier1 authoritative, LLM fills gaps; re-validate via Zod.
+        const merged = mergeSpecs(tier1.spec, llmResult.spec);
+        const reparsed = ParsedSpecSchema.safeParse(merged);
+        // mergeSpecs only recombines already-valid fields, so this should hold;
+        // if it ever fails we keep tier1's spec rather than fabricate.
+        spec = reparsed.success ? reparsed.data : tier1.spec;
+        if (guard) {
+          try {
+            const notes = await guard.review(input, spec);
+            extraWarnings.push(...notes);
+          } catch {
+            // Review never fails the parse and never rewrites spec.
+          }
+        }
+      } else if (llmResult.kind === 'config') {
+        // Runtime config error — distinguishable 5xx (different from insufficient).
+        return { kind: 'config-error', message: llmResult.message };
+      } else if (llmResult.kind === 'transport') {
+        // tier2 transport failure. If tier1 has no shape to even judge
+        // computability, this is "information insufficient" -> 5xx. Otherwise
+        // fall through to tier3 on tier1 alone with a "no LLM review" warning.
+        if (!hasAnyShapeForJudgement(tier1.spec)) {
+          return { kind: 'insufficient', message: llmResult.message };
+        }
+        extraWarnings.push(WARN_NO_LLM_REVIEW);
+      } else {
+        // kind === 'invalid': LLM output rejected. Do not adopt; proceed on tier1.
+        // The calculator's final banding will reflect tier1's (lower) quality.
+        extraWarnings.push(WARN_LLM_REJECTED);
+      }
     }
   }
 

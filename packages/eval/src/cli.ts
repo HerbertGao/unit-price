@@ -24,6 +24,14 @@ function isSubcommand(value: string): value is Subcommand {
   return (SUBCOMMANDS as readonly string[]).includes(value);
 }
 
+/** Both REST credentials, or undefined so the harness stays tier1-only. */
+function workersAiFromEnv(): { accountId: string; apiToken: string } | undefined {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+  const apiToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
+  if (!accountId || !apiToken) return undefined;
+  return { accountId, apiToken };
+}
+
 function printUsage(): void {
   // eslint-disable-next-line no-console
   console.error(
@@ -160,7 +168,7 @@ async function runScore(args: string[]): Promise<void> {
   }
 
   const samples = loadCorpusFile(corpusPath);
-  const metrics = await scoreCorpus(samples, { apiKey: process.env.OPENROUTER_API_KEY });
+  const metrics = await scoreCorpus(samples, { workersAi: workersAiFromEnv() });
 
   // Machine-readable metrics → stdout (or --out file).
   const json = `${JSON.stringify(metrics, null, 2)}\n`;
@@ -227,7 +235,7 @@ async function runBaseline(args: string[]): Promise<void> {
   }
 
   const samples = loadCorpusFile(corpusPath);
-  const metrics: Metrics = await scoreCorpus(samples, { apiKey: process.env.OPENROUTER_API_KEY });
+  const metrics: Metrics = await scoreCorpus(samples, { workersAi: workersAiFromEnv() });
   writeFileSync(outPath, `${JSON.stringify(metrics, null, 2)}\n`, 'utf8');
   console.error(`eval baseline: saved metrics for ${samples.length} sample(s) → ${outPath}`);
   console.error(renderReport(metrics));

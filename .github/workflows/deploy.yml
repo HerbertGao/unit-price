@@ -58,8 +58,8 @@ jobs:
 
   # main: build -> production D1 migrations apply -> deploy. Any step failing
   # fails the job (no continue-on-error). Only CLOUDFLARE_API_TOKEN is injected;
-  # OPENROUTER_API_KEY / API_KEYS are Worker runtime secrets set out-of-band via
-  # `wrangler secret put`, never in CI.
+  # API_KEYS is a Worker runtime secret set out-of-band via `wrangler secret
+  # put`, never in CI. Workers AI uses the [ai] binding, not a CI secret.
   deploy-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: guard

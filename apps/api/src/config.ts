@@ -1,31 +1,52 @@
-// Runtime/config boundary for the LLM provider. `OPENROUTER_API_KEY` missing is
-// a CONFIG error (not a transient transport failure): callers fail-fast at
-// startup or surface a distinguishable config-error, never a retryable signal.
+// Runtime/config boundary for Workers AI. A missing binding (and no
+// out-of-Worker Cloudflare credentials) is a CONFIG error, not a transient
+// transport failure. Callers surface a distinguishable config-error; they
+// never treat it as retryable.
 //
-// The cheap-tier model is a configuration constant (D3): switching providers or
-// models is just changing this string — no business code changes.
+// Production reaches Workers AI through the `AI` binding, billed on the
+// Cloudflare account (Workers Paid or AI Gateway credits). Node dev and the
+// eval CLI have no binding, so they may pass an account id plus an API token;
+// that REST path is the same Workers AI bill, not a third-party vendor.
 
 import type { Bindings } from './bindings.js';
 
-/** OpenRouter OpenAI-compatible base URL. */
-export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+/** Default generative model for tier2 title parsing. */
+export const DEFAULT_MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
 
-/** Cheap-tier model id (this change implements a single tier; see D4). */
-export const DEFAULT_MODEL = 'deepseek/deepseek-chat';
+/**
+ * Wire value for the parse path. This model defaults to `high` and spends
+ * output tokens on reasoning. `none` turns that off. The provider's typed
+ * `null` is a different signal (it drops the field), so the string is required.
+ */
+export const PARSE_REASONING_EFFORT = 'none' as const;
 
-/** Env var holding the single OpenRouter key. */
-export const API_KEY_ENV = 'OPENROUTER_API_KEY';
+/** Decision model used beside generative parsing. It does not fill specs. */
+export const CLEF_MODEL = '@cf/cloudflare/clef-flash';
+
+/** `model` selector Clef-flash requires in the request body. */
+export const CLEF_MODEL_SELECTOR = 'clef-flash';
+
+/** Minimal binding surface. The real Workers `Ai` binding satisfies it. */
+export interface WorkersAiBinding {
+  run(
+    model: string,
+    inputs: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ): Promise<unknown>;
+}
 
 export interface LlmConfig {
-  baseURL: string;
-  apiKey: string;
   model: string;
+  /** Set when the request env carries an AI binding. Preferred over REST. */
+  binding?: WorkersAiBinding;
+  /** Set together with `apiToken` for the out-of-Worker REST path. */
+  accountId?: string;
+  apiToken?: string;
 }
 
 /**
- * Thrown when `OPENROUTER_API_KEY` is absent. This is a CONFIG error and must
- * be distinguishable from a transient transport failure. Prefer calling
- * `assertConfigOrThrow()` at startup so `/parse` never hits this branch.
+ * Thrown when Workers AI is not configured. Distinguishable from a transient
+ * transport failure.
  */
 export class ConfigError extends Error {
   readonly kind = 'config' as const;
@@ -35,22 +56,88 @@ export class ConfigError extends Error {
   }
 }
 
-/**
- * Read the LLM config from the INJECTED env (no global `process.env` fallback —
- * Workers has no module-load-time env). Throws `ConfigError` if the API key is
- * missing/empty. The model is taken from the configuration constant unless
- * overridden (kept for testability / the future upgrade tier).
- */
-export function loadLlmConfig(env: Pick<Bindings, 'OPENROUTER_API_KEY'>, model = DEFAULT_MODEL): LlmConfig {
-  const apiKey = env.OPENROUTER_API_KEY;
-  if (apiKey === undefined || apiKey.trim() === '') {
-    throw new ConfigError(`Missing ${API_KEY_ENV} (configuration error, not a transport failure)`);
-  }
-  return { baseURL: OPENROUTER_BASE_URL, apiKey, model };
+const MISSING_CONFIG =
+  'Missing Workers AI binding (AI), or CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN (configuration error, not a transport failure)';
+
+function nonEmpty(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
 }
 
-/** Startup fail-fast helper: returns true if config is present in the env. */
-export function configPresent(env: Pick<Bindings, 'OPENROUTER_API_KEY'>): boolean {
-  const apiKey = env.OPENROUTER_API_KEY;
-  return apiKey !== undefined && apiKey.trim() !== '';
+function hasBinding(env: Pick<Bindings, 'AI'>): env is { AI: WorkersAiBinding } {
+  return typeof env.AI?.run === 'function';
+}
+
+/**
+ * Read LLM config from the INJECTED env (no global `process.env` fallback —
+ * Workers has no module-load-time env). Throws `ConfigError` when neither the
+ * AI binding nor both REST credentials are present. The binding wins when both
+ * are set, so a Worker never sends a token it does not need.
+ */
+export function loadLlmConfig(
+  env: Pick<Bindings, 'AI' | 'CLOUDFLARE_ACCOUNT_ID' | 'CLOUDFLARE_API_TOKEN'>,
+  model = DEFAULT_MODEL,
+): LlmConfig {
+  if (hasBinding(env)) {
+    return { model, binding: env.AI };
+  }
+  const accountId = nonEmpty(env.CLOUDFLARE_ACCOUNT_ID);
+  const apiToken = nonEmpty(env.CLOUDFLARE_API_TOKEN);
+  if (accountId !== undefined && apiToken !== undefined) {
+    return { model, accountId, apiToken };
+  }
+  throw new ConfigError(MISSING_CONFIG);
+}
+
+/** True when `loadLlmConfig` would succeed for this env. */
+export function configPresent(
+  env: Pick<Bindings, 'AI' | 'CLOUDFLARE_ACCOUNT_ID' | 'CLOUDFLARE_API_TOKEN'>,
+): boolean {
+  if (hasBinding(env)) return true;
+  return nonEmpty(env.CLOUDFLARE_ACCOUNT_ID) !== undefined && nonEmpty(env.CLOUDFLARE_API_TOKEN) !== undefined;
+}
+
+/**
+ * Run one Workers AI model. The binding returns the bare result. The REST API
+ * wraps it in `{ success, result }`, which is unwrapped here.
+ */
+export async function runWorkersAi(
+  config: LlmConfig,
+  model: string,
+  input: Record<string, unknown>,
+): Promise<unknown> {
+  if (config.binding) {
+    return config.binding.run(model, input);
+  }
+  const accountId = encodeURIComponent(config.accountId ?? '');
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${config.apiToken ?? ''}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+  const text = await response.text();
+  let body: unknown;
+  try {
+    body = text === '' ? undefined : JSON.parse(text);
+  } catch {
+    body = undefined;
+  }
+  if (!response.ok) {
+    const err = new Error(`Workers AI HTTP ${response.status}`);
+    (err as Error & { statusCode: number }).statusCode = response.status;
+    throw err;
+  }
+  if (body !== null && typeof body === 'object' && !Array.isArray(body)) {
+    const record = body as { success?: unknown; result?: unknown };
+    if (record.success === false) {
+      throw new Error('Workers AI request failed');
+    }
+    if (record.success === true && 'result' in record) return record.result;
+  }
+  return body;
 }

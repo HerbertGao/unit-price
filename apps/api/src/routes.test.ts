@@ -31,7 +31,7 @@ const transportFailPort: SpecParserLLM = {
 /** A port that reports a (runtime) config error. */
 const configFailPort: SpecParserLLM = {
   async parse(): Promise<ParseResult> {
-    return { ok: false, kind: 'config', message: 'missing OPENROUTER_API_KEY' };
+    return { ok: false, kind: 'config', message: 'missing Workers AI binding' };
   },
 };
 
@@ -96,7 +96,7 @@ describe('POST /parse — orphan single-unit volume (tier1 infers qty=1)', () =>
   it('4L single bottle: 200, per100ml ~= 0.2475, confidence >= 0.9, surfaces inference warning', async () => {
     // "4L" is a bare volume with no quantity signal. tier1 infers quantity=1
     // and emits an informational warning; the case is clean/determinate so
-    // tier2 (throwingPort) is never reached (no OPENROUTER_API_KEY needed).
+    // tier2 (throwingPort) is never reached (no Workers AI config needed).
     const { res, json } = await post(throwingPort, { title: 'MM 弱碱性饮用水 4L', price: 9.9 });
     expect(res.status).toBe(200);
     expect(json.unitPrice.per100ml).not.toBeNull();
@@ -293,7 +293,7 @@ describe('POST /parse — env injected per request (no isolate cross-request ble
   // buildApp injects REAL governance, so these env-injection cases (which probe
   // the parse-api tier behavior, not governance) must clear the auth gate: a
   // valid API_KEYS allowlist + matching Bearer key admits the request, leaving
-  // OPENROUTER_API_KEY absent so the tier1/tier2 assertions stand unchanged.
+  // Workers AI is unbound so the tier1/tier2 assertions stand unchanged.
   const ADMIT_KEY = 'env-suite-key';
 
   /** POST a body to an app, injecting `env` as the request-scoped Bindings. */
@@ -326,9 +326,10 @@ describe('POST /parse — env injected per request (no isolate cross-request ble
   });
 
   it('missing key + dirty title needing tier2 -> 500 config-error (not 503)', async () => {
-    // A bare brand name has tier1 shape but needs tier2 to fill the spec. With
-    // no OPENROUTER_API_KEY injected, resolving config throws ConfigError ->
-    // orchestrate returns config-error -> HTTP 500 (distinct from 503).
+    // A bare brand name has no tier1 shape and needs tier2 to fill the spec.
+    // With no AI binding, the Clef guard does not skip and resolving config
+    // throws ConfigError -> orchestrate returns config-error -> HTTP 500
+    // (distinct from 503).
     const app = buildApp();
     const { res, json } = await postEnv(app, {}, { title: '农夫山泉', price: 5 });
     expect(res.status).toBe(500);
@@ -339,6 +340,7 @@ describe('POST /parse — env injected per request (no isolate cross-request ble
     // Record the env each makeLlm call receives. The first request injects a
     // key, the second injects none; if env were固化 from the first request the
     // second would wrongly see the first key. We assert each saw its own env.
+    const bindingA = { run: async () => ({}) };
     const seen: Array<Bindings> = [];
     const app = createApp({
       makeLlm: (env) => {
@@ -356,7 +358,7 @@ describe('POST /parse — env injected per request (no isolate cross-request ble
     await app.request(
       '/parse',
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(dirty) },
-      { OPENROUTER_API_KEY: 'key-A' },
+      { AI: bindingA },
     );
     await app.request(
       '/parse',
@@ -365,8 +367,8 @@ describe('POST /parse — env injected per request (no isolate cross-request ble
     );
 
     expect(seen).toHaveLength(2);
-    expect(seen[0]?.OPENROUTER_API_KEY).toBe('key-A');
-    expect(seen[1]?.OPENROUTER_API_KEY).toBeUndefined();
+    expect(seen[0]?.AI).toBe(bindingA);
+    expect(seen[1]?.AI).toBeUndefined();
   });
 });
 

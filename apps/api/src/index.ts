@@ -1,12 +1,13 @@
 // @unit-price/api — Hono backend (public API + LLM tier2).
 // Wires the AI-SDK SpecParserLLM port into the POST /parse orchestration.
 //
-// Config vs runtime boundary: clean titles parse via tier1 with no LLM/key, so
-// the app builds even without OPENROUTER_API_KEY. A genuinely missing key only
+// Config vs runtime boundary: clean titles parse via tier1 with no model call, so
+// the app builds even without a Workers AI binding. A missing binding only
 // surfaces as a distinguishable runtime config-error if a request reaches tier2.
-import type { RawProduct } from '@unit-price/core';
+import type { ParsedSpec, RawProduct } from '@unit-price/core';
 import { createDb, createRepository, type Db, type Repository } from '@unit-price/db';
 import type { Bindings } from './bindings.js';
+import { ClefSpecGuard, type ParseGate, type SpecGuard } from './clef.js';
 import { ConfigError, loadLlmConfig } from './config.js';
 import { AiSdkSpecParser, type ParseOptions, type ParseResult, type SpecParserLLM } from './llm.js';
 import { createApp } from './routes.js';
@@ -58,7 +59,15 @@ export {
   type ParseResult,
   type ParseOptions,
 } from './llm.js';
-export { ConfigError, DEFAULT_MODEL, loadLlmConfig, configPresent } from './config.js';
+export {
+  ConfigError,
+  CLEF_MODEL,
+  DEFAULT_MODEL,
+  PARSE_REASONING_EFFORT,
+  loadLlmConfig,
+  configPresent,
+} from './config.js';
+export { ClefSpecGuard, type SpecGuard, type ParseGate } from './clef.js';
 export type { Bindings } from './bindings.js';
 
 /**
@@ -105,6 +114,53 @@ class LazySpecParser implements SpecParserLLM {
 export const defaultMakeLlm = (env: Bindings): SpecParserLLM => new LazySpecParser(env);
 
 /**
+ * Clef guard for the same request env. Missing Workers AI config resolves to
+ * "do not skip" / no warnings, so the generative port still reports config-error.
+ * Built per request, same as `makeLlm`.
+ */
+class LazyClefGuard implements SpecGuard {
+  private inner: ClefSpecGuard | null = null;
+  private readonly env: Bindings;
+
+  constructor(env: Bindings | undefined) {
+    this.env = env ?? {};
+  }
+
+  private resolve(): ClefSpecGuard | null {
+    if (this.inner) return this.inner;
+    try {
+      this.inner = new ClefSpecGuard(loadLlmConfig(this.env));
+      return this.inner;
+    } catch (err) {
+      if (err instanceof ConfigError) return null;
+      throw err;
+    }
+  }
+
+  async shouldParse(input: RawProduct): Promise<ParseGate> {
+    const inner = this.resolve();
+    if (!inner) return 'unavailable';
+    try {
+      return await inner.shouldParse(input);
+    } catch {
+      return 'unavailable';
+    }
+  }
+
+  async review(input: RawProduct, spec: ParsedSpec): Promise<string[]> {
+    const inner = this.resolve();
+    if (!inner) return [];
+    try {
+      return await inner.review(input, spec);
+    } catch {
+      return [];
+    }
+  }
+}
+
+export const defaultMakeGuard = (env: Bindings): SpecGuard => new LazyClefGuard(env);
+
+/**
  * The default Repository factory: builds a fresh repo from THIS request's
  * injected `c.env.DB`, mirroring `makeLlm` (no isolate cross-request env bleed).
  * Returns `null` when no D1 is bound so `/contribute` takes the persistence-error
@@ -127,6 +183,7 @@ export const defaultMakeDb = (env: Bindings): Db | null =>
 export function buildApp() {
   return createApp({
     makeLlm: defaultMakeLlm,
+    makeGuard: defaultMakeGuard,
     governance: createRealGovernance(),
     makeRepo: defaultMakeRepo,
     makeDb: defaultMakeDb,

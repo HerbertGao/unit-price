@@ -1,11 +1,12 @@
 # Cloudflare Workers config for @unit-price/api.
 #
 # Resource ids are placeholders: [手动验证] 由 task 4.1 开通后填入；禁明文密钥。
-# Secrets (OPENROUTER_API_KEY / API_KEYS) are NOT declared here — they are set
-# out-of-band via `wrangler secret put`, per environment. The admin tier secrets
-# ADMIN_API_KEYS / AUDIT_LOG_HMAC_SECRET are likewise set via `wrangler secret
-# put` and never written to this file. CLOUDFLARE_API_TOKEN is a CI Actions
-# secret. Nothing secret belongs in this file.
+# Workers AI is an [ai] binding, not a secret. Named environments do not
+# inherit top-level bindings, so production and preview each declare `AI`.
+# API_KEYS / ADMIN_API_KEYS / AUDIT_LOG_HMAC_SECRET are runtime secrets set
+# out-of-band via `wrangler secret put`. CLOUDFLARE_API_TOKEN is a CI Actions
+# secret. Nothing secret belongs in this file. The Worker does not read
+# OPENROUTER_API_KEY; delete that leftover secret after deploy.
 #
 # Path baseline: wrangler resolves `migrations_dir` relative to THIS file's
 # directory (apps/api/). All wrangler invocations (local and CI) must pass
@@ -34,6 +35,9 @@ migrations_dir = "../../packages/db/drizzle"
 binding = "GOVERNANCE_KV"
 id = "321e4dd69ec34147b48677ad7d9959b6"
 
+[ai]
+binding = "AI"
+
 # --- production environment ---
 [env.production]
 name = "unit-price-api"
@@ -55,6 +59,9 @@ migrations_dir = "../../packages/db/drizzle"
 binding = "GOVERNANCE_KV"
 id = "2727860c3b7d4e80a0d9b789e37766e9"
 
+[env.production.ai]
+binding = "AI"
+
 # --- preview environment ---
 [env.preview]
 name = "unit-price-api-preview"
@@ -68,3 +75,6 @@ migrations_dir = "../../packages/db/drizzle"
 [[env.preview.kv_namespaces]]
 binding = "GOVERNANCE_KV"
 id = "1cbce68a7498470ab122a41866d15c33"
+
+[env.preview.ai]
+binding = "AI"
