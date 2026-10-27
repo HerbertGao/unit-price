@@ -25,9 +25,13 @@ export function formatCapturedAt(ms: number): string {
   return `${y}年${m}月${d}日`;
 }
 
-export function freshnessLine(trust: Pick<ProductTrust, 'capturedAt'>, now: number): string {
-  const date = formatCapturedAt(trust.capturedAt);
-  return isStale(trust, now) ? `${date} · 超过 30 天未重报，标价可能已变动` : date;
+export function freshnessLine(trust: Pick<ProductTrust, 'capturedAt'>): string {
+  return formatCapturedAt(trust.capturedAt);
+}
+
+/** Stale copy for the chip. Null while the capture is still inside the list threshold. */
+export function staleNote(trust: Pick<ProductTrust, 'capturedAt'>, now: number): string | null {
+  return isStale(trust, now) ? '超过 30 天未重报，标价可能已变动' : null;
 }
 
 export function priceLine(trust: Pick<ProductTrust, 'priceCents' | 'lowestPriceCents'>): string {

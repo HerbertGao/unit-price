@@ -8,10 +8,11 @@ import {
   freshnessLine,
   historicalLowLine,
   specLines,
+  staleNote,
 } from './view';
 import { readTrustParams, trustCohortSlug, trustPageUrl } from './params';
 import { acceptTrustResponse, TrustNotFound } from './response';
-import { STALE_AFTER_MS } from '../../components/RankingRow';
+import { formatRank, STALE_AFTER_MS } from '../../components/RankingRow';
 
 function payload(over: Partial<ProductTrust> = {}): ProductTrust {
   return parseProductTrust({
@@ -103,9 +104,15 @@ describe('trust display does not recompute unit price', () => {
 
   it('formats freshness in UTC+8 and reuses the stale threshold', () => {
     const trust = payload();
-    expect(freshnessLine(trust, trust.capturedAt)).toBe('2023年11月15日');
-    expect(freshnessLine(trust, trust.capturedAt + STALE_AFTER_MS + 1)).toContain('可能已变动');
+    expect(freshnessLine(trust)).toBe('2023年11月15日');
+    expect(staleNote(trust, trust.capturedAt)).toBeNull();
+    expect(staleNote(trust, trust.capturedAt + STALE_AFTER_MS + 1)).toContain('可能已变动');
     expect(historicalLowLine(trust)).toBe('历史低 ¥9.00');
+  });
+
+  it('pads neighbor ranks the same way as the board', () => {
+    expect(formatRank(3)).toBe('03');
+    expect(formatRank(12)).toBe('12');
   });
 });
 

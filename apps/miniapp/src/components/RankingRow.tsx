@@ -52,7 +52,7 @@ function formatPer100ml(per100ml: number): string {
 }
 
 /** Zero-pad the rank to 2 digits to match the mono "#01 / #02 …" ledger mark. */
-function formatRank(rank: number): string {
+export function formatRank(rank: number): string {
   return rank < 10 ? `0${rank}` : String(rank);
 }
 

@@ -5,19 +5,22 @@ import Taro, { useLoad, usePullDownRefresh, useRouter } from '@tarojs/taro';
 import { useCallback, useState } from 'react';
 import { buildProductTrustUrl, type ProductTrust } from '@unit-price/api-client';
 import { ListEmpty, ListLoading, FirstScreenError } from '../../components/ListStates';
+import { formatRank } from '../../components/RankingRow';
 import { BASE, BASE_IS_PLACEHOLDER } from '../index/config';
 import { readTrustParams, trustPageUrl } from './params';
 import { acceptTrustResponse, TrustNotFound } from './response';
 import {
   cohortCopy,
+  formatCapturedAt,
   formatConfidence,
   formatPer100ml,
-  freshnessLine,
   historicalLowLine,
   priceLine,
   specLines,
+  staleNote,
 } from './view';
 
+import '../index/index.css';
 import './index.css';
 
 type Phase = 'loading' | 'ready' | 'error' | 'missing';
@@ -74,7 +77,7 @@ export default function TrustPage() {
 
   if (phase === 'missing') {
     return (
-      <View className="trust">
+      <View className="screen">
         <ListEmpty title={err || '榜单里没有这件商品'} hint="返回榜单再试" />
       </View>
     );
@@ -82,7 +85,7 @@ export default function TrustPage() {
 
   if (phase === 'error') {
     return (
-      <View className="trust">
+      <View className="screen">
         <FirstScreenError onRetry={load} title="依据加载失败" hint="请检查网络后重试" />
       </View>
     );
@@ -90,7 +93,7 @@ export default function TrustPage() {
 
   if (phase === 'loading' || trust == null) {
     return (
-      <View className="trust">
+      <View className="screen">
         <ListLoading />
       </View>
     );
@@ -98,6 +101,7 @@ export default function TrustPage() {
 
   const copy = cohortCopy(trust);
   const lowest = historicalLowLine(trust);
+  const stale = staleNote(trust, Date.now());
   const peerCohort = trust.cohort.slug ?? cohort ?? '';
 
   return (
@@ -108,16 +112,15 @@ export default function TrustPage() {
         <Text className="trust__per-unit">元/100ml</Text>
       </View>
       <Text className="trust__meta">{priceLine(trust)}</Text>
-      {lowest ? <Text className="trust__lowest">{lowest}</Text> : null}
-      <Text className="trust__meta">{freshnessLine(trust, Date.now())}</Text>
-      <Text className="trust__meta">置信度 {formatConfidence(trust.confidence)}</Text>
-      {trust.warnings.length > 0 ? (
-        <View className="trust__chips">
-          {trust.warnings.map((warning) => (
-            <Text key={warning} className="trust__warn">⚠ {warning}</Text>
-          ))}
-        </View>
-      ) : null}
+      <Text className="trust__meta">{formatCapturedAt(trust.capturedAt)}</Text>
+      <View className="trust__chips">
+        {lowest ? <Text className="trust__lowest">{lowest}</Text> : null}
+        <Text className="trust__chip">置信度 {formatConfidence(trust.confidence)}</Text>
+        {stale ? <Text className="trust__chip">{stale}</Text> : null}
+        {trust.warnings.map((warning) => (
+          <Text key={warning} className="trust__warn">⚠ {warning}</Text>
+        ))}
+      </View>
 
       <Text className="trust__h">规格</Text>
       {specLines(trust).map((line) => (
@@ -141,7 +144,7 @@ export default function TrustPage() {
             void Taro.navigateTo({ url: trustPageUrl(peer.id, peerCohort) });
           }}
         >
-          <Text className="trust__peer-rank">#{peer.rank}</Text>
+          <Text className="trust__peer-rank">#{formatRank(peer.rank)}</Text>
           <Text className="trust__peer-title">{peer.title}</Text>
           <Text className="trust__peer-price">{formatPer100ml(peer.per100ml)}</Text>
         </View>

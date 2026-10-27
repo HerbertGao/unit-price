@@ -16,22 +16,22 @@
 .trust__per {
   display: flex;
   align-items: baseline;
-  gap: var(--sp-2);
   margin-top: var(--sp-3);
 }
 
 .trust__per-num {
   font-family: var(--f-mono);
-  font-size: var(--fs-2xl);
-  font-weight: var(--fw-black);
-  letter-spacing: -0.02em;
+  font-size: var(--per100ml-size);
+  font-weight: var(--per100ml-weight);
+  letter-spacing: var(--per100ml-tracking);
   color: var(--ink);
+  line-height: 1;
 }
 
 .trust__per-unit {
-  font-family: var(--f-mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--muted);
+  margin-left: 6rpx;
 }
 
 .trust__meta {
@@ -44,13 +44,28 @@
 
 .trust__lowest {
   display: inline-flex;
-  margin-top: var(--sp-2);
+  align-items: center;
   font-family: var(--f-mono);
   font-size: var(--fs-xs);
+  line-height: 1.6;
   padding: 2rpx 12rpx;
   border-radius: 8rpx;
+  letter-spacing: 0.02em;
   background: var(--blue-bg);
   color: var(--blue);
+}
+
+.trust__chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  letter-spacing: 0.02em;
+  background: var(--paper-band);
+  color: var(--ink-soft);
 }
 
 .trust__chips {
@@ -139,9 +154,12 @@
 
 .trust__peer-rank {
   flex-shrink: 0;
-  width: 64rpx;
+  width: 72rpx;
+  padding-top: 6rpx;
   font-family: var(--f-mono);
-  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-md);
+  letter-spacing: -0.02em;
   color: var(--muted);
 }
 
