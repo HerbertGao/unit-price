@@ -17,9 +17,11 @@ import { LoadAPIKeyError, generateObject } from 'ai';
 import type { Ai } from '@cloudflare/workers-types';
 import { ParsedSpecSchema, type ParsedSpec, type RawProduct } from '@unit-price/core';
 import {
+  AI_GATEWAY_ID,
   ConfigError,
   DEFAULT_MODEL,
   PARSE_REASONING_EFFORT,
+  workersAiRunOptions,
   type LlmConfig,
   type WorkersAiBinding,
 } from './config.js';
@@ -67,8 +69,9 @@ const PARSE_MODEL_OPTIONS = {
 
 /**
  * Last-mile guarantee for the binding path: stamp `reasoning_effort: "none"`
- * on the object `env.AI.run` actually receives, even if the provider drops it.
- * Clef calls use the raw binding and never pass through this wrapper.
+ * and {@link AI_GATEWAY_ID} on the call `env.AI.run` actually receives.
+ * Other run options (`returnRawResponse`, `signal`) stay. Clef does not use
+ * this wrapper; `runWorkersAi` stamps the same gateway id.
  */
 function forceReasoningNone(binding: WorkersAiBinding): Ai {
   const wrapped: WorkersAiBinding = {
@@ -77,19 +80,26 @@ function forceReasoningNone(binding: WorkersAiBinding): Ai {
         inputs !== null && typeof inputs === 'object' && !Array.isArray(inputs)
           ? { ...inputs, reasoning_effort: PARSE_REASONING_EFFORT }
           : inputs;
-      return binding.run(model, body, options);
+      return binding.run(model, body, workersAiRunOptions(options));
     },
   };
   return wrapped as unknown as Ai;
 }
 
 function providerFor(config: LlmConfig) {
+  // `gateway` is required. createAI otherwise sends id "default" and would
+  // open a different gateway. The REST transport turns this into
+  // `cf-aig-gateway-id`; the binding transport puts it on `AI.run`.
   if (config.binding) {
-    return createAI({ binding: forceReasoningNone(config.binding) });
+    return createAI({
+      binding: forceReasoningNone(config.binding),
+      gateway: AI_GATEWAY_ID,
+    });
   }
   return createAI({
     accountId: config.accountId ?? '',
     apiToken: config.apiToken ?? '',
+    gateway: AI_GATEWAY_ID,
   });
 }
 

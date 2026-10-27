@@ -9,7 +9,7 @@ import {
   WARN_QTY_SUSPICIOUS,
   readNoul,
 } from './clef.js';
-import type { WorkersAiBinding } from './config.js';
+import { AI_GATEWAY_ID, type WorkersAiBinding } from './config.js';
 
 const RAW: RawProduct = { title: '农夫山泉', price: 5 };
 
@@ -63,7 +63,9 @@ describe('ClefSpecGuard.shouldParse', () => {
         state: RAW.title,
         questions: { extractable: expect.objectContaining({ type: 'noul' }) },
       }),
+      { gateway: { id: AI_GATEWAY_ID } },
     );
+    expect(AI_GATEWAY_ID).toBe('unit-price');
   });
 
   it('propagates a binding failure (the caller maps it to unavailable)', async () => {
@@ -87,6 +89,7 @@ describe('ClefSpecGuard.review', () => {
     const body = binding.run.mock.calls[0]?.[1] as { questions: Record<string, { type: string }> };
     expect(body.questions.qtySuspicious.type).toBe('noul');
     expect(body.questions.dualProduct.type).toBe('noul');
+    expect(binding.run.mock.calls[0]?.[2]).toEqual({ gateway: { id: 'unit-price' } });
   });
 
   it('does not warn on quantity when the spec quantity is null', async () => {
