@@ -20,7 +20,7 @@
     "@unit-price/db": "workspace:*",
     "ai": "^7.0.152",
     "hono": "^4.13.13",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261024.1",
