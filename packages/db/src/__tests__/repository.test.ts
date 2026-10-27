@@ -355,6 +355,39 @@ describe('saveParsed + getProduct', () => {
     expect(record!.calc).toEqual(fullCalc);
   });
 
+  it('reads the stored spec by unit_price.id and leaves the unit price untouched', async () => {
+    const { productId, unitPriceId } = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    const before = t.handle
+      .prepare('SELECT per100ml, formula FROM unit_price WHERE id = ?')
+      .get(unitPriceId) as { per100ml: number; formula: string };
+
+    const spec = await t.repo.getStoredSpecByUnitPriceId(unitPriceId);
+    expect(spec).toEqual(fullSpec);
+    expect(await t.repo.getStoredSpecByUnitPriceId('missing-unit-price')).toBeNull();
+
+    const after = t.handle
+      .prepare('SELECT per100ml, formula FROM unit_price WHERE id = ?')
+      .get(unitPriceId) as { per100ml: number; formula: string };
+    expect(after).toEqual(before);
+    expect(productId).toBeTruthy();
+  });
+
+  it('throws when a measurement column pair is half-null', async () => {
+    const { productId, unitPriceId } = await t.repo.saveParsed({
+      rawId,
+      spec: fullSpec,
+      calc: fullCalc,
+    });
+    t.handle.prepare('UPDATE product SET unit_size_unit = NULL WHERE id = ?').run(productId);
+    await expect(t.repo.getStoredSpecByUnitPriceId(unitPriceId)).rejects.toThrow(
+      /corrupt measurement/,
+    );
+  });
+
   it('stores per100ml verbatim from core, not recomputed from stored cents', async () => {
     const { productId } = await t.repo.saveParsed({
       rawId,

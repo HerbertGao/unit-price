@@ -21,6 +21,7 @@ import BrandHead from '../../components/BrandHead';
 import SearchEntry from '../../components/SearchEntry';
 import ScopeBar from '../../components/ScopeBar';
 import RankingRow from '../../components/RankingRow';
+import { trustCohortSlug, trustPageUrl } from '../trust/params';
 import ListFooter from '../../components/ListFooter';
 import {
   ListLoading,
@@ -123,7 +124,12 @@ export default function Index() {
           const showAdAfter = isAdSlotAfterRank(item.rank);
           return (
             <Fragment key={item.id}>
-              <RankingRow item={item} />
+              <RankingRow
+                item={item}
+                onOpen={() => {
+                  void Taro.navigateTo({ url: trustPageUrl(item.id, trustCohortSlug(undefined)) });
+                }}
+              />
               {showAdAfter ? <AdSlot id={`ad-slot-after-${item.rank}`} /> : null}
             </Fragment>
           );

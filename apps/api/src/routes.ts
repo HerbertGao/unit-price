@@ -26,6 +26,7 @@ import {
   CategoryTreeResponseSchema,
   ComputeRequestSchema,
   ComputeResultSchema,
+  ProductTrustSchema,
   type ComputeRequest,
   type RankingsItem,
 } from '@unit-price/api-client';
@@ -41,6 +42,7 @@ import {
   type Governance,
 } from './governance.js';
 import { runBackfill, ADMIN_BACKFILL_DEFAULT_LIMIT, ADMIN_BACKFILL_MAX_LIMIT } from './tagging.js';
+import { cohortForRow, toTrustSpecs } from './product-trust.js';
 
 /** Request schema: title non-empty string, price a finite number, optional hint. */
 export const ParseRequestSchema = z.object({
@@ -760,6 +762,78 @@ export function createApp(deps: AppDeps): Hono<AppEnv> {
     }
     // Edge-cacheable like /rankings; the category tree changes even less often.
     c.header('Cache-Control', PUBLIC_CACHE_CONTROL);
+    return c.json(validated.data, 200);
+  });
+
+  // GET /products/:id — public read of one rankings row's trust payload.
+  // `:id` is unit_price.id (the snapshot row id). Unit price fields come from
+  // the same admitted snapshot /rankings would emit; specs come from stored
+  // product columns. No calculate(), no write, no LLM. no-store: one URL per
+  // id would otherwise fill the CDN.
+  app.get('/products/:id', async (c) => {
+    const id = c.req.param('id').trim();
+    if (id === '') {
+      return c.json({ error: 'not-found', message: '榜单里没有这件商品' }, 404);
+    }
+    const resolved = resolveRepo(c, deps);
+    if (!resolved.ok) return resolved.response;
+    const repo = resolved.value;
+
+    let snapshot: Awaited<ReturnType<Repository['listBoardSnapshot']>>;
+    try {
+      snapshot = await repo.listBoardSnapshot();
+    } catch {
+      return c.json({ error: 'persistence-error', message: 'failed to read product' }, 500);
+    }
+
+    const admitted = admitSnapshotRows(snapshot.rows, snapshot.categoryNodes);
+    const consistent = RankingsSnapshotSchema.safeParse({
+      rows: admitted.rows.map(toWireRow),
+      categoryNodes: admitted.nodes,
+      excluded: snapshot.excluded,
+    });
+    if (!consistent.success) {
+      console.error('[products] snapshot validation failed', consistent.error.issues);
+      return c.json({ error: 'internal', message: 'snapshot failed validation' }, 500);
+    }
+
+    const row = admitted.rows.find((candidate) => candidate.id === id);
+    if (!row) {
+      return c.json({ error: 'not-found', message: '榜单里没有这件商品' }, 404);
+    }
+
+    let spec: Awaited<ReturnType<Repository['getStoredSpecByUnitPriceId']>>;
+    try {
+      spec = await repo.getStoredSpecByUnitPriceId(row.id);
+    } catch {
+      return c.json({ error: 'persistence-error', message: 'failed to read stored spec' }, 500);
+    }
+    if (spec == null) {
+      return c.json({ error: 'persistence-error', message: 'stored spec missing' }, 500);
+    }
+
+    const body = {
+      id: row.id,
+      title: row.title,
+      priceCents: row.priceCents,
+      lowestPriceCents: row.lowestPriceCents,
+      capturedAt: row.capturedAt,
+      per100ml: row.per100ml,
+      formula: row.formula,
+      confidence: row.confidence,
+      warnings: row.warnings,
+      store: row.store,
+      storeSku: row.storeSku,
+      specs: toTrustSpecs(spec),
+      categorySlugs: row.categorySlugs,
+      cohort: cohortForRow(row, admitted.rows, admitted.nodes, c.req.query('cohort')),
+    };
+    const validated = ProductTrustSchema.safeParse(body);
+    if (!validated.success) {
+      console.error('[products] response validation failed', validated.error.issues);
+      return c.json({ error: 'internal', message: 'response failed validation' }, 500);
+    }
+    c.header('Cache-Control', 'no-store');
     return c.json(validated.data, 200);
   });
 

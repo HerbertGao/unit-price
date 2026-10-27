@@ -55,3 +55,15 @@ export {
   type ComputeRequest,
   type ComputeResult,
 } from './compute.js';
+export {
+  ProductTrustSchema,
+  ProductTrustSpecsSchema,
+  ProductTrustCohortSchema,
+  ProductTrustPeerSchema,
+  buildProductTrustUrl,
+  parseProductTrust,
+  type ProductTrust,
+  type ProductTrustSpecs,
+  type ProductTrustCohort,
+  type ProductTrustPeer,
+} from './trust.js';

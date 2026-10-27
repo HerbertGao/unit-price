@@ -519,7 +519,7 @@ describe('POST /contribute — error body carries rawId (5.8)', () => {
 });
 
 describe('POST /contribute — non-target boundary (5.9)', () => {
-  it('routes are exactly {/admin/backfill, /categories, /compute, /health, /rankings, /parse, /contribute, /ingest, /ingest/batch} — no corrections/compare', async () => {
+  it('routes include the public reads and have no corrections/compare', async () => {
     const app = createApp({
       makeLlm: () => throwingPort,
       governance: createNoopGovernance(),
@@ -532,7 +532,7 @@ describe('POST /contribute — non-target boundary (5.9)', () => {
     // /admin/backfill is the admin-tier taxonomy backfill driver (its own
     // ADMIN_API_KEYS gate, not the public governance chain). corrections and the
     // future v2 /compare endpoint must NOT exist yet (/compute ≠ /compare).
-    expect(paths).toEqual(['/admin/backfill', '/categories', '/compute', '/contribute', '/health', '/ingest', '/ingest/batch', '/parse', '/rankings']);
+    expect(paths).toEqual(['/admin/backfill', '/categories', '/compute', '/contribute', '/health', '/ingest', '/ingest/batch', '/parse', '/products/:id', '/rankings']);
     expect(paths).not.toContain('/corrections');
     expect(paths).not.toContain('/compare');
   });
