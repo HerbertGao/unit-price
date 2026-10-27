@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LoadAPIKeyError } from 'ai';
-import { ConfigError, DEFAULT_MODEL, configPresent, loadLlmConfig, runWorkersAi } from './config.js';
+import {
+  AI_GATEWAY_ID,
+  AI_GATEWAY_ID_HEADER,
+  ConfigError,
+  DEFAULT_MODEL,
+  configPresent,
+  loadLlmConfig,
+  runWorkersAi,
+  workersAiRunOptions,
+} from './config.js';
 import { AiSdkSpecParser } from './llm.js';
 import { ParsedSpecSchema, type RawProduct } from '@unit-price/core';
 
@@ -73,13 +82,27 @@ describe('config boundary (missing Workers AI vs transport)', () => {
   });
 });
 
+describe('workersAiRunOptions', () => {
+  it('forces gateway id unit-price and keeps options already on the call', () => {
+    expect(workersAiRunOptions({ returnRawResponse: true, gateway: { skipCache: false } })).toEqual({
+      returnRawResponse: true,
+      gateway: { skipCache: false, id: 'unit-price' },
+    });
+    expect(AI_GATEWAY_ID).toBe('unit-price');
+  });
+});
+
 describe('runWorkersAi', () => {
-  it('returns the binding result unchanged', async () => {
+  it('returns the binding result unchanged and passes the gateway id', async () => {
     const binding = { run: vi.fn(async () => ({ answers: { extractable: { noul: 0.9 } } })) };
     const raw = await runWorkersAi({ model: DEFAULT_MODEL, binding }, '@cf/cloudflare/clef-flash', {
       model: 'clef-flash',
     });
-    expect(binding.run).toHaveBeenCalledWith('@cf/cloudflare/clef-flash', { model: 'clef-flash' });
+    expect(binding.run).toHaveBeenCalledWith(
+      '@cf/cloudflare/clef-flash',
+      { model: 'clef-flash' },
+      { gateway: { id: 'unit-price' } },
+    );
     expect(raw).toEqual({ answers: { extractable: { noul: 0.9 } } });
   });
 
@@ -97,7 +120,9 @@ describe('runWorkersAi', () => {
     expect(String(url)).toBe(
       'https://api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/cloudflare/clef-flash',
     );
-    expect((init?.headers as Record<string, string>).authorization).toBe('Bearer tok');
+    const headers = init?.headers as Record<string, string>;
+    expect(headers.authorization).toBe('Bearer tok');
+    expect(headers[AI_GATEWAY_ID_HEADER]).toBe('unit-price');
     fetchMock.mockRestore();
   });
 

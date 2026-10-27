@@ -3,10 +3,13 @@
 // transport failure. Callers surface a distinguishable config-error; they
 // never treat it as retryable.
 //
-// Production reaches Workers AI through the `AI` binding, billed on the
-// Cloudflare account (Workers Paid or AI Gateway credits). Node dev and the
-// eval CLI have no binding, so they may pass an account id plus an API token;
-// that REST path is the same Workers AI bill, not a third-party vendor.
+// Production reaches Workers AI through the `AI` binding. Every run is logged
+// on the existing AI Gateway `unit-price`: `gateway.id` on `env.AI.run`, and
+// `cf-aig-gateway-id` on the REST path. Billing stays on that gateway's
+// current Workers AI mode (standard / postpaid is enough; this code does not
+// switch the gateway to prepaid Unified Billing). Node dev and the eval CLI
+// have no binding, so they may pass an account id plus an API token; that
+// REST path is the same Workers AI bill, not a third-party vendor.
 
 import type { Bindings } from './bindings.js';
 
@@ -19,6 +22,33 @@ export const DEFAULT_MODEL = '@cf/deepseek-ai/deepseek-v4.1-flash-1017';
  * `null` is a different signal (it drops the field), so the string is required.
  */
 export const PARSE_REASONING_EFFORT = 'none' as const;
+
+/**
+ * AI Gateway that already exists on this Cloudflare account. One constant so
+ * generative parse and Clef cannot drift onto another id (including the
+ * SDK default `default`, which would create a different gateway).
+ */
+export const AI_GATEWAY_ID = 'unit-price';
+
+/** REST header AI Gateway reads on `POST /accounts/{id}/ai/run/{model}`. */
+export const AI_GATEWAY_ID_HEADER = 'cf-aig-gateway-id';
+
+/**
+ * Third argument for `env.AI.run`. Always sets `gateway.id` to
+ * {@link AI_GATEWAY_ID} and keeps any other options the caller already set
+ * (`returnRawResponse`, `signal`, extra gateway fields).
+ */
+export function workersAiRunOptions(options?: Record<string, unknown>): Record<string, unknown> {
+  const current = options?.gateway;
+  const nested =
+    current !== null && typeof current === 'object' && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
+  return {
+    ...options,
+    gateway: { ...nested, id: AI_GATEWAY_ID },
+  };
+}
 
 /** Decision model used beside generative parsing. It does not fill specs. */
 export const CLEF_MODEL = '@cf/cloudflare/clef-flash';
@@ -108,7 +138,7 @@ export async function runWorkersAi(
   input: Record<string, unknown>,
 ): Promise<unknown> {
   if (config.binding) {
-    return config.binding.run(model, input);
+    return config.binding.run(model, input, workersAiRunOptions());
   }
   const accountId = encodeURIComponent(config.accountId ?? '');
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
@@ -117,6 +147,7 @@ export async function runWorkersAi(
     headers: {
       authorization: `Bearer ${config.apiToken ?? ''}`,
       'content-type': 'application/json',
+      [AI_GATEWAY_ID_HEADER]: AI_GATEWAY_ID,
     },
     body: JSON.stringify(input),
   });

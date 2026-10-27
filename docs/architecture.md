@@ -59,7 +59,7 @@ openspec             # 主 specs 与归档记录
 
 ## 五、apps/api
 
-框架：Hono；生产运行时：Cloudflare Workers；数据库：D1(SQLite)+Drizzle；LLM：Workers AI。生成式解析默认 `@cf/deepseek-ai/deepseek-v4.1-flash-1017`，`reasoning_effort` 固定为 `none`。决策补全为 `@cf/cloudflare/clef-flash`，只影响是否调用生成式解析以及 warnings。生产经 `AI` binding 计费，不使用 OpenRouter。当前没有解析缓存。
+框架：Hono；生产运行时：Cloudflare Workers；数据库：D1(SQLite)+Drizzle；LLM：Workers AI。生成式解析默认 `@cf/deepseek-ai/deepseek-v4.1-flash-1017`，`reasoning_effort` 固定为 `none`。决策补全为 `@cf/cloudflare/clef-flash`，只影响是否调用生成式解析以及 warnings。生产经 `AI` binding 调用，生成式解析与 Clef 都带上已有 AI Gateway `unit-price`（日志与观测；计费沿用该网关现有的 Workers AI 账单）。不使用 OpenRouter。当前没有解析缓存。
 
 架构上把端点分成四类：可缓存公共读、无状态即时计算、受公共治理的解析/写入、独立鉴权的 admin 运维。完整路由、错误码、治理、secret 与部署命令只在 [`apps/api/README.md`](../apps/api/README.md) 维护。
 

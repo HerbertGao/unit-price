@@ -122,7 +122,7 @@ wrangler secret delete OPENROUTER_API_KEY --env production --config apps/api/wra
 wrangler secret delete OPENROUTER_API_KEY --env preview    --config apps/api/wrangler.toml
 ```
 
-模型调用走同一 `AI` binding，账单在 Cloudflare（Workers Paid 或 AI Gateway 预付额度）。生成式模型与 Clef 共享账号额度；preview 与 production 也共享。默认生成式模型约 20 rpm（预付额度下约 50）。
+模型调用走同一 `AI` binding，账单在 Cloudflare（Workers Paid，或该网关若已开通的预付额度）。生成式解析与 Clef 都把请求记到已有 AI Gateway `unit-price`：binding 路径是 `env.AI.run` 的 `gateway: { id: "unit-price" }`，Node / eval 的 REST 路径是请求头 `cf-aig-gateway-id: unit-price`。网关必须事先存在于同一账号；部署不创建网关，也不改它的 Workers AI 计费模式。标准账单即可看日志，不要求改成预付 Unified Billing。生成式模型与 Clef 共享账号额度；preview 与 production 也共享。默认生成式模型约 20 rpm（预付额度下约 50）。
 
 `wrangler.toml` 声明的 binding 名（`AI`、`DB`、`GOVERNANCE_KV`）与应用代码 `Bindings` 类型读取的名字一一对应。
 
@@ -142,7 +142,7 @@ tier1 已经能给出确定结论（完整规格、`price ≤ 0`、重量轴、�
 其余标题：
 
 1. **Clef-flash**（`@cf/cloudflare/clef-flash`，noul）先回答「标题里有没有可抽取规格」。P(yes) < 0.35 时跳过生成式解析，附 warning `标题未见可抽取规格，已跳过生成式解析`，再用 tier1 做 tier3。概率缺失或 Clef 失败则不跳过。
-2. **generateObject** 仍是唯一填写 `ParsedSpec` 的路径，模型 `@cf/deepseek-ai/deepseek-v4.1-flash-1017`，`reasoning_effort` 为字符串 `none`（不是 `null`；`null` 会被 provider 丢掉，模型默认 `high`）。
+2. **generateObject** 仍是唯一填写 `ParsedSpec` 的路径，模型 `@cf/deepseek-ai/deepseek-v4.1-flash-1017`，`reasoning_effort` 为字符串 `none`（不是 `null`；`null` 会被 provider 丢掉，模型默认 `high`）。与 Clef 一样经 AI Gateway `unit-price`。
 3. 生成式合并成功后，**Clef 再问两个 noul**：数量是否与标题不符、标题是否像两件商品拼在一起。P ≥ 0.75 才追加 warning，不改 `quantity` / `unitSize`。数量为 null 时不报数量告警。复核失败则忽略。
 
 缺 `AI` binding（且没有成对的 REST 凭据）时，Clef 返回 unavailable / 空告警，生成式端口仍返回 `config-error`（HTTP 500），不会被闸门改成 200。失败分类不变：transport / config / invalid。
@@ -177,7 +177,7 @@ tier1 已经能给出确定结论（完整规格、`price ≤ 0`、重量轴、�
 ### 部署前置（首次，带外）
 
 1. **开通资源**：`wrangler d1 create`（production/preview/dev 各一）、`wrangler kv namespace create`（各环境一个、title 互不相同），把返回的 `database_id` / `id` 回填 `wrangler.toml` 对应块；binding 名保持 `DB` / `GOVERNANCE_KV` 不变。
-2. **配 runtime secret**：`API_KEYS` 在 production/preview 各一份；production backfill 另配 `ADMIN_API_KEYS` 与 `AUDIT_LOG_HMAC_SECRET`（命令见上）。确认账号已开通 Workers Paid 或 AI Gateway 额度，否则 `AI` binding 上的付费模型会失败。部署后删除残留的 `OPENROUTER_API_KEY`。
+2. **配 runtime secret**：`API_KEYS` 在 production/preview 各一份；production backfill 另配 `ADMIN_API_KEYS` 与 `AUDIT_LOG_HMAC_SECRET`（命令见上）。确认账号已开通 Workers Paid，否则 `AI` binding 上的付费模型会失败。AI Gateway `unit-price` 须已在同一账号；部署不创建网关，也不把它的 Workers AI 计费从标准账单改成预付。部署后删除残留的 `OPENROUTER_API_KEY`。
 3. **配 CI 凭据**：`CLOUDFLARE_API_TOKEN` 作为 GitHub repo 的 Actions secret（名字须正好为 `CLOUDFLARE_API_TOKEN`，与 `deploy.yml` 对应）。
 
 `CLOUDFLARE_API_TOKEN` 用 **Custom Scoped Token**（Cloudflare → My Profile → API Tokens → Create Custom Token），**不要用 Global API Key**。按本流水线「`wrangler deploy` + `d1 migrations apply --remote`」所需，权限为：
