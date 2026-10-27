@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@babel/runtime": "^7.24.0",
+    "@babel/runtime": "^7.29.10",
     "@tarojs/components": "4.3.1",
     "@tarojs/helper": "4.3.1",
     "@tarojs/plugin-framework-react": "4.3.1",
