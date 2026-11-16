@@ -13,14 +13,14 @@
     "dev": "tsx src/server.ts"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^4.0.36",
-    "@hono/node-server": "^2.1.6",
+    "@ai-sdk/provider": "^4.0.38",
+    "@hono/node-server": "^2.1.8",
     "@unit-price/api-client": "workspace:*",
     "@unit-price/core": "workspace:*",
     "@unit-price/db": "workspace:*",
     "agents": "^0.33.0",
     "ai": "^7.0.164",
-    "hono": "^4.13.16",
+    "hono": "^4.13.18",
     "zod": "^4.6.7"
   },
   "devDependencies": {
